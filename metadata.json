@@ -1,0 +1,6 @@
+{
+  "name": "احمد بلال کریانہ",
+  "description": "احمد بلال کریانہ سٹور (ضلع گجرات) کے لیے مکمل اردو/انگلش بلنگ، اسٹاک، ادھار کھاتہ، بارکوڈ اسکینر، بلوٹوتھ پرنٹر اور کلاؤڈ بیک اپ ایپ۔",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

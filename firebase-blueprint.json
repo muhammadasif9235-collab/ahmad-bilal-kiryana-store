@@ -1,0 +1,247 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "A kiryana grocery inventory item with Gujrat Punjab PKR market rates, profit margin, and stock level.",
+      "type": "object",
+      "properties": {
+        "nameUrdu": { "type": "string", "description": "Product name in Urdu" },
+        "nameEnglish": { "type": "string", "description": "Product name in English" },
+        "category": {
+          "type": "string",
+          "enum": ["FLOUR_RICE", "GHEE_OIL", "SUGAR_PULSES", "TEA_DAIRY", "SPICES", "SOAP_CLEANING", "DRINKS_SNACKS", "OTHER"]
+        },
+        "unit": { "type": "string", "description": "Measurement unit (kg, pack, liter, dozen, bag, piece)" },
+        "costPrice": { "type": "number", "description": "Purchase/cost price in PKR" },
+        "sellingPrice": { "type": "number", "description": "Retail selling price in PKR" },
+        "marginPercent": { "type": "number", "description": "Profit margin percentage for automatic price calculation" },
+        "autoPriceEnabled": { "type": "boolean", "description": "Whether selling price updates automatically on cost or market rate changes" },
+        "stockQty": { "type": "number", "description": "Available quantity in stock" },
+        "lowStockThreshold": { "type": "number", "description": "Threshold to trigger low stock alert" },
+        "barcode": { "type": "string", "description": "EAN/UPC barcode string" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation (FieldValue.serverTimestamp())" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update (FieldValue.serverTimestamp())" }
+      },
+      "required": [
+        "nameUrdu",
+        "nameEnglish",
+        "category",
+        "unit",
+        "costPrice",
+        "sellingPrice",
+        "marginPercent",
+        "autoPriceEnabled",
+        "stockQty",
+        "lowStockThreshold",
+        "barcode",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "A shop customer with Udhar Khata (credit/debit ledger) balance.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Customer name in Urdu or English" },
+        "phone": { "type": "string", "description": "Customer phone number" },
+        "address": { "type": "string", "description": "Customer address or mohalla in Gujrat" },
+        "balance": { "type": "number", "description": "Outstanding Udhar receivable in PKR" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update" }
+      },
+      "required": ["name", "phone", "address", "balance", "createdAt", "updatedAt"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "A customer grocery order or completed bill with itemized lines, Udhar tracking, and profit.",
+      "type": "object",
+      "properties": {
+        "billNumber": { "type": "string", "description": "Sequential/unique receipt number" },
+        "customerId": { "type": "string", "description": "Customer document ID or empty for walk-in" },
+        "customerName": { "type": "string", "description": "Customer name displayed on the receipt" },
+        "status": { "type": "string", "enum": ["PENDING", "COMPLETED", "CANCELLED"] },
+        "paymentMethod": { "type": "string", "enum": ["CASH", "UDHAR", "PARTIAL"] },
+        "subtotal": { "type": "number" },
+        "discount": { "type": "number" },
+        "totalAmount": { "type": "number" },
+        "paidAmount": { "type": "number" },
+        "remainingUdhar": { "type": "number" },
+        "totalCost": { "type": "number" },
+        "profitAmount": { "type": "number" },
+        "items": { "type": "array", "description": "Bounded list of order line items (max 100)" },
+        "note": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update" }
+      },
+      "required": [
+        "billNumber",
+        "customerId",
+        "customerName",
+        "status",
+        "paymentMethod",
+        "subtotal",
+        "discount",
+        "totalAmount",
+        "paidAmount",
+        "remainingUdhar",
+        "totalCost",
+        "profitAmount",
+        "items",
+        "note",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "LedgerEntry": {
+      "title": "LedgerEntry",
+      "description": "An immutable Udhar Khata debit (credit sale) or credit (cash recovery) transaction.",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "entryType": { "type": "string", "enum": ["DEBIT", "CREDIT"] },
+        "amount": { "type": "number" },
+        "balanceAfter": { "type": "number" },
+        "orderId": { "type": "string" },
+        "note": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation" }
+      },
+      "required": ["customerId", "customerName", "entryType", "amount", "balanceAfter", "orderId", "note", "createdAt"]
+    },
+    "StockMovement": {
+      "title": "StockMovement",
+      "description": "An immutable Stock In, Stock Out, Sale, or Adjustment audit record with profit delta.",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string" },
+        "productNameUrdu": { "type": "string" },
+        "productNameEnglish": { "type": "string" },
+        "movementType": { "type": "string", "enum": ["STOCK_IN", "STOCK_OUT", "SALE", "ADJUSTMENT"] },
+        "quantity": { "type": "number" },
+        "unitCost": { "type": "number" },
+        "unitPrice": { "type": "number" },
+        "profitDelta": { "type": "number" },
+        "note": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation" }
+      },
+      "required": [
+        "productId",
+        "productNameUrdu",
+        "productNameEnglish",
+        "movementType",
+        "quantity",
+        "unitCost",
+        "unitPrice",
+        "profitDelta",
+        "note",
+        "createdAt"
+      ]
+    },
+    "RationDonation": {
+      "title": "RationDonation",
+      "description": "A transparent charity donation received or ration pack distributed to a deserving family.",
+      "type": "object",
+      "properties": {
+        "entryType": { "type": "string", "enum": ["DONATION_IN", "RATION_OUT"] },
+        "personName": { "type": "string", "description": "Donor name or deserving family name/reference" },
+        "phone": { "type": "string" },
+        "amount": { "type": "number", "description": "Donation amount or ration pack value in PKR" },
+        "rationSummary": { "type": "string", "description": "Summary of ration items or charity note" },
+        "paymentRef": { "type": "string", "description": "HBL transfer reference or Cash" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation" }
+      },
+      "required": ["entryType", "personName", "phone", "amount", "rationSummary", "paymentRef", "createdAt"]
+    },
+    "RationCardItem": {
+      "title": "RationCardItem",
+      "description": "An editable Maryam Nawaz Ration Card eligible grocery item with custom/govt PKR price.",
+      "type": "object",
+      "properties": {
+        "nameUrdu": { "type": "string", "description": "Item name in Urdu" },
+        "nameEnglish": { "type": "string", "description": "Item name in English" },
+        "unit": { "type": "string", "description": "Unit label (kg, bag, pack, liter)" },
+        "price": { "type": "number", "description": "Editable item rate in PKR" },
+        "sortOrder": { "type": "number", "description": "Display sort order" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["nameUrdu", "nameEnglish", "unit", "price", "sortOrder", "createdAt", "updatedAt"]
+    },
+    "RationCardBill": {
+      "title": "RationCardBill",
+      "description": "An immutable Maryam Nawaz Ration Card (Punjab Rs. 3,000 NFC subsidy) distribution bill.",
+      "type": "object",
+      "properties": {
+        "billNumber": { "type": "string" },
+        "cardUid": { "type": "string", "description": "NFC Tag UID hex string or empty if manual" },
+        "cardNumber": { "type": "string", "description": "Printed Ration Card number" },
+        "beneficiaryName": { "type": "string" },
+        "cnic": { "type": "string" },
+        "phone": { "type": "string" },
+        "monthKey": { "type": "string", "description": "YYYY-MM subsidy cycle key" },
+        "subsidyLimit": { "type": "number", "description": "Punjab Govt monthly ration allowance (default 3000 PKR)" },
+        "totalAmount": { "type": "number" },
+        "subsidyUsed": { "type": "number" },
+        "cashTopUp": { "type": "number" },
+        "remainingSubsidy": { "type": "number" },
+        "items": { "type": "array", "description": "Bounded list of ration items (1..100)" },
+        "scannedViaNfc": { "type": "boolean" },
+        "note": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "billNumber",
+        "cardUid",
+        "cardNumber",
+        "beneficiaryName",
+        "cnic",
+        "phone",
+        "monthKey",
+        "subsidyLimit",
+        "totalAmount",
+        "subsidyUsed",
+        "cashTopUp",
+        "remainingSubsidy",
+        "items",
+        "scannedViaNfc",
+        "note",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/products/{productId}": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "Per-shop owner kiryana product catalog and stock levels"
+    },
+    "/users/{userId}/customers/{customerId}": {
+      "schema": { "$ref": "#/entities/Customer" },
+      "description": "Per-shop owner customer Udhar Khata accounts"
+    },
+    "/users/{userId}/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/Order" },
+      "description": "Per-shop owner customer orders and completed bills"
+    },
+    "/users/{userId}/ledgerEntries/{entryId}": {
+      "schema": { "$ref": "#/entities/LedgerEntry" },
+      "description": "Per-shop owner customer Udhar Khata transaction history"
+    },
+    "/users/{userId}/stockMovements/{movementId}": {
+      "schema": { "$ref": "#/entities/StockMovement" },
+      "description": "Per-shop owner Stock In / Stock Out and profit movement log"
+    },
+    "/users/{userId}/donations/{donationId}": {
+      "schema": { "$ref": "#/entities/RationDonation" },
+      "description": "Per-shop owner Ration Charity Fund donations and deserving family distributions"
+    },
+    "/users/{userId}/rationItems/{itemId}": {
+      "schema": { "$ref": "#/entities/RationCardItem" },
+      "description": "Per-shop owner editable Maryam Nawaz Ration Card items and PKR prices"
+    },
+    "/users/{userId}/rationCardBills/{billId}": {
+      "schema": { "$ref": "#/entities/RationCardBill" },
+      "description": "Per-shop owner Maryam Nawaz Ration Card NFC subsidy bills and beneficiary records"
+    }
+  }
+}

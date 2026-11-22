@@ -1,0 +1,353 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- GLOBAL HELPERS ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    // --- ENTITY VALIDATION BLUEPRINTS ---
+    function isValidCategory(cat) {
+      return cat in ['FLOUR_RICE', 'GHEE_OIL', 'SUGAR_PULSES', 'TEA_DAIRY', 'SPICES', 'SOAP_CLEANING', 'DRINKS_SNACKS', 'OTHER'];
+    }
+
+    function isValidProduct(data) {
+      return data.keys().hasAll([
+               'nameUrdu', 'nameEnglish', 'category', 'unit',
+               'costPrice', 'sellingPrice', 'marginPercent', 'autoPriceEnabled',
+               'stockQty', 'lowStockThreshold', 'barcode', 'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'nameUrdu', 'nameEnglish', 'category', 'unit',
+               'costPrice', 'sellingPrice', 'marginPercent', 'autoPriceEnabled',
+               'stockQty', 'lowStockThreshold', 'barcode', 'createdAt', 'updatedAt'
+             ]) &&
+             data.nameUrdu is string && data.nameUrdu.size() >= 1 && data.nameUrdu.size() <= 120 &&
+             data.nameEnglish is string && data.nameEnglish.size() >= 1 && data.nameEnglish.size() <= 120 &&
+             isValidCategory(data.category) &&
+             data.unit is string && data.unit.size() >= 1 && data.unit.size() <= 30 &&
+             data.costPrice is number && data.costPrice >= 0 && data.costPrice <= 1000000 &&
+             data.sellingPrice is number && data.sellingPrice >= 0 && data.sellingPrice <= 1000000 &&
+             data.marginPercent is number && data.marginPercent >= 0 && data.marginPercent <= 500 &&
+             data.autoPriceEnabled is bool &&
+             data.stockQty is number && data.stockQty >= 0 && data.stockQty <= 1000000 &&
+             data.lowStockThreshold is number && data.lowStockThreshold >= 0 && data.lowStockThreshold <= 100000 &&
+             data.barcode is string && data.barcode.size() <= 64 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidCustomer(data) {
+      return data.keys().hasAll(['name', 'phone', 'address', 'balance', 'createdAt', 'updatedAt']) &&
+             data.keys().hasOnly(['name', 'phone', 'address', 'balance', 'createdAt', 'updatedAt']) &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+             data.phone is string && data.phone.size() <= 30 &&
+             data.address is string && data.address.size() <= 200 &&
+             data.balance is number && data.balance >= -10000000 && data.balance <= 10000000 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidOrderStatus(status) {
+      return status in ['PENDING', 'COMPLETED', 'CANCELLED'];
+    }
+
+    function isValidPaymentMethod(method) {
+      return method in ['CASH', 'UDHAR', 'PARTIAL'];
+    }
+
+    function isValidOrder(data) {
+      return data.keys().hasAll([
+               'billNumber', 'customerId', 'customerName', 'status', 'paymentMethod',
+               'subtotal', 'discount', 'totalAmount', 'paidAmount', 'remainingUdhar',
+               'totalCost', 'profitAmount', 'items', 'note', 'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'billNumber', 'customerId', 'customerName', 'status', 'paymentMethod',
+               'subtotal', 'discount', 'totalAmount', 'paidAmount', 'remainingUdhar',
+               'totalCost', 'profitAmount', 'items', 'note', 'createdAt', 'updatedAt'
+             ]) &&
+             data.billNumber is string && data.billNumber.size() >= 1 && data.billNumber.size() <= 40 &&
+             data.customerId is string && data.customerId.size() <= 128 &&
+             data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 100 &&
+             isValidOrderStatus(data.status) &&
+             isValidPaymentMethod(data.paymentMethod) &&
+             data.subtotal is number && data.subtotal >= 0 && data.subtotal <= 10000000 &&
+             data.discount is number && data.discount >= 0 && data.discount <= 10000000 &&
+             data.totalAmount is number && data.totalAmount >= 0 && data.totalAmount <= 10000000 &&
+             data.paidAmount is number && data.paidAmount >= 0 && data.paidAmount <= 10000000 &&
+             data.remainingUdhar is number && data.remainingUdhar >= 0 && data.remainingUdhar <= 10000000 &&
+             data.totalCost is number && data.totalCost >= 0 && data.totalCost <= 10000000 &&
+             data.profitAmount is number && data.profitAmount >= -10000000 && data.profitAmount <= 10000000 &&
+             data.items is list && data.items.size() >= 1 && data.items.size() <= 100 && data.items[0] is map &&
+             data.note is string && data.note.size() <= 300 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidLedgerEntry(data) {
+      return data.keys().hasAll([
+               'customerId', 'customerName', 'entryType', 'amount', 'balanceAfter', 'orderId', 'note', 'createdAt'
+             ]) &&
+             data.keys().hasOnly([
+               'customerId', 'customerName', 'entryType', 'amount', 'balanceAfter', 'orderId', 'note', 'createdAt'
+             ]) &&
+             data.customerId is string && data.customerId.size() >= 1 && data.customerId.size() <= 128 &&
+             data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 100 &&
+             data.entryType in ['DEBIT', 'CREDIT'] &&
+             data.amount is number && data.amount > 0 && data.amount <= 10000000 &&
+             data.balanceAfter is number && data.balanceAfter >= -10000000 && data.balanceAfter <= 10000000 &&
+             data.orderId is string && data.orderId.size() <= 128 &&
+             data.note is string && data.note.size() <= 300 &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    function isValidStockMovement(data) {
+      return data.keys().hasAll([
+               'productId', 'productNameUrdu', 'productNameEnglish', 'movementType',
+               'quantity', 'unitCost', 'unitPrice', 'profitDelta', 'note', 'createdAt'
+             ]) &&
+             data.keys().hasOnly([
+               'productId', 'productNameUrdu', 'productNameEnglish', 'movementType',
+               'quantity', 'unitCost', 'unitPrice', 'profitDelta', 'note', 'createdAt'
+             ]) &&
+             data.productId is string && data.productId.size() >= 1 && data.productId.size() <= 128 &&
+             data.productNameUrdu is string && data.productNameUrdu.size() >= 1 && data.productNameUrdu.size() <= 120 &&
+             data.productNameEnglish is string && data.productNameEnglish.size() >= 1 && data.productNameEnglish.size() <= 120 &&
+             data.movementType in ['STOCK_IN', 'STOCK_OUT', 'SALE', 'ADJUSTMENT'] &&
+             data.quantity is number && data.quantity > 0 && data.quantity <= 1000000 &&
+             data.unitCost is number && data.unitCost >= 0 && data.unitCost <= 1000000 &&
+             data.unitPrice is number && data.unitPrice >= 0 && data.unitPrice <= 1000000 &&
+             data.profitDelta is number && data.profitDelta >= -10000000 && data.profitDelta <= 10000000 &&
+             data.note is string && data.note.size() <= 300 &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    function isValidRationDonation(data) {
+      return data.keys().hasAll([
+               'entryType', 'personName', 'phone', 'amount', 'rationSummary', 'paymentRef', 'createdAt'
+             ]) &&
+             data.keys().hasOnly([
+               'entryType', 'personName', 'phone', 'amount', 'rationSummary', 'paymentRef', 'createdAt'
+             ]) &&
+             data.entryType in ['DONATION_IN', 'RATION_OUT'] &&
+             data.personName is string && data.personName.size() >= 1 && data.personName.size() <= 100 &&
+             data.phone is string && data.phone.size() <= 30 &&
+             data.amount is number && data.amount > 0 && data.amount <= 10000000 &&
+             data.rationSummary is string && data.rationSummary.size() <= 300 &&
+             data.paymentRef is string && data.paymentRef.size() <= 100 &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    function isValidRationCardItem(data) {
+      return data.keys().hasAll([
+               'nameUrdu', 'nameEnglish', 'unit', 'price', 'sortOrder', 'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'nameUrdu', 'nameEnglish', 'unit', 'price', 'sortOrder', 'createdAt', 'updatedAt'
+             ]) &&
+             data.nameUrdu is string && data.nameUrdu.size() >= 1 && data.nameUrdu.size() <= 120 &&
+             data.nameEnglish is string && data.nameEnglish.size() >= 1 && data.nameEnglish.size() <= 120 &&
+             data.unit is string && data.unit.size() >= 1 && data.unit.size() <= 30 &&
+             data.price is number && data.price >= 0 && data.price <= 1000000 &&
+             data.sortOrder is number && data.sortOrder >= 0 && data.sortOrder <= 10000 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidRationCardBill(data) {
+      return data.keys().hasAll([
+               'billNumber', 'cardUid', 'cardNumber', 'beneficiaryName', 'cnic', 'phone',
+               'monthKey', 'subsidyLimit', 'totalAmount', 'subsidyUsed', 'cashTopUp',
+               'remainingSubsidy', 'items', 'scannedViaNfc', 'note', 'createdAt'
+             ]) &&
+             data.keys().hasOnly([
+               'billNumber', 'cardUid', 'cardNumber', 'beneficiaryName', 'cnic', 'phone',
+               'monthKey', 'subsidyLimit', 'totalAmount', 'subsidyUsed', 'cashTopUp',
+               'remainingSubsidy', 'items', 'scannedViaNfc', 'note', 'createdAt'
+             ]) &&
+             data.billNumber is string && data.billNumber.size() >= 1 && data.billNumber.size() <= 40 &&
+             data.cardUid is string && data.cardUid.size() <= 100 &&
+             data.cardNumber is string && data.cardNumber.size() <= 60 &&
+             data.beneficiaryName is string && data.beneficiaryName.size() >= 1 && data.beneficiaryName.size() <= 100 &&
+             data.cnic is string && data.cnic.size() <= 30 &&
+             data.phone is string && data.phone.size() <= 30 &&
+             data.monthKey is string && data.monthKey.size() >= 4 && data.monthKey.size() <= 16 &&
+             data.subsidyLimit is number && data.subsidyLimit >= 0 && data.subsidyLimit <= 1000000 &&
+             data.totalAmount is number && data.totalAmount > 0 && data.totalAmount <= 10000000 &&
+             data.subsidyUsed is number && data.subsidyUsed >= 0 && data.subsidyUsed <= 1000000 &&
+             data.cashTopUp is number && data.cashTopUp >= 0 && data.cashTopUp <= 10000000 &&
+             data.remainingSubsidy is number && data.remainingSubsidy >= 0 && data.remainingSubsidy <= 1000000 &&
+             data.items is list && data.items.size() >= 1 && data.items.size() <= 100 && data.items[0] is map &&
+             data.scannedViaNfc is bool &&
+             data.note is string && data.note.size() <= 300 &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    // --- USER-SCOPED SHOP COLLECTIONS ---
+    match /users/{userId} {
+
+      // 1. Products Catalog & Stock
+      match /products/{productId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(productId);
+        allow create: if isOwner(userId) &&
+                         isValidId(productId) &&
+                         isValidProduct(incoming());
+        allow update: if isOwner(userId) &&
+                         isValidId(productId) &&
+                         isValidProduct(incoming()) &&
+                         incoming().createdAt == existing().createdAt && (
+                           // Action: Edit product details / manual or auto price update
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'nameUrdu', 'nameEnglish', 'category', 'unit',
+                             'costPrice', 'sellingPrice', 'marginPercent', 'autoPriceEnabled',
+                             'stockQty', 'lowStockThreshold', 'barcode', 'updatedAt'
+                           ]) ||
+                           // Action: Stock quantity & cost adjustment
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'stockQty', 'costPrice', 'sellingPrice', 'updatedAt'
+                           ]) ||
+                           // Action: Stock deduction on sale
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'stockQty', 'updatedAt'
+                           ])
+                         );
+        allow delete: if isOwner(userId) && isValidId(productId);
+      }
+
+      // 2. Customers (Udhar Khata)
+      match /customers/{customerId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(customerId);
+        allow create: if isOwner(userId) &&
+                         isValidId(customerId) &&
+                         isValidCustomer(incoming());
+        allow update: if isOwner(userId) &&
+                         isValidId(customerId) &&
+                         isValidCustomer(incoming()) &&
+                         incoming().createdAt == existing().createdAt && (
+                           // Action: Edit customer profile
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'name', 'phone', 'address', 'updatedAt'
+                           ]) ||
+                           // Action: Update Udhar balance
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'balance', 'updatedAt'
+                           ])
+                         );
+        allow delete: if isOwner(userId) && isValidId(customerId);
+      }
+
+      // 3. Orders & Bills
+      match /orders/{orderId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(orderId);
+        allow create: if isOwner(userId) &&
+                         isValidId(orderId) &&
+                         isValidOrder(incoming());
+        allow update: if isOwner(userId) &&
+                         isValidId(orderId) &&
+                         isValidOrder(incoming()) &&
+                         existing().status == 'PENDING' &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().billNumber == existing().billNumber && (
+                           // Action: Complete or cancel a pending order
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'status', 'paymentMethod', 'discount', 'totalAmount',
+                             'paidAmount', 'remainingUdhar', 'profitAmount', 'note', 'updatedAt'
+                           ])
+                         );
+        allow delete: if isOwner(userId) && isValidId(orderId);
+      }
+
+      // 4. Customer Ledger Entries (Append-Only Audit Trail)
+      match /ledgerEntries/{entryId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(entryId);
+        allow create: if isOwner(userId) &&
+                         isValidId(entryId) &&
+                         isValidLedgerEntry(incoming());
+        allow update: if false;
+        allow delete: if isOwner(userId) && isValidId(entryId);
+      }
+
+      // 5. Stock Movements (Append-Only Audit Trail)
+      match /stockMovements/{movementId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(movementId);
+        allow create: if isOwner(userId) &&
+                         isValidId(movementId) &&
+                         isValidStockMovement(incoming());
+        allow update: if false;
+        allow delete: if isOwner(userId) && isValidId(movementId);
+      }
+
+      // 6. Ration Charity Fund Donations & Distributions (Append-Only Audit Trail)
+      match /donations/{donationId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(donationId);
+        allow create: if isOwner(userId) &&
+                         isValidId(donationId) &&
+                         isValidRationDonation(incoming());
+        allow update: if false;
+        allow delete: if isOwner(userId) && isValidId(donationId);
+      }
+
+      // 7. Maryam Nawaz Ration Card Editable Commodities Catalog
+      match /rationItems/{itemId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(itemId);
+        allow create: if isOwner(userId) &&
+                         isValidId(itemId) &&
+                         isValidRationCardItem(incoming());
+        allow update: if isOwner(userId) &&
+                         isValidId(itemId) &&
+                         isValidRationCardItem(incoming()) &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'nameUrdu', 'nameEnglish', 'unit', 'price', 'sortOrder', 'updatedAt'
+                         ]);
+        allow delete: if isOwner(userId) && isValidId(itemId);
+      }
+
+      // 8. Maryam Nawaz Ration Card NFC Subsidy Bills (Append-Only Audit Trail)
+      match /rationCardBills/{billId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(billId);
+        allow create: if isOwner(userId) &&
+                         isValidId(billId) &&
+                         isValidRationCardBill(incoming());
+        allow update: if false;
+        allow delete: if isOwner(userId) && isValidId(billId);
+      }
+    }
+  }
+}
