@@ -19,16 +19,31 @@ jobs:
           distribution: 'temurin'
 
       - name: Setup Permanent Release Keystore
+        env:
+          K_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          K_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.KEY_PASSWORD }}
         run: |
+          PASS="${K_PASS:-Kiryana@786}"
+          ALIAS="${K_ALIAS:-kiryanakey}"
+          KPASS="${KEY_PASS:-Kiryana@786}"
           if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
             echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > kiryana-release.jks
-            cp kiryana-release.jks app/kiryana-release.jks
-            cp kiryana-release.jks my-upload-key.jks
-            cp kiryana-release.jks app/my-upload-key.jks
-            cp kiryana-release.jks debug.keystore
-          elif [ ! -f debug.keystore ]; then
-            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          else
+            keytool -genkey -v -keystore kiryana-release.jks -storepass "$PASS" -alias "$ALIAS" -keypass "$KPASS" -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Ahmad Bilal Kiryana Store,O=Tanda Gujrat,C=PK"
           fi
+          cp kiryana-release.jks app/kiryana-release.jks
+          cp kiryana-release.jks my-upload-key.jks
+          cp kiryana-release.jks app/my-upload-key.jks
+          cp kiryana-release.jks debug.keystore
+
+          cat <<EOF > keystore.properties
+          storeFile=my-upload-key.jks
+          storePassword=$PASS
+          keyAlias=$ALIAS
+          keyPassword=$KPASS
+          EOF
+          cp keystore.properties app/keystore.properties
 
       - name: Fix Icons and Apply Store Logo
         run: |
@@ -36,7 +51,7 @@ jobs:
           rm -f app/src/main/res/drawable*/ic_launcher*.xml
           python3 -m pip install -q pillow
           python3 - << 'EOF'
-          import os, re, glob
+          import os, glob
           from PIL import Image
 
           candidates = (
@@ -64,9 +79,21 @@ jobs:
       - name: Build Signed Public APK
         env:
           KEYSTORE_FILE: my-upload-key.jks
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'Kiryana@786' }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'kiryanakey' }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'Kiryana@786' }}
+          ORG_GRADLE_PROJECT_KEYSTORE_FILE: my-upload-key.jks
+          ORG_GRADLE_PROJECT_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'Kiryana@786' }}
+          ORG_GRADLE_PROJECT_KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'kiryanakey' }}
+          ORG_GRADLE_PROJECT_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'Kiryana@786' }}
+          ORG_GRADLE_PROJECT_MYAPP_UPLOAD_STORE_FILE: my-upload-key.jks
+          ORG_GRADLE_PROJECT_MYAPP_UPLOAD_STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'Kiryana@786' }}
+          ORG_GRADLE_PROJECT_MYAPP_UPLOAD_KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'kiryanakey' }}
+          ORG_GRADLE_PROJECT_MYAPP_UPLOAD_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'Kiryana@786' }}
+          ORG_GRADLE_PROJECT_RELEASE_STORE_FILE: my-upload-key.jks
+          ORG_GRADLE_PROJECT_RELEASE_STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'Kiryana@786' }}
+          ORG_GRADLE_PROJECT_RELEASE_KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'kiryanakey' }}
+          ORG_GRADLE_PROJECT_RELEASE_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'Kiryana@786' }}
         run: |
           gradle assembleRelease --stacktrace
           mkdir -p final_apk
