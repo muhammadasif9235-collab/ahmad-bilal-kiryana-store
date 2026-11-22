@@ -12,13 +12,11 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-      - name: Grant execute permission
-        run: chmod +x gradlew
+      - uses: gradle/actions/setup-gradle@v4
       - name: Build Debug APK
-        run: ./gradlew assembleDebug
+        run: gradle assembleDebug
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Ahmad-Bilal-Kiryana-Store-APK
-          path: app/build/outputs/apk/debug/*.apk
-          
+          path: app/build/outputs/apk/debug/*. apk
