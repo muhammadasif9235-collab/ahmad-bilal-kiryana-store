@@ -12,14 +12,14 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
-      - name: Prepare Keystore and Firebase String
+      - name: Prepare Keystore and Firebase Config
         run: |
           if [ ! -f debug.keystore ]; then
             keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
-          mkdir -p app/src/main/res/values
-          if ! grep -rn "default_web_client_id" app/src/main/res/ >/dev/null 2>&1; then
-            printf '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <string name="default_web_client_id" translatable="false">000000000000-placeholder.apps.googleusercontent.com</string>\n</resources>\n' > app/src/main/res/values/firebase_strings.xml
+          if [ ! -f app/google-services.json ]; then
+            mkdir -p app/src/main/res/values
+            printf '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <string name="google_app_id" translatable="false">1:123456789012:android:0123456789abcdef012345</string>\n    <string name="google_api_key" translatable="false">AIzaSyDummyKeyForAndroidAppBuild1234567890</string>\n    <string name="project_id" translatable="false">ahmad-bilal-kiryana-store</string>\n    <string name="gcm_defaultSenderId" translatable="false">123456789012</string>\n    <string name="google_storage_bucket" translatable="false">ahmad-bilal-kiryana-store.appspot.com</string>\n    <string name="default_web_client_id" translatable="false">123456789012-placeholder.apps.googleusercontent.com</string>\n</resources>\n' > app/src/main/res/values/firebase_strings.xml
           fi
       - uses: gradle/actions/setup-gradle@v4
         with:
@@ -31,4 +31,3 @@ jobs:
         with:
           name: Ahmad-Bilal-Kiryana-Store-APK
           path: app/build/outputs/apk/debug/*.apk
-          
