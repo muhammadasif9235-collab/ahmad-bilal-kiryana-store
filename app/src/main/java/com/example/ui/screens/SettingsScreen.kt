@@ -24,8 +24,11 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Sync
@@ -69,7 +72,9 @@ fun SettingsScreen(
     userEmail: String?,
     pairedPrinters: List<PairedBluetoothPrinter>,
     onToggleLanguage: () -> Unit,
-    onSyncCloudNow: () -> Unit,
+    onConnectGoogleAccount: () -> Unit,
+    onBackupToCloudNow: () -> Unit,
+    onRestoreFromCloudNow: () -> Unit,
     onSyncGujratMarketRates: () -> Unit,
     onUpdateDefaultMargin: (Double) -> Unit,
     onUpdateShopPhone: (String) -> Unit,
@@ -150,8 +155,9 @@ fun SettingsScreen(
                 }
             }
 
-            // 2. Cloud Backup & Offline Mode Card
+            // 2. Local Phone Storage & Optional One-Tap Google Cloud Backup Card
             item {
+                val isGoogleConnected = !userEmail.isNullOrBlank()
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
@@ -166,43 +172,97 @@ fun SettingsScreen(
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Icon(
-                                imageVector = if (isOnline) Icons.Default.CloudDone else Icons.Default.CloudOff,
+                                imageVector = if (isGoogleConnected && isOnline) Icons.Default.CloudDone
+                                else if (isGoogleConnected) Icons.Default.CloudOff
+                                else Icons.Default.PhoneAndroid,
                                 contentDescription = null,
-                                tint = if (isOnline) ProfitGreen else WarningAmber
+                                tint = if (isGoogleConnected && isOnline) ProfitGreen
+                                else if (!isGoogleConnected) ProfitGreen
+                                else WarningAmber
                             )
                             Column {
                                 Text(
-                                    text = language.pick("آف لائن موڈ اور کلاؤڈ بیک اپ", "Offline Mode & Cloud Backup"),
+                                    text = language.pick("فون اسٹوریج اور اختیاری کلاؤڈ بیک اپ", "Local Storage & Optional Cloud Backup"),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = if (isOnline) {
-                                        language.pick("آن لائن • گوگل کلاؤڈ سے منسلک", "Online • Connected to Google Cloud")
-                                    } else {
-                                        language.pick("آف لائن موڈ • ڈیٹا فون میں محفوظ ہو رہا ہے", "Offline Mode • Saving locally on device")
+                                    text = when {
+                                        isGoogleConnected && isOnline -> language.pick(
+                                            "فون میں محفوظ • گوگل کلاؤڈ بیک اپ کے لیے تیار",
+                                            "Saved on Phone • Ready for Google Cloud Backup"
+                                        )
+                                        isGoogleConnected -> language.pick(
+                                            "آف لائن موڈ • تمام ڈیٹا فون میں محفوظ ہے",
+                                            "Offline Mode • All store data saved safely on phone"
+                                        )
+                                        else -> language.pick(
+                                            "لوکل موڈ فعال • تمام اسٹاک، بل اور کھاتہ فون میں محفوظ ہے",
+                                            "Local Mode Active • All store, customer & khata data saved on phone"
+                                        )
                                     },
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = if (isOnline) ProfitGreen else WarningAmber
+                                    color = if (isGoogleConnected && !isOnline) WarningAmber else ProfitGreen
                                 )
                             }
                         }
-                        if (!userEmail.isNullOrBlank()) {
+
+                        if (isGoogleConnected) {
                             Text(
-                                text = "${language.pick("اکاؤنٹ", "Account")}: $userEmail",
+                                text = "${language.pick("منسلک گوگل اکاؤنٹ", "Connected Google Account")}: $userEmail",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                        }
-                        FilledTonalButton(
-                            onClick = onSyncCloudNow,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("settings_cloud_sync_button")
-                        ) {
-                            Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.size(6.dp))
-                            Text(language.pick("ابھی کلاؤڈ سنک / بیک اپ کریں", "Sync & Backup to Cloud Now"))
+                            if (settings.lastCloudBackupEpochMs > 0L) {
+                                Text(
+                                    text = "${language.pick("آخری کلاؤڈ بیک اپ", "Last Cloud Backup")}: ${
+                                        ReceiptFormatter.formatDateTime(settings.lastCloudBackupEpochMs)
+                                    }",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = onBackupToCloudNow,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("settings_cloud_sync_button")
+                                ) {
+                                    Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.size(6.dp))
+                                    Text(language.pick("کلاؤڈ بیک اپ", "Backup Now"))
+                                }
+                                OutlinedButton(
+                                    onClick = onRestoreFromCloudNow,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("settings_cloud_restore_button")
+                                ) {
+                                    Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.size(6.dp))
+                                    Text(language.pick("ری اسٹور کریں", "Restore"))
+                                }
+                            }
+                        } else {
+                            FilledTonalButton(
+                                onClick = onConnectGoogleAccount,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("settings_connect_google_button")
+                            ) {
+                                Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.size(6.dp))
+                                Text(
+                                    language.pick(
+                                        "گوگل اکاؤنٹ منسلک کریں (اختیاری کلاؤڈ بیک اپ)",
+                                        "Connect Google Account (Optional Cloud Backup)"
+                                    )
+                                )
+                            }
                         }
                     }
                 }
@@ -404,7 +464,7 @@ fun SettingsScreen(
                 }
             }
 
-            // 6. Sign Out Button
+            // 6. Log Out / Return to Login Screen Button (Local Data Stays Safe)
             item {
                 OutlinedButton(
                     onClick = onSignOut,
@@ -416,7 +476,12 @@ fun SettingsScreen(
                 ) {
                     Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.size(8.dp))
-                    Text(language.pick("گوگل اکاؤنٹ سے لاگ آؤٹ کریں", "Sign Out of Google Account"))
+                    Text(
+                        language.pick(
+                            "لاگ آؤٹ کریں (فون کا ڈیٹا محفوظ رہے گا)",
+                            "Log Out (Local Phone Data Stays Safe)"
+                        )
+                    )
                 }
             }
         }

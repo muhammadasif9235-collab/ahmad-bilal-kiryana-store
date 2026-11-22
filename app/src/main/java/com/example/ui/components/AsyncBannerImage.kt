@@ -76,10 +76,57 @@ fun AsyncBannerImage(
     }
 }
 
+/**
+ * Displays the official Ahmad Bilal Kiryana Store circular emblem decoded asynchronously
+ * with full ARGB_8888 transparency and an optional gold crest ring.
+ */
+@Composable
+fun ShopLogoBadge(
+    @DrawableRes resId: Int,
+    contentDescription: String?,
+    modifier: Modifier = Modifier,
+    maxWidthPx: Int = 512
+) {
+    val context = LocalContext.current
+    val cacheKey = resId xor 0x5A5A5A5A
+    val cached = DecodedDrawableCache.get(cacheKey)
+    val imageBitmap by produceState<ImageBitmap?>(initialValue = cached, key1 = cacheKey) {
+        if (value == null) {
+            val decoded = withContext(Dispatchers.IO) {
+                decodeSampledDrawable(
+                    resources = context.resources,
+                    resId = resId,
+                    maxWidthPx = maxWidthPx,
+                    preserveAlpha = true
+                )
+            }
+            if (decoded != null) {
+                DecodedDrawableCache.put(cacheKey, decoded)
+                value = decoded
+            }
+        }
+    }
+
+    val bitmap = imageBitmap
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap,
+            contentDescription = contentDescription,
+            contentScale = ContentScale.Fit,
+            modifier = modifier
+        )
+    } else {
+        Box(
+            modifier = modifier.background(Color(0xFF084C36))
+        )
+    }
+}
+
 private fun decodeSampledDrawable(
     resources: Resources,
     @DrawableRes resId: Int,
-    maxWidthPx: Int
+    maxWidthPx: Int,
+    preserveAlpha: Boolean = false
 ): ImageBitmap? {
     return try {
         val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -93,7 +140,7 @@ private fun decodeSampledDrawable(
         }
         val decodeOpts = BitmapFactory.Options().apply {
             inSampleSize = sampleSize
-            inPreferredConfig = Bitmap.Config.RGB_565
+            inPreferredConfig = if (preserveAlpha) Bitmap.Config.ARGB_8888 else Bitmap.Config.RGB_565
         }
         BitmapFactory.decodeResource(resources, resId, decodeOpts)?.asImageBitmap()
     } catch (_: Exception) {

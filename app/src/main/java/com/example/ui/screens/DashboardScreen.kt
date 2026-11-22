@@ -70,6 +70,7 @@ import com.example.i18n.formatQty
 import com.example.i18n.pick
 import com.example.i18n.unitLabel
 import com.example.ui.components.AsyncBannerImage
+import com.example.ui.components.ShopLogoBadge
 import com.example.ui.theme.EmeraldBright
 import com.example.ui.theme.EmeraldPrimary
 import com.example.ui.theme.EmeraldPrimaryDark
@@ -107,12 +108,11 @@ fun DashboardScreen(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // 1. Royal Emerald & Gold Marquee Banner — "احمد بلال کریانہ سٹور ٹانڈہ" in bold display typography
+            // 1. Royal Emerald & Gold Marquee Banner with Official Store Emblem
             item {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(198.dp)
                         .clip(RoundedCornerShape(26.dp))
                         .border(
                             width = 1.5.dp,
@@ -122,19 +122,19 @@ fun DashboardScreen(
                 ) {
                     AsyncBannerImage(
                         resId = R.drawable.img_kiryana_banner_1795314088201,
-                        contentDescription = language.pick("احمد بلال کریانہ سٹور ٹانڈہ", "Ahmad Bilal Kiryana Store, Tanda"),
+                        contentDescription = null,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.matchParentSize()
                     )
                     Box(
                         modifier = Modifier
-                            .fillMaxSize()
+                            .matchParentSize()
                             .background(
                                 Brush.linearGradient(
                                     colors = listOf(
-                                        Color(0xE8042B1E),
-                                        Color(0xCC084C36),
-                                        Color(0xDD052B1E)
+                                        Color(0xEC042B1E),
+                                        Color(0xD4084C36),
+                                        Color(0xE6052B1E)
                                     )
                                 )
                             )
@@ -156,9 +156,9 @@ fun DashboardScreen(
                     )
                     Column(
                         modifier = Modifier
-                            .fillMaxSize()
+                            .fillMaxWidth()
                             .padding(16.dp),
-                        verticalArrangement = Arrangement.SpaceBetween
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         // Top Badge & Gujrat Rate Sync Row
                         Row(
@@ -208,46 +208,70 @@ fun DashboardScreen(
                             }
                         }
 
-                        // Bold Prominent Centerpiece Title
-                        Column(
+                        // Official Circular Logo + Bold Store Title Row
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
-                            Text(
-                                text = language.pick("احمد بلال کریانہ سٹور ٹانڈہ", "Ahmad Bilal Kiryana Store, Tanda"),
-                                style = MaterialTheme.typography.headlineMedium.copy(
-                                    fontSize = if (language == AppLanguage.URDU) 27.sp else 22.sp,
-                                    lineHeight = if (language == AppLanguage.URDU) 38.sp else 28.sp,
-                                    fontWeight = FontWeight.ExtraBold
-                                ),
-                                color = Color.White,
-                                textAlign = TextAlign.Center,
-                                maxLines = 2
-                            )
-                            Spacer(Modifier.height(6.dp))
                             Box(
                                 modifier = Modifier
-                                    .width(96.dp)
-                                    .height(2.5.dp)
-                                    .clip(RoundedCornerShape(50.dp))
-                                    .background(
-                                        Brush.horizontalGradient(
-                                            listOf(Color.Transparent, GoldShimmer, Color.Transparent)
-                                        )
+                                    .size(76.dp)
+                                    .clip(CircleShape)
+                                    .border(
+                                        width = 2.dp,
+                                        brush = Brush.linearGradient(listOf(GoldShimmer, SaffronSecondary, GoldShimmer)),
+                                        shape = CircleShape
                                     )
-                            )
-                            Spacer(Modifier.height(5.dp))
-                            Text(
-                                text = language.pick(
-                                    "آج کی فروخت، منافع، اسٹاک، راشن کارڈ اور ادھار کھاتہ",
-                                    "Daily Sales, Profit, Inventory, Ration Card & Udhar Khata"
-                                ),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = GoldShimmer.copy(alpha = 0.92f),
-                                textAlign = TextAlign.Center,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                                    .padding(2.dp)
+                            ) {
+                                ShopLogoBadge(
+                                    resId = R.drawable.img_shop_logo,
+                                    contentDescription = language.pick(
+                                        "احمد بلال کریانہ سٹور ٹانڈہ لوگو",
+                                        "Ahmad Bilal Kiryana Store, Tanda Logo"
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(CircleShape)
+                                )
+                            }
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = language.pick("احمد بلال کریانہ سٹور ٹانڈہ", "Ahmad Bilal Kiryana Store, Tanda"),
+                                    style = MaterialTheme.typography.headlineMedium.copy(
+                                        fontSize = if (language == AppLanguage.URDU) 24.sp else 20.sp,
+                                        lineHeight = if (language == AppLanguage.URDU) 34.sp else 26.sp,
+                                        fontWeight = FontWeight.ExtraBold
+                                    ),
+                                    color = Color.White,
+                                    maxLines = 2
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .width(84.dp)
+                                        .height(2.5.dp)
+                                        .clip(RoundedCornerShape(50.dp))
+                                        .background(
+                                            Brush.horizontalGradient(
+                                                listOf(GoldShimmer, SaffronSecondary, Color.Transparent)
+                                            )
+                                        )
+                                )
+                                Text(
+                                    text = language.pick(
+                                        "آج کی فروخت، منافع، اسٹاک، راشن کارڈ اور ادھار کھاتہ",
+                                        "Daily Sales, Profit, Inventory, Ration Card & Udhar Khata"
+                                    ),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = GoldShimmer.copy(alpha = 0.94f),
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }

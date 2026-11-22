@@ -1,6 +1,7 @@
 package com.example.data
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -20,7 +21,9 @@ data class ShopSettings(
     val lastRateSyncEpochMs: Long = 0L,
     val shopPhone: String = "0300-0000000",
     val shopAddressUrdu: String = "مین بازار ٹانڈہ، ضلع گجرات، پنجاب",
-    val shopAddressEnglish: String = "Main Bazaar Tanda, District Gujrat, Punjab"
+    val shopAddressEnglish: String = "Main Bazaar Tanda, District Gujrat, Punjab",
+    val localOwnerLoggedIn: Boolean = false,
+    val lastCloudBackupEpochMs: Long = 0L
 )
 
 class ShopPreferences(private val context: Context) {
@@ -32,6 +35,8 @@ class ShopPreferences(private val context: Context) {
         val DEFAULT_MARGIN = doublePreferencesKey("default_margin_percent")
         val LAST_RATE_SYNC = longPreferencesKey("last_rate_sync_ms")
         val SHOP_PHONE = stringPreferencesKey("shop_phone")
+        val LOCAL_OWNER_LOGGED_IN = booleanPreferencesKey("local_owner_logged_in")
+        val LAST_CLOUD_BACKUP = longPreferencesKey("last_cloud_backup_ms")
     }
 
     val settingsFlow: Flow<ShopSettings> = context.shopDataStore.data.map { prefs ->
@@ -41,7 +46,9 @@ class ShopPreferences(private val context: Context) {
             selectedPrinterAddress = prefs[Keys.PRINTER_ADDRESS] ?: "",
             defaultMarginPercent = prefs[Keys.DEFAULT_MARGIN] ?: 8.0,
             lastRateSyncEpochMs = prefs[Keys.LAST_RATE_SYNC] ?: 0L,
-            shopPhone = prefs[Keys.SHOP_PHONE] ?: "0300-0000000"
+            shopPhone = prefs[Keys.SHOP_PHONE] ?: "0300-0000000",
+            localOwnerLoggedIn = prefs[Keys.LOCAL_OWNER_LOGGED_IN] ?: false,
+            lastCloudBackupEpochMs = prefs[Keys.LAST_CLOUD_BACKUP] ?: 0L
         )
     }
 
@@ -68,5 +75,13 @@ class ShopPreferences(private val context: Context) {
 
     suspend fun setShopPhone(phone: String) {
         context.shopDataStore.edit { it[Keys.SHOP_PHONE] = phone.take(30) }
+    }
+
+    suspend fun setLocalOwnerLoggedIn(loggedIn: Boolean) {
+        context.shopDataStore.edit { it[Keys.LOCAL_OWNER_LOGGED_IN] = loggedIn }
+    }
+
+    suspend fun setLastCloudBackupTime(epochMs: Long) {
+        context.shopDataStore.edit { it[Keys.LAST_CLOUD_BACKUP] = epochMs }
     }
 }

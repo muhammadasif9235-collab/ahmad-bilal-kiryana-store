@@ -81,7 +81,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.filled.PhoneAndroid
 import com.example.auth.AuthScreen
+import com.example.auth.onGoogleSignInClicked
 import com.example.auth.signOutShopAccount
 import com.example.data.ShopPreferences
 import com.example.data.ShopRepository
@@ -98,6 +101,7 @@ import com.example.services.ScannedNfcCard
 import com.example.ui.components.AutoReceiptDialog
 import com.example.ui.components.PaymentReceiptDialog
 import com.example.ui.components.RationCardReceiptDialog
+import com.example.ui.components.ShopLogoBadge
 import com.example.ui.screens.BillingScreen
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.KhataScreen
@@ -181,7 +185,8 @@ fun AppRoot(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val preferences = remember { ShopPreferences(context.applicationContext) }
-    val settings by preferences.settingsFlow.collectAsStateWithLifecycle(initialValue = ShopSettings())
+    val loadedSettings by preferences.settingsFlow.collectAsStateWithLifecycle(initialValue = null)
+    val settings = loadedSettings ?: ShopSettings()
     val language = settings.language
 
     var currentUser by remember { mutableStateOf(Firebase.auth.currentUser) }
@@ -195,30 +200,48 @@ fun AppRoot(
 
     KiryanaTheme(language = language) {
         CompositionLocalProvider(LocalAppLanguage provides language) {
-            val user = currentUser
-            if (user == null) {
-                AuthScreen(
-                    language = language,
-                    onToggleLanguage = {
-                        scope.launch {
-                            val next = if (language == AppLanguage.URDU) AppLanguage.ENGLISH else AppLanguage.URDU
-                            preferences.setLanguage(next)
-                        }
-                    },
-                    onAuthSuccess = {
-                        currentUser = Firebase.auth.currentUser
-                    }
+            if (loadedSettings == null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(EmeraldPrimary)
                 )
             } else {
-                val uid = user.uid
-                key(uid) {
+                val isLoggedIn = settings.localOwnerLoggedIn || currentUser != null
+                if (!isLoggedIn) {
+                    AuthScreen(
+                        language = language,
+                        onToggleLanguage = {
+                            scope.launch {
+                                val next = if (language == AppLanguage.URDU) AppLanguage.ENGLISH else AppLanguage.URDU
+                                preferences.setLanguage(next)
+                            }
+                        },
+                        onLocalOwnerLogin = {
+                            scope.launch {
+                                preferences.setLocalOwnerLoggedIn(true)
+                            }
+                        },
+                        onGoogleAuthSuccess = {
+                            currentUser = Firebase.auth.currentUser
+                            scope.launch {
+                                preferences.setLocalOwnerLoggedIn(true)
+                            }
+                        }
+                    )
+                } else {
                     MainShopShell(
-                        currentUserId = uid,
-                        userEmail = user.email,
+                        userEmail = currentUser?.email,
                         preferences = preferences,
                         incomingNfcFlow = incomingNfcFlow,
                         onConsumeIncomingNfc = onConsumeIncomingNfc,
-                        onSignedOut = { currentUser = Firebase.auth.currentUser }
+                        onGoogleUserUpdated = { currentUser = Firebase.auth.currentUser },
+                        onSignedOut = {
+                            currentUser = Firebase.auth.currentUser
+                            scope.launch {
+                                preferences.setLocalOwnerLoggedIn(false)
+                            }
+                        }
                     )
                 }
             }
@@ -229,11 +252,11 @@ fun AppRoot(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MainShopShell(
-    currentUserId: String,
     userEmail: String?,
     preferences: ShopPreferences,
     incomingNfcFlow: StateFlow<ScannedNfcCard?>,
     onConsumeIncomingNfc: () -> Unit,
+    onGoogleUserUpdated: () -> Unit,
     onSignedOut: () -> Unit
 ) {
     val context = LocalContext.current
@@ -241,7 +264,7 @@ private fun MainShopShell(
     val credentialManager = remember(context) { lazy { CredentialManager.create(context) } }
 
     val viewModel: ShopViewModel = viewModel(
-        key = currentUserId,
+        key = "ahmad_bilal_local_shop_vm",
         factory = viewModelFactory {
             initializer {
                 val app = checkNotNull(this[APPLICATION_KEY])
@@ -249,8 +272,7 @@ private fun MainShopShell(
                     repository = ShopRepository(app),
                     preferences = preferences,
                     networkMonitor = NetworkMonitor(app),
-                    bluetoothPrinterManager = BluetoothPrinterManager(app),
-                    currentUserId = currentUserId
+                    bluetoothPrinterManager = BluetoothPrinterManager(app)
                 )
             }
         }
@@ -349,43 +371,78 @@ private fun MainShopShell(
                         }
                     },
                     title = {
-                        Column {
-                            Text(
-                                text = language.pick(
-                                    "احمد بلال کریانہ سٹور ٹانڈہ",
-                                    "Ahmad Bilal Kiryana, Tanda"
-                                ),
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color.White,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                        val isCloudLinked = !userEmail.isNullOrBlank()
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .border(1.4.dp, GoldShimmer, CircleShape)
+                                    .padding(1.5.dp)
                             ) {
-                                Box(
+                                ShopLogoBadge(
+                                    resId = R.drawable.img_shop_logo,
+                                    contentDescription = language.pick(
+                                        "احمد بلال کریانہ سٹور لوگو",
+                                        "Ahmad Bilal Kiryana Store Logo"
+                                    ),
                                     modifier = Modifier
-                                        .size(7.dp)
-                                        .clip(CircleShape)
-                                        .background(if (isOnline) Color(0xFF4ADE80) else GoldShimmer)
+                                        .fillMaxSize()
+                                        .clip(CircleShape),
+                                    maxWidthPx = 192
                                 )
-                                Icon(
-                                    imageVector = if (isOnline) Icons.Default.CloudDone else Icons.Default.CloudOff,
-                                    contentDescription = null,
-                                    tint = if (isOnline) Color(0xFF86EFAC) else GoldShimmer,
-                                    modifier = Modifier.size(13.dp)
-                                )
+                            }
+                            Column {
                                 Text(
-                                    text = if (isOnline) {
-                                        language.pick("آن لائن • کلاؤڈ بیک اپ", "Online • Cloud Synced")
-                                    } else {
-                                        language.pick("آف لائن موڈ • لوکل محفوظ", "Offline Mode • Local")
-                                    },
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = if (isOnline) Color(0xFFD1FAE5) else GoldShimmer
+                                    text = language.pick(
+                                        "احمد بلال کریانہ سٹور ٹانڈہ",
+                                        "Ahmad Bilal Kiryana, Tanda"
+                                    ),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(7.dp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                if (isCloudLinked && isOnline) Color(0xFF4ADE80)
+                                                else if (!isCloudLinked) Color(0xFF86EFAC)
+                                                else GoldShimmer
+                                            )
+                                    )
+                                    Icon(
+                                        imageVector = when {
+                                            isCloudLinked && isOnline -> Icons.Default.CloudDone
+                                            isCloudLinked -> Icons.Default.CloudOff
+                                            else -> Icons.Default.PhoneAndroid
+                                        },
+                                        contentDescription = null,
+                                        tint = if (isCloudLinked && !isOnline) GoldShimmer else Color(0xFF86EFAC),
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                    Text(
+                                        text = when {
+                                            isCloudLinked && isOnline -> language.pick("فون اسٹوریج • کلاؤڈ منسلک", "Local DB • Cloud Ready")
+                                            isCloudLinked -> language.pick("آف لائن • فون میں محفوظ", "Offline • Saved on Phone")
+                                            else -> language.pick("فون اسٹوریج • آف لائن فعال", "On-Device Storage • Offline Ready")
+                                        },
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (isCloudLinked && !isOnline) GoldShimmer else Color(0xFFD1FAE5),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
                         }
                     },
@@ -624,7 +681,32 @@ private fun MainShopShell(
                                 userEmail = userEmail,
                                 pairedPrinters = pairedPrinters,
                                 onToggleLanguage = { viewModel.toggleLanguage() },
-                                onSyncCloudNow = { viewModel.syncCloudNow() },
+                                onConnectGoogleAccount = {
+                                    onGoogleSignInClicked(
+                                        context = context,
+                                        credentialManager = credentialManager.value,
+                                        onAuthSuccess = {
+                                            onGoogleUserUpdated()
+                                            viewModel.postMessage(
+                                                language.pick(
+                                                    "گوگل اکاؤنٹ منسلک ہو گیا! اب آپ کلاؤڈ بیک اپ کر سکتے ہیں۔",
+                                                    "Google Account connected! You can now run Cloud Backup."
+                                                )
+                                            )
+                                        },
+                                        onAuthError = { _ ->
+                                            viewModel.postMessage(
+                                                language.pick(
+                                                    "اس APK پر گوگل لاگ اِن دستیاب نہیں — آپ کا تمام ڈیٹا فون میں محفوظ ہے۔",
+                                                    "Google Sign-In unavailable on this standalone APK — all data remains safely saved on your phone."
+                                                )
+                                            )
+                                        },
+                                        scope = scope
+                                    )
+                                },
+                                onBackupToCloudNow = { viewModel.backupLocalToCloud() },
+                                onRestoreFromCloudNow = { viewModel.restoreCloudToLocal() },
                                 onSyncGujratMarketRates = { viewModel.syncGujratMarketRates() },
                                 onUpdateDefaultMargin = { viewModel.updateDefaultMargin(it) },
                                 onUpdateShopPhone = { viewModel.updateShopPhone(it) },
@@ -633,11 +715,15 @@ private fun MainShopShell(
                                 onTestBluetoothPrint = { viewModel.printBluetoothTestSlip() },
                                 onOpenRationFund = { currentDestination = ShopDestination.RATION_FUND },
                                 onSignOut = {
-                                    signOutShopAccount(
-                                        credentialManager = credentialManager.value,
-                                        scope = scope,
-                                        onSignOutComplete = onSignedOut
-                                    )
+                                    if (Firebase.auth.currentUser != null) {
+                                        signOutShopAccount(
+                                            credentialManager = credentialManager.value,
+                                            scope = scope,
+                                            onSignOutComplete = onSignedOut
+                                        )
+                                    } else {
+                                        onSignedOut()
+                                    }
                                 }
                             )
                         }

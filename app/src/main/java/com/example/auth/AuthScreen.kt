@@ -26,8 +26,10 @@ import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -36,16 +38,15 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -67,38 +68,25 @@ import com.example.R
 import com.example.i18n.AppLanguage
 import com.example.i18n.pick
 import com.example.ui.components.AsyncBannerImage
+import com.example.ui.components.ShopLogoBadge
 import com.example.ui.theme.EmeraldPrimary
 import com.example.ui.theme.EmeraldPrimaryDark
 import com.example.ui.theme.GoldShimmer
 import com.example.ui.theme.SaffronSecondary
-import kotlinx.coroutines.delay
 
 @Composable
 fun AuthScreen(
     language: AppLanguage,
     onToggleLanguage: () -> Unit,
-    onAuthSuccess: () -> Unit
+    onLocalOwnerLogin: () -> Unit,
+    onGoogleAuthSuccess: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val credentialManager = remember(context) { lazy { CredentialManager.create(context) } }
 
-    var isLoading by remember { mutableStateOf(false) }
+    var isGoogleLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-
-    // Wait for initial Activity frames & SurfaceSyncGroup to settle before triggering CredentialManager IPC
-    LaunchedEffect(Unit) {
-        withFrameNanos { }
-        withFrameNanos { }
-        delay(350)
-        attemptAutoSignIn(
-            context = context,
-            credentialManager = credentialManager.value,
-            onAuthSuccess = onAuthSuccess,
-            onUnauthenticated = { },
-            scope = scope
-        )
-    }
 
     Box(
         modifier = Modifier
@@ -115,7 +103,7 @@ fun AuthScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             // Top Language Toggle Row
             Row(
@@ -137,11 +125,10 @@ fun AuthScreen(
                 }
             }
 
-            // Royal Emerald & Antique Gold Hero Marquee
+            // Royal Emerald & Antique Gold Hero Marquee with Official Store Crest
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(236.dp)
                     .clip(RoundedCornerShape(26.dp))
                     .border(
                         width = 1.6.dp,
@@ -151,19 +138,19 @@ fun AuthScreen(
             ) {
                 AsyncBannerImage(
                     resId = R.drawable.img_kiryana_banner_1795314088201,
-                    contentDescription = language.pick("احمد بلال کریانہ سٹور ٹانڈہ", "Ahmad Bilal Kiryana Store, Tanda"),
+                    contentDescription = null,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.matchParentSize()
                 )
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .matchParentSize()
                         .background(
                             Brush.verticalGradient(
                                 colors = listOf(
-                                    Color(0x99042D1F),
-                                    Color(0xCC063927),
-                                    Color(0xEE042519)
+                                    Color(0xB8042D1F),
+                                    Color(0xD9063927),
+                                    Color(0xF2042519)
                                 )
                             )
                         )
@@ -171,25 +158,48 @@ fun AuthScreen(
                             val ringColor = Color(0x33FDE68A)
                             drawCircle(
                                 color = ringColor,
-                                radius = size.minDimension * 0.65f,
-                                center = Offset(size.width * 0.12f, size.height * 0.15f),
+                                radius = size.minDimension * 0.62f,
+                                center = Offset(size.width * 0.10f, size.height * 0.14f),
                                 style = Stroke(width = 2.5f)
                             )
                             drawCircle(
                                 color = ringColor,
-                                radius = size.minDimension * 0.45f,
-                                center = Offset(size.width * 0.92f, size.height * 0.85f),
+                                radius = size.minDimension * 0.44f,
+                                center = Offset(size.width * 0.92f, size.height * 0.86f),
                                 style = Stroke(width = 2f)
                             )
                         }
                 )
                 Column(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 22.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    // Official Store Circular Emblem
+                    Box(
+                        modifier = Modifier
+                            .size(116.dp)
+                            .clip(CircleShape)
+                            .border(
+                                width = 2.5.dp,
+                                brush = Brush.linearGradient(listOf(GoldShimmer, SaffronSecondary, GoldShimmer)),
+                                shape = CircleShape
+                            )
+                            .padding(3.dp)
+                    ) {
+                        ShopLogoBadge(
+                            resId = R.drawable.img_shop_logo,
+                            contentDescription = language.pick(
+                                "احمد بلال کریانہ سٹور ٹانڈہ لوگو",
+                                "Ahmad Bilal Kiryana Store, Tanda Logo"
+                            ),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(CircleShape)
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
                     Surface(
                         color = SaffronSecondary,
                         shape = RoundedCornerShape(50.dp)
@@ -202,7 +212,7 @@ fun AuthScreen(
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
                         )
                     }
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(10.dp))
                     Text(
                         text = language.pick("احمد بلال کریانہ سٹور ٹانڈہ", "Ahmad Bilal Kiryana Store, Tanda"),
                         style = MaterialTheme.typography.headlineMedium.copy(
@@ -230,6 +240,138 @@ fun AuthScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = GoldShimmer.copy(alpha = 0.95f),
                         textAlign = TextAlign.Center
+                    )
+                }
+            }
+
+            // PRIMARY CTA: One-Tap Local Shop Owner Login (Works 100% on Standalone APKs)
+            Button(
+                onClick = onLocalOwnerLogin,
+                shape = RoundedCornerShape(18.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = EmeraldPrimary,
+                    contentColor = Color.White
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(60.dp)
+                    .testTag("local_owner_login_button")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Storefront,
+                    contentDescription = null,
+                    tint = GoldShimmer,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    text = language.pick(
+                        "دکان کھولیں / مالک لاگ اِن (براہِ راست)",
+                        "Continue to Store / Shop Owner Login"
+                    ),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+
+            // Friendly local-storage reassurance
+            Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PhoneAndroid,
+                        contentDescription = null,
+                        tint = EmeraldPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = language.pick(
+                            "گوگل لاگ اِن کے بغیر فوراً استعمال کریں — آپ کا تمام اسٹاک، بل اور ادھار کھاتہ فون میں محفوظ رہے گا۔",
+                            "Open instantly without Google Sign-In — all store items, bills, and Udhar Khata are saved directly on your phone."
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+
+            if (errorMessage != null) {
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = errorMessage!!,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+            }
+
+            // SECONDARY OPTIONAL CTA: Google Sign-In for Cloud Backup
+            OutlinedButton(
+                onClick = {
+                    errorMessage = null
+                    isGoogleLoading = true
+                    onGoogleSignInClicked(
+                        context = context,
+                        credentialManager = credentialManager.value,
+                        onAuthSuccess = {
+                            isGoogleLoading = false
+                            onGoogleAuthSuccess()
+                        },
+                        onAuthError = { _ ->
+                            isGoogleLoading = false
+                            errorMessage = language.pick(
+                                "اس APK پر گوگل لاگ اِن دستیاب نہیں — براہِ کرم اوپر «دکان کھولیں / مالک لاگ اِن» بٹن استعمال کریں۔ تمام ڈیٹا فون میں محفوظ رہے گا۔",
+                                "Google Sign-In is unavailable on this standalone APK. Please use 'Continue to Store / Shop Owner Login' above — all data saves locally on your phone."
+                            )
+                        },
+                        scope = scope,
+                        onAuthCancelled = {
+                            isGoogleLoading = false
+                        }
+                    )
+                },
+                enabled = !isGoogleLoading,
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.2.dp, EmeraldPrimary.copy(alpha = 0.55f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .testTag("google_sign_in_button")
+            ) {
+                if (isGoogleLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = EmeraldPrimary,
+                        strokeWidth = 2.5.dp
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.CloudDone,
+                        contentDescription = null,
+                        tint = EmeraldPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = language.pick(
+                            "گوگل اکاؤنٹ سے لاگ اِن (اختیاری کلاؤڈ بیک اپ)",
+                            "Sign in with Google (Optional Cloud Backup)"
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = EmeraldPrimary
                     )
                 }
             }
@@ -283,91 +425,14 @@ fun AuthScreen(
                         )
                     )
                     FeatureBullet(
-                        icon = Icons.Default.CloudDone,
+                        icon = Icons.Default.PhoneAndroid,
                         text = language.pick(
-                            "آف لائن موڈ + محفوظ گوگل کلاؤڈ بیک اپ",
-                            "Works offline + automatic Google Cloud backup"
+                            "مکمل آف لائن فون اسٹوریج + اختیاری گوگل کلاؤڈ بیک اپ",
+                            "100% offline phone storage + optional Google Cloud backup"
                         )
                     )
                 }
             }
-
-            if (errorMessage != null) {
-                Surface(
-                    color = MaterialTheme.colorScheme.errorContainer,
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = errorMessage!!,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(12.dp)
-                    )
-                }
-            }
-
-            // Primary Google Sign-In Button
-            Button(
-                onClick = {
-                    errorMessage = null
-                    isLoading = true
-                    onGoogleSignInClicked(
-                        context = context,
-                        credentialManager = credentialManager.value,
-                        onAuthSuccess = {
-                            isLoading = false
-                            onAuthSuccess()
-                        },
-                        onAuthError = { msg ->
-                            isLoading = false
-                            errorMessage = msg
-                        },
-                        scope = scope,
-                        onAuthCancelled = {
-                            isLoading = false
-                        }
-                    )
-                },
-                enabled = !isLoading,
-                shape = RoundedCornerShape(18.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = EmeraldPrimary,
-                    contentColor = Color.White
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp)
-                    .testTag("google_sign_in_button")
-            ) {
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = Color.White,
-                        strokeWidth = 2.5.dp
-                    )
-                } else {
-                    Text(
-                        text = language.pick(
-                            "گوگل اکاؤنٹ سے لاگ ان کریں (کلاؤڈ بیک اپ)",
-                            "Sign in with Google (Cloud Backup)"
-                        ),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
-            Text(
-                text = language.pick(
-                    "ایک بار لاگ ان کے بعد آپ انٹرنیٹ کے بغیر (آف لائن موڈ) میں بھی مکمل بلنگ، راشن کارڈ اور کھاتہ چلا سکتے ہیں۔",
-                    "Once signed in, your shop works seamlessly offline and syncs automatically to Google Cloud when online."
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 12.dp)
-            )
         }
     }
 }

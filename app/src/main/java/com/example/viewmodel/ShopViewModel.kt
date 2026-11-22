@@ -63,8 +63,7 @@ class ShopViewModel(
     private val repository: ShopRepository,
     private val preferences: ShopPreferences,
     private val networkMonitor: NetworkMonitor,
-    private val bluetoothPrinterManager: BluetoothPrinterManager,
-    private val currentUserId: String
+    private val bluetoothPrinterManager: BluetoothPrinterManager
 ) : ViewModel() {
 
     private companion object {
@@ -79,30 +78,30 @@ class ShopViewModel(
     val isOnline: StateFlow<Boolean> = networkMonitor.isOnlineFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), networkMonitor.isCurrentlyOnline())
 
-    // --- FIRESTORE REALTIME STREAMS (Two-tier CancellationException / FirestoreException unwrapping) ---
+    // --- LOCAL-FIRST ROOM REACTIVE STREAMS (Always work offline & on standalone APKs) ---
     val productsState: StateFlow<UiState<List<Product>>> =
-        repository.observeProducts(currentUserId).toUiState("products")
+        repository.observeProducts().toUiState("products")
 
     val customersState: StateFlow<UiState<List<Customer>>> =
-        repository.observeCustomers(currentUserId).toUiState("customers")
+        repository.observeCustomers().toUiState("customers")
 
     val ordersState: StateFlow<UiState<List<Order>>> =
-        repository.observeOrders(currentUserId).toUiState("orders")
+        repository.observeOrders().toUiState("orders")
 
     val ledgerState: StateFlow<UiState<List<LedgerEntry>>> =
-        repository.observeLedgerEntries(currentUserId).toUiState("ledgerEntries")
+        repository.observeLedgerEntries().toUiState("ledgerEntries")
 
     val stockMovementsState: StateFlow<UiState<List<StockMovement>>> =
-        repository.observeStockMovements(currentUserId).toUiState("stockMovements")
+        repository.observeStockMovements().toUiState("stockMovements")
 
     val donationsState: StateFlow<UiState<List<RationDonation>>> =
-        repository.observeDonations(currentUserId).toUiState("donations")
+        repository.observeDonations().toUiState("donations")
 
     val rationItemsState: StateFlow<UiState<List<RationCardItem>>> =
-        repository.observeRationCardItems(currentUserId).toUiState("rationItems")
+        repository.observeRationCardItems().toUiState("rationItems")
 
     val rationCardBillsState: StateFlow<UiState<List<RationCardBill>>> =
-        repository.observeRationCardBills(currentUserId).toUiState("rationCardBills")
+        repository.observeRationCardBills().toUiState("rationCardBills")
 
     // Compute dashboard analytics off the Main Thread so frame rendering never stalls
     val analytics: StateFlow<ShopAnalytics> = combine(
@@ -621,23 +620,70 @@ class ShopViewModel(
         }
     }
 
-    // --- CLOUD SYNC ---
-    fun syncCloudNow() {
+    // --- OPTIONAL GOOGLE CLOUD BACKUP & RESTORE ---
+    fun backupLocalToCloud() {
+        if (!repository.isCloudConnected()) {
+            showMessage(
+                "کلاؤڈ بیک اپ کے لیے پہلے گوگل اکاؤنٹ منسلک کریں (آپ کا تمام ڈیٹا فون میں محفوظ ہے)",
+                "Connect a Google account first for Cloud Backup (your data is safely stored on this phone)"
+            )
+            return
+        }
         if (!isOnline.value) {
             showMessage(
-                "اس وقت آف لائن موڈ ہے — انٹرنیٹ آتے ہی ڈیٹا خودکار سنک ہو جائے گا",
-                "Currently offline — pending data will auto-sync when online"
+                "اس وقت آف لائن موڈ ہے — انٹرنیٹ منسلک کر کے کلاؤڈ بیک اپ کریں",
+                "Currently offline — connect to the internet to run Cloud Backup"
             )
             return
         }
         viewModelScope.launch {
             _isBusy.value = true
-            val result = repository.syncPendingWritesToCloud()
+            val result = repository.backupLocalToCloud()
             _isBusy.value = false
-            result.onSuccess {
-                showMessage("تمام ڈیٹا کلاؤڈ پر کامیابی سے بیک اپ ہو گیا", "All shop data synced to Cloud backup")
-            }.onFailure {
-                showMessage("ڈیٹا لوکل محفوظ ہے، انٹرنیٹ پر خودکار سنک ہو گا", "Data saved locally, syncing in background")
+            result.onSuccess { count ->
+                preferences.setLastCloudBackupTime(System.currentTimeMillis())
+                showMessage(
+                    "کلاؤڈ بیک اپ مکمل! $count ریکارڈز گوگل کلاؤڈ پر محفوظ ہو گئے",
+                    "Cloud Backup complete! $count records backed up to Google Cloud"
+                )
+            }.onFailure { err ->
+                showMessage(
+                    "کلاؤڈ بیک اپ ناکام: ${err.localizedMessage ?: "دوبارہ کوشش کریں"}",
+                    "Cloud Backup failed: ${err.localizedMessage ?: "Please try again"}"
+                )
+            }
+        }
+    }
+
+    fun restoreCloudToLocal() {
+        if (!repository.isCloudConnected()) {
+            showMessage(
+                "کلاؤڈ سے ری اسٹور کرنے کے لیے پہلے گوگل اکاؤنٹ منسلک کریں",
+                "Connect your Google account first to restore from Cloud"
+            )
+            return
+        }
+        if (!isOnline.value) {
+            showMessage(
+                "ری اسٹور کے لیے انٹرنیٹ کنکشن درکار ہے",
+                "Internet connection is required to restore from Cloud"
+            )
+            return
+        }
+        viewModelScope.launch {
+            _isBusy.value = true
+            val result = repository.restoreCloudToLocal()
+            _isBusy.value = false
+            result.onSuccess { count ->
+                showMessage(
+                    "کلاؤڈ سے $count ریکارڈز فون میں کامیابی سے ری اسٹور ہو گئے",
+                    "Restored $count records from Google Cloud to phone"
+                )
+            }.onFailure { err ->
+                showMessage(
+                    "ری اسٹور ناکام: ${err.localizedMessage ?: "دوبارہ کوشش کریں"}",
+                    "Cloud Restore failed: ${err.localizedMessage ?: "Please try again"}"
+                )
             }
         }
     }
