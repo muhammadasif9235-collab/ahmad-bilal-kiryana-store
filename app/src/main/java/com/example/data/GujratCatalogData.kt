@@ -23,6 +23,7 @@ object GujratCatalogData {
 
     val initialProducts: List<GujratSeedProduct> = listOf(
         // Flour & Rice (آٹا اور چاول)
+        GujratSeedProduct("prod_atta_10kg", "گندم کا آٹا (10 کلو تھیلا)", "Wheat Flour 10kg Bag", ProductCategory.FLOUR_RICE, "bag", 1390.0, 1460.0, 5.0, 25.0, 6.0, "8961001000004"),
         GujratSeedProduct("prod_atta_20kg", "گندم کا آٹا (20 کلو تھیلا)", "Wheat Flour 20kg Bag", ProductCategory.FLOUR_RICE, "bag", 2780.0, 2920.0, 5.0, 20.0, 5.0, "8961001000011"),
         GujratSeedProduct("prod_atta_1kg", "کھلا چکی آٹا", "Chakki Atta (Loose)", ProductCategory.FLOUR_RICE, "kg", 138.0, 148.0, 7.2, 85.0, 15.0, "8961001000028"),
         GujratSeedProduct("prod_maida", "میدہ فائن", "Fine Maida Flour", ProductCategory.FLOUR_RICE, "kg", 155.0, 170.0, 9.7, 30.0, 8.0, "8961001000035"),

@@ -1,4 +1,5 @@
 name: Build Ahmad Bilal Kiryana Store APK
+
 on:
   push:
     branches:
@@ -8,6 +9,8 @@ on:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -15,34 +18,84 @@ jobs:
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
-          distribution: 'temurin'
-
-      - name: Prepare Keystore and Firebase Strings
-        run: |
-          if [ -f debug.keystore.base64 ] && [ ! -f debug.keystore ]; then
-            base64 -d debug.keystore.base64 > debug.keystore
-          fi
-          if [ ! -f debug.keystore ]; then
-            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          fi
-          if [ ! -f app/google-services.json ]; then
-            mkdir -p app/src/main/res/values
-            if ! grep -rn "default_web_client_id" app/src/main/res/ >/dev/null 2>&1; then
-              printf '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <string name="google_app_id" translatable="false">1:123456789012:android:0123456789abcdef012345</string>\n    <string name="google_api_key" translatable="false">AIzaSyDummyKeyForAndroidAppBuild1234567890</string>\n    <string name="project_id" translatable="false">ahmad-bilal-kiryana-store</string>\n    <string name="gcm_defaultSenderId" translatable="false">123456789012</string>\n    <string name="google_storage_bucket" translatable="false">ahmad-bilal-kiryana-store.appspot.com</string>\n    <string name="default_web_client_id" translatable="false">123456789012-placeholder.apps.googleusercontent.com</string>\n</resources>\n' > app/src/main/res/values/firebase_strings.xml
-            fi
-          fi
+          distribution: temurin
+          java-version: "21"
 
       - name: Set up Gradle 9.3.1
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '9.3.1'
+          gradle-version: "9.3.1"
 
-      - name: Build Debug APK
-        run: gradle assembleDebug --stacktrace
+      - name: Prepare Debug & Release Keystores
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          # 1. Debug keystore (decode committed base64 or generate fallback)
+          if [ ! -f debug.keystore ]; then
+            if [ -f debug.keystore.base64 ]; then
+              base64 -d debug.keystore.base64 > debug.keystore
+            else
+              keytool -genkeypair -v \
+                -keystore debug.keystore \
+                -storepass android \
+                -alias androiddebugkey \
+                -keypass android \
+                -keyalg RSA -keysize 2048 -validity 10000 \
+                -dname "CN=Android Debug,O=Android,C=US"
+            fi
+          fi
+
+          # 2. Release keystore (use GitHub Secret KEYSTORE_BASE64 if provided, else safe fallback)
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > my-upload-key.jks
+            REL_STORE_PASS="${KEYSTORE_PASSWORD:-$STORE_PASSWORD}"
+            REL_KEY_PASS="${KEY_PASSWORD:-$REL_STORE_PASS}"
+            echo "KEYSTORE_PATH=${GITHUB_WORKSPACE}/my-upload-key.jks" >> "$GITHUB_ENV"
+            echo "STORE_PASSWORD=${REL_STORE_PASS}" >> "$GITHUB_ENV"
+            echo "KEY_PASSWORD=${REL_KEY_PASS}" >> "$GITHUB_ENV"
+          else
+            if [ ! -f my-upload-key.jks ]; then
+              keytool -genkeypair -v \
+                -keystore my-upload-key.jks \
+                -storepass android \
+                -alias upload \
+                -keypass android \
+                -keyalg RSA -keysize 2048 -validity 10000 \
+                -dname "CN=Ahmad Bilal Kiryana Store,O=Tanda Gujrat,C=PK"
+            fi
+            echo "KEYSTORE_PATH=${GITHUB_WORKSPACE}/my-upload-key.jks" >> "$GITHUB_ENV"
+            echo "STORE_PASSWORD=android" >> "$GITHUB_ENV"
+            echo "KEY_PASSWORD=android" >> "$GITHUB_ENV"
+          fi
+
+      - name: Ensure default_web_client_id fallback when google-services.json is absent
+        run: |
+          if [ ! -f app/google-services.json ]; then
+            mkdir -p app/src/main/res/values
+            cat << 'EOF' > app/src/main/res/values/ci_google_services_fallback.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="default_web_client_id" translatable="false">placeholder-web-client-id</string>
+          </resources>
+          EOF
+          fi
+
+      - name: Build Debug and Release APKs
+        run: gradle assembleDebug assembleRelease --stacktrace
 
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Ahmad-Bilal-Kiryana-Store-APK
+          name: ahmad-bilal-kiryana-store-debug-apk
           path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Upload Release APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ahmad-bilal-kiryana-store-release-apk
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: warn

@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PriceChange
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SwapVert
@@ -72,6 +74,7 @@ import com.example.i18n.pick
 import com.example.i18n.unitLabel
 import com.example.services.ReceiptFormatter
 import com.example.ui.theme.ProfitGreen
+import com.example.ui.theme.SaffronSecondary
 import com.example.ui.theme.UdharCrimson
 import com.example.ui.theme.WarningAmber
 import com.example.viewmodel.ShopAnalytics
@@ -104,6 +107,7 @@ fun StockScreen(
     var activeTab by remember { mutableIntStateOf(0) } // 0 = Inventory, 1 = Stock In/Out, 2 = Profit Report
     var searchQuery by remember { mutableStateOf("") }
     var editingProduct by remember { mutableStateOf<Product?>(null) }
+    var quickPriceProduct by remember { mutableStateOf<Product?>(null) }
     var showAddProductDialog by remember { mutableStateOf(false) }
     var movementProduct by remember { mutableStateOf<Product?>(null) }
 
@@ -157,7 +161,7 @@ fun StockScreen(
 
             when (activeTab) {
                 0 -> {
-                    // Search + Auto Gujrat Rate Update Bar
+                    // Search (Urdu & English) + Auto Gujrat Rate Update Bar
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -168,7 +172,14 @@ fun StockScreen(
                         OutlinedTextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
-                            placeholder = { Text(language.pick("آئٹم تلاش کریں...", "Search items...")) },
+                            placeholder = {
+                                Text(
+                                    language.pick(
+                                        "اردو یا انگلش نام تلاش کریں...",
+                                        "Search Urdu or English name..."
+                                    )
+                                )
+                            },
                             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                             singleLine = true,
                             shape = RoundedCornerShape(14.dp),
@@ -183,14 +194,14 @@ fun StockScreen(
                         ) {
                             Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.size(4.dp))
-                            Text(language.pick("گجرات ریٹ", "Auto Rate"))
+                            Text(language.pick("آٹو ریٹ", "Auto Rate"))
                         }
                     }
 
                     LazyColumn(
                         modifier = Modifier.weight(1f),
                         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 88.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         items(filteredProducts, key = { it.id }) { prod ->
                             Card(
@@ -198,60 +209,141 @@ fun StockScreen(
                                     .fillMaxWidth()
                                     .clickable { editingProduct = prod },
                                 shape = RoundedCornerShape(16.dp),
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (prod.autoPriceEnabled) MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+                                    else SaffronSecondary.copy(alpha = 0.55f)
+                                ),
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                             ) {
-                                Row(
+                                Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(14.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = if (language == AppLanguage.URDU) prod.nameUrdu else prod.nameEnglish,
-                                            style = MaterialTheme.typography.titleMedium,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Text(
-                                            text = "${language.pick("خرید", "Cost")}: ${prod.costPrice.toLong()} • ${language.pick("فروخت", "Sale")}: ${prod.sellingPrice.toLong()} • ${language.pick("منافع", "Margin")}: +${prod.profitPerUnit().toLong()}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.Top
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.weight(1f),
+                                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                                        ) {
+                                            // Always display prominent Urdu name as primary title
                                             Text(
-                                                text = "${language.pick("اسٹاک", "Stock")}: ${formatQty(prod.stockQty)} ${unitLabel(prod.unit, language)}",
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = if (prod.isLowStock()) UdharCrimson else ProfitGreen
+                                                text = prod.nameUrdu.ifBlank { prod.nameEnglish },
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
                                             )
-                                            if (prod.autoPriceEnabled) {
+                                            if (prod.nameEnglish.isNotBlank()) {
                                                 Text(
-                                                    text = language.pick("• خودکار ریٹ", "• Auto"),
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.secondary
+                                                    text = prod.nameEnglish,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
                                                 )
                                             }
                                         }
-                                    }
 
-                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        IconButton(
-                                            onClick = { movementProduct = prod },
-                                            modifier = Modifier.testTag("stock_inout_${prod.id}")
+                                        // Clear Auto Price vs Manual Price Badge
+                                        Surface(
+                                            color = if (prod.autoPriceEnabled) {
+                                                MaterialTheme.colorScheme.primaryContainer
+                                            } else {
+                                                SaffronSecondary.copy(alpha = 0.16f)
+                                            },
+                                            shape = RoundedCornerShape(50.dp)
                                         ) {
-                                            Icon(
-                                                imageVector = Icons.Default.SwapVert,
-                                                contentDescription = language.pick("اسٹاک ان/آؤٹ", "Stock In/Out"),
-                                                tint = MaterialTheme.colorScheme.primary
+                                            Text(
+                                                text = if (prod.autoPriceEnabled) {
+                                                    language.pick("آٹو ریٹ", "Auto Price")
+                                                } else {
+                                                    language.pick("مینوئل ریٹ", "Manual Price")
+                                                },
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (prod.autoPriceEnabled) {
+                                                    MaterialTheme.colorScheme.primary
+                                                } else {
+                                                    SaffronSecondary
+                                                },
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                                             )
                                         }
-                                        IconButton(onClick = { editingProduct = prod }) {
-                                            Icon(
-                                                imageVector = Icons.Default.Edit,
-                                                contentDescription = language.pick("ترمیم", "Edit"),
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                            Text(
+                                                text = "${formatPkr(prod.sellingPrice, language)} / ${unitLabel(prod.unit, language)}",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = MaterialTheme.colorScheme.primary
                                             )
+                                            Text(
+                                                text = "${language.pick("خرید", "Cost")}: Rs. ${prod.costPrice.toLong()} • ${language.pick("منافع", "Profit")}: +Rs. ${prod.profitPerUnit().toLong()}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Text(
+                                                text = "${language.pick("اسٹاک", "Stock")}: ${formatQty(prod.stockQty)} ${unitLabel(prod.unit, language)}",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = if (prod.isLowStock()) UdharCrimson else ProfitGreen
+                                            )
+                                        }
+
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            FilledTonalButton(
+                                                onClick = { quickPriceProduct = prod },
+                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                                                shape = RoundedCornerShape(10.dp),
+                                                modifier = Modifier.testTag("quick_edit_price_${prod.id}")
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.PriceChange,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(Modifier.size(4.dp))
+                                                Text(
+                                                    text = language.pick("ریٹ تبدیل کریں", "Edit Price"),
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                            IconButton(
+                                                onClick = { movementProduct = prod },
+                                                modifier = Modifier.testTag("stock_inout_${prod.id}")
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.SwapVert,
+                                                    contentDescription = language.pick("اسٹاک ان/آؤٹ", "Stock In/Out"),
+                                                    tint = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                            IconButton(
+                                                onClick = { editingProduct = prod },
+                                                modifier = Modifier.testTag("edit_product_${prod.id}")
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Edit,
+                                                    contentDescription = language.pick("مکمل ترمیم", "Edit Item"),
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -307,9 +399,17 @@ fun StockScreen(
                                             )
                                             Column {
                                                 Text(
-                                                    text = if (language == AppLanguage.URDU) mov.productNameUrdu else mov.productNameEnglish,
-                                                    style = MaterialTheme.typography.titleSmall
+                                                    text = mov.productNameUrdu.ifBlank { mov.productNameEnglish },
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    fontWeight = FontWeight.Bold
                                                 )
+                                                if (mov.productNameEnglish.isNotBlank()) {
+                                                    Text(
+                                                        text = mov.productNameEnglish,
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
                                                 Text(
                                                     text = "${mov.movementTypeEnum().label(language)} • ${
                                                         ReceiptFormatter.formatDateTime(mov.createdAt?.toDate()?.time ?: System.currentTimeMillis())
@@ -427,11 +527,19 @@ fun StockScreen(
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            text = if (language == AppLanguage.URDU) prod.nameUrdu else prod.nameEnglish,
-                                            style = MaterialTheme.typography.titleSmall
+                                            text = prod.nameUrdu.ifBlank { prod.nameEnglish },
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold
                                         )
+                                        if (prod.nameEnglish.isNotBlank()) {
+                                            Text(
+                                                text = prod.nameEnglish,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
                                         Text(
-                                            text = "${language.pick("خرید", "Buy")}: ${prod.costPrice.toLong()} → ${language.pick("فروخت", "Sell")}: ${prod.sellingPrice.toLong()}",
+                                            text = "${language.pick("خرید", "Buy")}: Rs. ${prod.costPrice.toLong()} → ${language.pick("فروخت", "Sell")}: Rs. ${prod.sellingPrice.toLong()}",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -468,6 +576,33 @@ fun StockScreen(
                 Icon(Icons.Default.Add, contentDescription = language.pick("نیا آئٹم شامل کریں", "Add Item"))
             }
         }
+    }
+
+    if (quickPriceProduct != null) {
+        val target = quickPriceProduct!!
+        QuickPriceEditDialog(
+            language = language,
+            product = target,
+            defaultMargin = defaultMarginPercent,
+            onSavePrice = { newCost, newSell, newMargin, newAuto ->
+                onSaveProduct(
+                    target.id,
+                    target.nameUrdu,
+                    target.nameEnglish,
+                    target.categoryEnum(),
+                    target.unit,
+                    newCost,
+                    newSell,
+                    newMargin,
+                    newAuto,
+                    target.stockQty,
+                    target.lowStockThreshold,
+                    target.barcode
+                )
+                quickPriceProduct = null
+            },
+            onDismiss = { quickPriceProduct = null }
+        )
     }
 
     if (showAddProductDialog || editingProduct != null) {
@@ -519,6 +654,192 @@ private fun StatMiniCard(title: String, value: String, color: Color, modifier: M
 }
 
 @Composable
+private fun QuickPriceEditDialog(
+    language: AppLanguage,
+    product: Product,
+    defaultMargin: Double,
+    onSavePrice: (Double, Double, Double, Boolean) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var costStr by remember(product.id) { mutableStateOf(product.costPrice.toLong().toString()) }
+    var marginStr by remember(product.id) { mutableStateOf(product.marginPercent.toString()) }
+    var autoPrice by remember(product.id) { mutableStateOf(product.autoPriceEnabled) }
+    var sellStr by remember(product.id) { mutableStateOf(product.sellingPrice.toLong().toString()) }
+
+    val parsedCost = costStr.toDoubleOrNull() ?: 0.0
+    val parsedMargin = marginStr.toDoubleOrNull() ?: defaultMargin
+    val autoPreviewPrice = GujratCatalogData.calculateAutoSellingPrice(parsedCost, parsedMargin)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = language.pick("ریٹ تبدیل کریں", "Quick Edit Price"),
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = product.nameUrdu.ifBlank { product.nameEnglish } +
+                        if (product.nameEnglish.isNotBlank()) " (${product.nameEnglish})" else "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                // Auto Price vs Manual Price Toggle
+                Surface(
+                    color = if (autoPrice) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+                    else SaffronSecondary.copy(alpha = 0.14f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (autoPrice) {
+                                    language.pick("آٹو ریٹ (Auto Price)", "Auto Price (آٹو ریٹ)")
+                                } else {
+                                    language.pick("مینوئل ریٹ (Manual Price)", "Manual Price (مینوئل ریٹ)")
+                                },
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if (autoPrice) MaterialTheme.colorScheme.primary else SaffronSecondary
+                            )
+                            Text(
+                                text = if (autoPrice) {
+                                    language.pick(
+                                        "خرید ریٹ اور منافع % سے قیمت خودکار نکلے گی",
+                                        "Selling price auto-calculated from cost + margin %"
+                                    )
+                                } else {
+                                    language.pick(
+                                        "آپ کی درج کردہ قیمت محفوظ رہے گی — خودکار تبدیل نہیں ہوگی",
+                                        "Your entered selling price is locked — never overwritten"
+                                    )
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = autoPrice,
+                            onCheckedChange = { enabled ->
+                                autoPrice = enabled
+                                if (enabled) {
+                                    sellStr = GujratCatalogData
+                                        .calculateAutoSellingPrice(parsedCost, parsedMargin)
+                                        .toLong()
+                                        .toString()
+                                }
+                            },
+                            modifier = Modifier.testTag("quick_price_auto_switch")
+                        )
+                    }
+                }
+
+                // Always-editable Selling Price: typing manually automatically switches to Manual Price mode
+                OutlinedTextField(
+                    value = sellStr,
+                    onValueChange = { raw ->
+                        val cleaned = raw.filter { c -> c.isDigit() || c == '.' }
+                        sellStr = cleaned
+                        if (autoPrice) {
+                            autoPrice = false
+                        }
+                    },
+                    label = {
+                        Text(
+                            language.pick(
+                                "فروخت ریٹ (Rs.) — ٹائپ کریں تو مینوئل ہو جائے گا",
+                                "Selling Price (Rs.) — Typing switches to Manual"
+                            )
+                        )
+                    },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("quick_selling_price_input")
+                )
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = costStr,
+                        onValueChange = { raw ->
+                            val cleaned = raw.filter { c -> c.isDigit() || c == '.' }
+                            costStr = cleaned
+                            if (autoPrice) {
+                                val nextCost = cleaned.toDoubleOrNull() ?: 0.0
+                                sellStr = GujratCatalogData
+                                    .calculateAutoSellingPrice(nextCost, parsedMargin)
+                                    .toLong()
+                                    .toString()
+                            }
+                        },
+                        label = { Text(language.pick("خرید ریٹ (Rs.)", "Cost (Rs.)")) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedTextField(
+                        value = marginStr,
+                        onValueChange = { raw ->
+                            val cleaned = raw.filter { c -> c.isDigit() || c == '.' }
+                            marginStr = cleaned
+                            if (autoPrice) {
+                                val nextMargin = cleaned.toDoubleOrNull() ?: defaultMargin
+                                sellStr = GujratCatalogData
+                                    .calculateAutoSellingPrice(parsedCost, nextMargin)
+                                    .toLong()
+                                    .toString()
+                            }
+                        },
+                        label = { Text(language.pick("منافع %", "Margin %")) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        enabled = autoPrice,
+                        modifier = Modifier.weight(0.9f)
+                    )
+                }
+
+                val previewProfit = ((sellStr.toDoubleOrNull() ?: autoPreviewPrice) - parsedCost).coerceAtLeast(0.0)
+                Text(
+                    text = "${language.pick("فی یونٹ منافع", "Profit per unit")}: +${formatPkr(previewProfit, language)}",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = ProfitGreen
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val finalSell = if (autoPrice) autoPreviewPrice else (sellStr.toDoubleOrNull() ?: parsedCost)
+                    onSavePrice(parsedCost, finalSell, parsedMargin, autoPrice)
+                },
+                enabled = (sellStr.toDoubleOrNull() ?: 0.0) > 0.0 || (autoPrice && parsedCost > 0.0),
+                modifier = Modifier.testTag("quick_price_save_button")
+            ) {
+                Text(language.pick("ریٹ محفوظ کریں", "Save Price"))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(language.pick("منسوخ", "Cancel"))
+            }
+        }
+    )
+}
+
+@Composable
 private fun ProductEditorDialog(
     language: AppLanguage,
     existing: Product?,
@@ -559,22 +880,36 @@ private fun ProductEditorDialog(
                 OutlinedTextField(
                     value = nameUrdu,
                     onValueChange = { nameUrdu = it },
-                    label = { Text(language.pick("اردو نام*", "Urdu Name*")) },
+                    label = { Text("اردو نام (Urdu Name)*") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("product_urdu_name_input")
                 )
                 OutlinedTextField(
                     value = nameEnglish,
                     onValueChange = { nameEnglish = it },
-                    label = { Text(language.pick("انگلش نام", "English Name")) },
+                    label = { Text("انگلش نام (English Name)") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("product_english_name_input")
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = costStr,
-                        onValueChange = { costStr = it.filter { c -> c.isDigit() || c == '.' } },
-                        label = { Text(language.pick("خرید ریٹ (PKR)", "Cost Price")) },
+                        onValueChange = { raw ->
+                            val cleaned = raw.filter { c -> c.isDigit() || c == '.' }
+                            costStr = cleaned
+                            if (autoPrice) {
+                                val nextCost = cleaned.toDoubleOrNull() ?: 0.0
+                                sellStr = GujratCatalogData
+                                    .calculateAutoSellingPrice(nextCost, parsedMargin)
+                                    .toLong()
+                                    .toString()
+                            }
+                        },
+                        label = { Text(language.pick("خرید ریٹ (Rs.)", "Cost Price (Rs.)")) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
                         modifier = Modifier.weight(1f)
@@ -588,52 +923,104 @@ private fun ProductEditorDialog(
                     )
                 }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                // Clear Auto Price (آٹو ریٹ) vs Manual Price (مینوئل ریٹ) Toggle
+                Surface(
+                    color = if (autoPrice) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                    else SaffronSecondary.copy(alpha = 0.14f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(
-                        text = language.pick("خودکار قیمت اپڈیٹ (منافع %)", "Auto Selling Price (Margin %)"),
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Switch(checked = autoPrice, onCheckedChange = { autoPrice = it })
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (autoPrice) {
+                                    language.pick("آٹو ریٹ (Auto Price)", "Auto Price (آٹو ریٹ)")
+                                } else {
+                                    language.pick("مینوئل ریٹ (Manual Price)", "Manual Price (مینوئل ریٹ)")
+                                },
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = if (autoPrice) MaterialTheme.colorScheme.primary else SaffronSecondary
+                            )
+                            Text(
+                                text = if (autoPrice) {
+                                    language.pick(
+                                        "خرید ریٹ اور منافع % کے مطابق خودکار قیمت",
+                                        "Auto-calculated from cost + margin %"
+                                    )
+                                } else {
+                                    language.pick(
+                                        "مینوئل ریٹ فعال — ایپ قیمت خودکار تبدیل نہیں کرے گی",
+                                        "Manual Price locked — app will never overwrite it"
+                                    )
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = autoPrice,
+                            onCheckedChange = { enabled ->
+                                autoPrice = enabled
+                                if (enabled) {
+                                    sellStr = GujratCatalogData
+                                        .calculateAutoSellingPrice(parsedCost, parsedMargin)
+                                        .toLong()
+                                        .toString()
+                                }
+                            },
+                            modifier = Modifier.testTag("product_auto_price_switch")
+                        )
+                    }
                 }
 
-                if (autoPrice) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedTextField(
-                            value = marginStr,
-                            onValueChange = { marginStr = it.filter { c -> c.isDigit() || c == '.' } },
-                            label = { Text(language.pick("منافع %", "Margin %")) },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            singleLine = true,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Column(modifier = Modifier.padding(10.dp)) {
-                                Text(language.pick("فروخت ریٹ:", "Auto Price:"), style = MaterialTheme.typography.labelSmall)
-                                Text(
-                                    formatPkr(autoPreviewPrice, language),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    }
-                } else {
+                // Always-editable Selling Price — typing automatically flips to Manual Price mode
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
                         value = sellStr,
-                        onValueChange = { sellStr = it.filter { c -> c.isDigit() || c == '.' } },
-                        label = { Text(language.pick("مینوئل فروخت ریٹ (PKR)", "Manual Selling Price")) },
+                        onValueChange = { raw ->
+                            val cleaned = raw.filter { c -> c.isDigit() || c == '.' }
+                            sellStr = cleaned
+                            if (autoPrice) {
+                                autoPrice = false
+                            }
+                        },
+                        label = {
+                            Text(
+                                if (autoPrice) language.pick("فروخت ریٹ (Rs.)", "Selling Price (Rs.)")
+                                else language.pick("مینوئل فروخت ریٹ (Rs.)", "Manual Selling Price (Rs.)")
+                            )
+                        },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .weight(1.2f)
+                            .testTag("product_selling_price_input")
+                    )
+                    OutlinedTextField(
+                        value = marginStr,
+                        onValueChange = { raw ->
+                            val cleaned = raw.filter { c -> c.isDigit() || c == '.' }
+                            marginStr = cleaned
+                            if (autoPrice) {
+                                val nextMargin = cleaned.toDoubleOrNull() ?: defaultMargin
+                                sellStr = GujratCatalogData
+                                    .calculateAutoSellingPrice(parsedCost, nextMargin)
+                                    .toLong()
+                                    .toString()
+                            }
+                        },
+                        label = { Text(language.pick("منافع %", "Margin %")) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        enabled = autoPrice,
+                        modifier = Modifier.weight(0.8f)
                     )
                 }
 
@@ -693,7 +1080,7 @@ private fun ProductEditorDialog(
                         barcode
                     )
                 },
-                enabled = nameUrdu.isNotBlank()
+                enabled = nameUrdu.isNotBlank() || nameEnglish.isNotBlank()
             ) {
                 Text(language.pick("محفوظ کریں", "Save"))
             }
@@ -724,10 +1111,18 @@ private fun StockMovementDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    text = if (language == AppLanguage.URDU) product.nameUrdu else product.nameEnglish,
+                    text = product.nameUrdu.ifBlank { product.nameEnglish },
                     style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
+                if (product.nameEnglish.isNotBlank()) {
+                    Text(
+                        text = product.nameEnglish,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = type == StockMovementType.STOCK_IN,
@@ -754,7 +1149,7 @@ private fun StockMovementDialog(
                     OutlinedTextField(
                         value = costStr,
                         onValueChange = { costStr = it.filter { c -> c.isDigit() || c == '.' } },
-                        label = { Text(language.pick("نیا خرید ریٹ (PKR)", "New Purchase Rate (PKR)")) },
+                        label = { Text(language.pick("نیا خرید ریٹ (Rs.)", "New Purchase Rate (Rs.)")) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()

@@ -210,6 +210,17 @@ enum class DonationEntryType {
     }
 }
 
+enum class DonationStatus {
+    PENDING,
+    VERIFIED,
+    REJECTED;
+
+    companion object {
+        fun safeValueOf(raw: String?): DonationStatus =
+            entries.firstOrNull { it.name == raw } ?: PENDING
+    }
+}
+
 @Keep
 @IgnoreExtraProperties
 data class RationDonation(
@@ -220,9 +231,14 @@ data class RationDonation(
     val amount: Double = 0.0,
     val rationSummary: String = "",
     val paymentRef: String = "",
+    val senderAccount: String = "",
+    val transactionId: String = "",
+    val receiptImagePath: String = "",
+    val status: String = DonationStatus.PENDING.name,
     @ServerTimestamp val createdAt: Timestamp? = null
 ) {
     fun entryTypeEnum(): DonationEntryType = DonationEntryType.safeValueOf(entryType)
+    fun statusEnum(): DonationStatus = DonationStatus.safeValueOf(status)
 }
 
 @Keep

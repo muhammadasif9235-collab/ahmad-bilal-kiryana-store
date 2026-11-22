@@ -16,7 +16,7 @@ import androidx.room.RoomDatabase
         RationCardItemEntity::class,
         RationCardBillEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class ShopLocalDatabase : RoomDatabase() {

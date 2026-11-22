@@ -614,7 +614,7 @@ class ShopRepository(
         }
     }
 
-    // --- RATION CHARITY FUND ---
+    // --- RATION CHARITY FUND (HBL Direct Transfer with Pending Owner Verification) ---
 
     suspend fun recordRationDonation(
         entryType: DonationEntryType,
@@ -622,15 +622,48 @@ class ShopRepository(
         phone: String,
         amount: Double,
         rationSummary: String,
-        paymentRef: String
+        paymentRef: String,
+        senderAccount: String = "",
+        transactionId: String = "",
+        receiptImagePath: String = ""
     ): Result<RationDonation> {
-        val cleanName = personName.trim().ifBlank {
-            if (entryType == DonationEntryType.DONATION_IN) "مخیر حضرات" else "مستحق خاندان"
-        }.take(100)
-        val safeAmount = amount.coerceIn(1.0, 10_000_000.0)
+        val cleanName = personName.trim().take(100)
         val cleanPhone = phone.trim().take(30)
+        val cleanSender = senderAccount.trim().take(100)
+        val cleanTid = transactionId.trim().take(100)
+        val cleanReceiptPath = receiptImagePath.trim().take(400)
+        val safeAmount = amount.coerceIn(0.0, 10_000_000.0)
+
+        if (safeAmount <= 0.0) {
+            return Result.failure(IllegalArgumentException("Amount must be greater than zero"))
+        }
+
+        if (entryType == DonationEntryType.DONATION_IN) {
+            if (cleanName.isBlank()) {
+                return Result.failure(IllegalArgumentException("Donor full name is required"))
+            }
+            if (cleanPhone.isBlank()) {
+                return Result.failure(IllegalArgumentException("Phone number is required"))
+            }
+            if (cleanSender.isBlank()) {
+                return Result.failure(IllegalArgumentException("Sender account number / title is required"))
+            }
+            if (cleanTid.isBlank()) {
+                return Result.failure(IllegalArgumentException("HBL Transaction ID (TID) is required"))
+            }
+        }
+
+        val finalName = cleanName.ifBlank { "مستحق خاندان" }
         val cleanSummary = rationSummary.trim().take(300)
-        val cleanRef = paymentRef.trim().take(100)
+        val cleanRef = paymentRef.trim().ifBlank {
+            if (entryType == DonationEntryType.DONATION_IN) "HBL TID: $cleanTid" else "Shop Counter"
+        }.take(100)
+        val initialStatus = if (entryType == DonationEntryType.DONATION_IN) {
+            DonationStatus.PENDING
+        } else {
+            DonationStatus.VERIFIED
+        }
+
         val id = newId()
         val now = System.currentTimeMillis()
 
@@ -639,11 +672,15 @@ class ShopRepository(
                 RationDonationEntity(
                     id = id,
                     entryType = entryType.name,
-                    personName = cleanName,
+                    personName = finalName,
                     phone = cleanPhone,
                     amount = safeAmount,
                     rationSummary = cleanSummary,
                     paymentRef = cleanRef,
+                    senderAccount = cleanSender,
+                    transactionId = cleanTid,
+                    receiptImagePath = cleanReceiptPath,
+                    status = initialStatus.name,
                     createdAtMs = now
                 )
             )
@@ -651,11 +688,15 @@ class ShopRepository(
                 RationDonation(
                     id = id,
                     entryType = entryType.name,
-                    personName = cleanName,
+                    personName = finalName,
                     phone = cleanPhone,
                     amount = safeAmount,
                     rationSummary = cleanSummary,
                     paymentRef = cleanRef,
+                    senderAccount = cleanSender,
+                    transactionId = cleanTid,
+                    receiptImagePath = cleanReceiptPath,
+                    status = initialStatus.name,
                     createdAt = now.toFirebaseTimestamp()
                 )
             )
@@ -663,6 +704,19 @@ class ShopRepository(
             throw e
         } catch (e: Exception) {
             Log.e(TAG, "Error recording ration donation", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateDonationStatus(donationId: String, status: DonationStatus): Result<Unit> {
+        return try {
+            require(donationId.isNotBlank())
+            dao.updateDonationStatus(donationId, status.name)
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Error updating donation status", e)
             Result.failure(e)
         }
     }

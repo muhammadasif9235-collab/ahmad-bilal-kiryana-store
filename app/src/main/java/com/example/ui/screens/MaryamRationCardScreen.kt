@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Nfc
+import androidx.compose.material.icons.filled.PriceChange
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
@@ -143,6 +144,7 @@ fun MaryamRationCardScreen(
     // Ration Bill Cart State
     var cartItems by remember { mutableStateOf<List<RationCartItem>>(emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
+    var catalogSearchQuery by remember { mutableStateOf("") }
     var historySearch by remember { mutableStateOf("") }
 
     // Item Editor Dialogs
@@ -200,6 +202,14 @@ fun MaryamRationCardScreen(
 
     val filteredItems = remember(rationItems, searchQuery) {
         val q = searchQuery.trim().lowercase()
+        if (q.isBlank()) rationItems
+        else rationItems.filter {
+            it.nameUrdu.lowercase().contains(q) || it.nameEnglish.lowercase().contains(q)
+        }
+    }
+
+    val filteredCatalogItems = remember(rationItems, catalogSearchQuery) {
+        val q = catalogSearchQuery.trim().lowercase()
         if (q.isBlank()) rationItems
         else rationItems.filter {
             it.nameUrdu.lowercase().contains(q) || it.nameEnglish.lowercase().contains(q)
@@ -768,16 +778,25 @@ fun MaryamRationCardScreen(
                                         ) {
                                             Column(modifier = Modifier.weight(1f)) {
                                                 Text(
-                                                    text = if (language == AppLanguage.URDU) ci.item.nameUrdu else ci.item.nameEnglish,
+                                                    text = ci.item.nameUrdu.ifBlank { ci.item.nameEnglish },
                                                     style = MaterialTheme.typography.bodyMedium,
-                                                    fontWeight = FontWeight.SemiBold,
+                                                    fontWeight = FontWeight.Bold,
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis
                                                 )
+                                                if (ci.item.nameEnglish.isNotBlank()) {
+                                                    Text(
+                                                        text = ci.item.nameEnglish,
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
                                                 Text(
                                                     text = "${formatPkr(ci.effectivePrice, language)} / ${unitLabel(ci.item.unit, language)} = ${formatPkr(ci.lineTotal, language)}",
                                                     style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    color = MaterialTheme.colorScheme.primary
                                                 )
                                             }
                                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -868,7 +887,14 @@ fun MaryamRationCardScreen(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
                             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                            placeholder = { Text(language.pick("راشن آئٹم تلاش کریں (آٹا، گھی، چینی، دال)...", "Search ration item (Atta, Ghee, Sugar, Daal)...")) },
+                            placeholder = {
+                                Text(
+                                    language.pick(
+                                        "اردو یا انگلش میں راشن تلاش کریں (آٹا، چینی، گھی)...",
+                                        "Search Urdu or English (Atta, Sugar, Ghee)..."
+                                    )
+                                )
+                            },
                             singleLine = true,
                             shape = RoundedCornerShape(14.dp),
                             modifier = Modifier.fillMaxWidth()
@@ -895,12 +921,27 @@ fun MaryamRationCardScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
+                                    // Prominent Urdu name always primary
                                     Text(
-                                        text = if (language == AppLanguage.URDU) item.nameUrdu else item.nameEnglish,
+                                        text = item.nameUrdu.ifBlank { item.nameEnglish },
                                         style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.SemiBold
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
+                                    if (item.nameEnglish.isNotBlank()) {
+                                        Text(
+                                            text = item.nameEnglish,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
                                     Text(
                                         text = "${formatPkr(item.price, language)} / ${unitLabel(item.unit, language)}",
                                         style = MaterialTheme.typography.labelMedium,
@@ -910,14 +951,24 @@ fun MaryamRationCardScreen(
                                 }
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    IconButton(onClick = { editingItem = item }) {
+                                    OutlinedButton(
+                                        onClick = { editingItem = item },
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier.testTag("ration_quick_edit_${item.id}")
+                                    ) {
                                         Icon(
-                                            Icons.Default.Edit,
-                                            contentDescription = language.pick("ریٹ ایڈیٹ کریں", "Edit Rate"),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(18.dp)
+                                            Icons.Default.PriceChange,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                        Spacer(Modifier.size(3.dp))
+                                        Text(
+                                            text = language.pick("ریٹ تبدیل", "Edit Price"),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold
                                         )
                                     }
                                     if (inCartQty > 0) {
@@ -935,7 +986,7 @@ fun MaryamRationCardScreen(
                                     } else {
                                         FilledTonalButton(
                                             onClick = { addOrIncrementCart(item, 1.0) },
-                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                                         ) {
                                             Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                                             Text(language.pick("شامل", "Add"))
@@ -949,19 +1000,39 @@ fun MaryamRationCardScreen(
 
                 RationCardTab.ITEMS -> {
                     item {
-                        Button(
-                            onClick = { showAddItemDialog = true },
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("add_maryam_ration_item_button")
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = null)
-                            Spacer(Modifier.size(6.dp))
-                            Text(language.pick("نئی راشن چیز شامل کریں", "Add New Ration Item"))
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = { showAddItemDialog = true },
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("add_maryam_ration_item_button")
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null)
+                                Spacer(Modifier.size(6.dp))
+                                Text(language.pick("نئی راشن چیز شامل کریں", "Add New Ration Item"))
+                            }
+                            OutlinedTextField(
+                                value = catalogSearchQuery,
+                                onValueChange = { catalogSearchQuery = it },
+                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                                placeholder = {
+                                    Text(
+                                        language.pick(
+                                            "اردو یا انگلش میں راشن تلاش کریں...",
+                                            "Search ration items in Urdu or English..."
+                                        )
+                                    )
+                                },
+                                singleLine = true,
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("ration_catalog_search_input")
+                            )
                         }
                     }
-                    items(rationItems, key = { it.id }) { item ->
+                    items(filteredCatalogItems, key = { it.id }) { item ->
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(16.dp),
@@ -975,10 +1046,13 @@ fun MaryamRationCardScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
                                     Text(
-                                        text = item.nameUrdu,
-                                        style = MaterialTheme.typography.titleSmall,
+                                        text = item.nameUrdu.ifBlank { item.nameEnglish },
+                                        style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
@@ -993,12 +1067,26 @@ fun MaryamRationCardScreen(
                                         color = MaterialTheme.colorScheme.primary
                                     )
                                 }
-                                Row {
-                                    IconButton(onClick = { editingItem = item }) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    FilledTonalButton(
+                                        onClick = { editingItem = item },
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier.testTag("ration_catalog_edit_${item.id}")
+                                    ) {
                                         Icon(
-                                            Icons.Default.Edit,
-                                            contentDescription = language.pick("ترمیم", "Edit"),
-                                            tint = MaterialTheme.colorScheme.primary
+                                            Icons.Default.PriceChange,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(Modifier.size(4.dp))
+                                        Text(
+                                            text = language.pick("ریٹ تبدیل کریں", "Edit Price"),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold
                                         )
                                     }
                                     IconButton(onClick = { onDeleteRationItem(item.id) }) {
@@ -1275,14 +1363,14 @@ private fun RationItemEditorDialog(
                 OutlinedTextField(
                     value = nameUrdu,
                     onValueChange = { nameUrdu = it },
-                    label = { Text(language.pick("چیز کا نام (اردو)*", "Item Name (Urdu)*")) },
+                    label = { Text("اردو نام (Urdu Name)*") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = nameEnglish,
                     onValueChange = { nameEnglish = it },
-                    label = { Text(language.pick("انگلش نام (اختیاری)", "English Name (optional)")) },
+                    label = { Text("انگلش نام (English Name)") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1290,7 +1378,7 @@ private fun RationItemEditorDialog(
                     OutlinedTextField(
                         value = priceStr,
                         onValueChange = { priceStr = it.filter { c -> c.isDigit() || c == '.' } },
-                        label = { Text(language.pick("قیمت (روپے)*", "Price (PKR)*")) },
+                        label = { Text(language.pick("قیمت (Rs.)*", "Price (Rs.)*")) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
                         modifier = Modifier.weight(1f)

@@ -114,6 +114,9 @@ interface ShopDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertDonations(entities: List<RationDonationEntity>)
 
+    @Query("UPDATE ration_donations SET status = :status WHERE id = :id")
+    suspend fun updateDonationStatus(id: String, status: String)
+
     // --- MARYAM NAWAZ RATION CARD ITEMS ---
     @Query("SELECT * FROM ration_card_items ORDER BY sortOrder ASC, nameUrdu ASC")
     fun observeRationCardItems(): Flow<List<RationCardItemEntity>>

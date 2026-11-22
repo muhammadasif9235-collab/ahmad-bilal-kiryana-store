@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.CartItem
 import com.example.data.Customer
 import com.example.data.DonationEntryType
+import com.example.data.DonationStatus
 import com.example.data.LedgerEntry
 import com.example.data.LedgerEntryType
 import com.example.data.Order
@@ -476,14 +477,17 @@ class ShopViewModel(
         }
     }
 
-    // --- RATION CHARITY FUND ---
+    // --- RATION CHARITY FUND (Pending Until Shop Owner Verifies in HBL) ---
     fun recordRationDonation(
         entryType: DonationEntryType,
         personName: String,
         phone: String,
         amount: Double,
         rationSummary: String,
-        paymentRef: String
+        paymentRef: String,
+        senderAccount: String = "",
+        transactionId: String = "",
+        receiptImagePath: String = ""
     ) {
         viewModelScope.launch {
             _isBusy.value = true
@@ -493,17 +497,46 @@ class ShopViewModel(
                 phone = phone,
                 amount = amount,
                 rationSummary = rationSummary,
-                paymentRef = paymentRef
+                paymentRef = paymentRef,
+                senderAccount = senderAccount,
+                transactionId = transactionId,
+                receiptImagePath = receiptImagePath
             )
             _isBusy.value = false
             result.onSuccess {
                 if (entryType == DonationEntryType.DONATION_IN) {
-                    showMessage("راشن عطیہ کامیابی سے درج ہو گیا۔ جزاک اللہ خیراً!", "Ration donation recorded. JazakAllah Khair!")
+                    showMessage(
+                        "عطیہ «تصدیق باقی (PENDING)» کے طور پر محفوظ ہو گیا۔ HBL میں رقم چیک کر کے تصدیق کریں۔",
+                        "Donation submitted as PENDING. Verify in HBL to add to the official fund."
+                    )
                 } else {
                     showMessage("مستحق خاندان کو راشن کی تقسیم درج ہو گئی", "Ration distribution recorded")
                 }
             }.onFailure { err ->
                 showMessage("اندراج نہ ہو سکا: ${err.localizedMessage}", "Failed: ${err.localizedMessage}")
+            }
+        }
+    }
+
+    fun updateDonationStatus(donationId: String, newStatus: DonationStatus) {
+        viewModelScope.launch {
+            _isBusy.value = true
+            val result = repository.updateDonationStatus(donationId, newStatus)
+            _isBusy.value = false
+            result.onSuccess {
+                when (newStatus) {
+                    DonationStatus.VERIFIED -> showMessage(
+                        "عطیہ تصدیق ہو گیا اور HBL راشن فنڈ میں شامل کر دیا گیا۔ جزاک اللہ خیراً!",
+                        "Donation VERIFIED and added to official HBL Charity Fund!"
+                    )
+                    DonationStatus.REJECTED -> showMessage(
+                        "عطیہ مسترد کر دیا گیا (فنڈ میں شامل نہیں کیا گیا)",
+                        "Donation marked as REJECTED (not added to fund)"
+                    )
+                    DonationStatus.PENDING -> showMessage("اسٹیٹس اپڈیٹ ہو گیا", "Status updated")
+                }
+            }.onFailure { err ->
+                showMessage("اسٹیٹس تبدیل نہ ہو سکا: ${err.localizedMessage}", "Update failed: ${err.localizedMessage}")
             }
         }
     }

@@ -668,8 +668,21 @@ private fun MainShopShell(
                             ShopDestination.RATION_FUND -> RationFundScreen(
                                 language = language,
                                 donations = donations,
-                                onRecordEntry = { type, name, phone, amt, summary, ref ->
-                                    viewModel.recordRationDonation(type, name, phone, amt, summary, ref)
+                                onRecordEntry = { type, name, phone, amt, summary, ref, senderAcc, tid, receiptPath ->
+                                    viewModel.recordRationDonation(
+                                        entryType = type,
+                                        personName = name,
+                                        phone = phone,
+                                        amount = amt,
+                                        rationSummary = summary,
+                                        paymentRef = ref,
+                                        senderAccount = senderAcc,
+                                        transactionId = tid,
+                                        receiptImagePath = receiptPath
+                                    )
+                                },
+                                onUpdateDonationStatus = { id, status ->
+                                    viewModel.updateDonationStatus(id, status)
                                 },
                                 onShowMessage = { viewModel.postMessage(it) }
                             )

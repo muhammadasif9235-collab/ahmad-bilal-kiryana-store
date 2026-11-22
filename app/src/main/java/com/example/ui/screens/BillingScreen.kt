@@ -248,7 +248,7 @@ fun BillingScreen(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
                         placeholder = {
-                            Text(language.pick("آٹا، چینی، گھی، چاول تلاش کریں...", "Search Atta, Sugar, Ghee..."))
+                            Text(language.pick("اردو یا انگلش میں تلاش کریں (آٹا، چینی، گھی)...", "Search Urdu or English (Atta, Sugar, Ghee)..."))
                         },
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                         singleLine = true,
@@ -446,11 +446,21 @@ private fun BillingProductRow(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = if (language == AppLanguage.URDU) product.nameUrdu else product.nameEnglish,
+                    text = product.nameUrdu.ifBlank { product.nameEnglish },
                     style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                if (product.nameEnglish.isNotBlank() && product.nameEnglish != product.nameUrdu) {
+                    Text(
+                        text = product.nameEnglish,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -458,6 +468,7 @@ private fun BillingProductRow(
                     Text(
                         text = "${formatPkr(product.sellingPrice, language)} / ${unitLabel(product.unit, language)}",
                         style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
                     )
                     Text(

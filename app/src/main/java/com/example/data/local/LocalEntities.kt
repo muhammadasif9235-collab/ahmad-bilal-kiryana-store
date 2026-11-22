@@ -298,6 +298,10 @@ data class RationDonationEntity(
     val amount: Double,
     val rationSummary: String,
     val paymentRef: String,
+    val senderAccount: String = "",
+    val transactionId: String = "",
+    val receiptImagePath: String = "",
+    val status: String = "PENDING",
     val createdAtMs: Long
 ) {
     fun toDomain(): RationDonation = RationDonation(
@@ -308,6 +312,10 @@ data class RationDonationEntity(
         amount = amount,
         rationSummary = rationSummary,
         paymentRef = paymentRef,
+        senderAccount = senderAccount,
+        transactionId = transactionId,
+        receiptImagePath = receiptImagePath,
+        status = status,
         createdAt = createdAtMs.toFirebaseTimestamp()
     )
 }
@@ -320,6 +328,10 @@ fun RationDonation.toEntity(nowMs: Long = System.currentTimeMillis()): RationDon
     amount = amount,
     rationSummary = rationSummary,
     paymentRef = paymentRef,
+    senderAccount = senderAccount,
+    transactionId = transactionId,
+    receiptImagePath = receiptImagePath,
+    status = status,
     createdAtMs = createdAt?.toEpochMs() ?: nowMs
 )
 
