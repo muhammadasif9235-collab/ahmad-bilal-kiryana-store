@@ -18,7 +18,7 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: Setup Permanent Release Keystore
+      - name: Setup Permanent Release Keystore & Signing
         env:
           K_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
           K_ALIAS: ${{ secrets.KEY_ALIAS }}
@@ -35,15 +35,31 @@ jobs:
           cp kiryana-release.jks app/kiryana-release.jks
           cp kiryana-release.jks my-upload-key.jks
           cp kiryana-release.jks app/my-upload-key.jks
-          cp kiryana-release.jks debug.keystore
 
-          cat <<EOF > keystore.properties
-          storeFile=my-upload-key.jks
-          storePassword=$PASS
-          keyAlias=$ALIAS
-          keyPassword=$KPASS
+          python3 - << EOF
+          with open("app/build.gradle.kts", "r") as f:
+              content = f.read()
+          patch = '''
+
+          android {
+              signingConfigs {
+                  maybeCreate("release").apply {
+                      storeFile = rootProject.file("kiryana-release.jks")
+                      storePassword = "$PASS"
+                      keyAlias = "$ALIAS"
+                      keyPassword = "$KPASS"
+                  }
+              }
+              buildTypes {
+                  getByName("release") {
+                      signingConfig = signingConfigs.getByName("release")
+                  }
+              }
+          }
+          '''
+          with open("app/build.gradle.kts", "w") as f:
+              f.write(content + patch)
           EOF
-          cp keystore.properties app/keystore.properties
 
       - name: Fix Icons and Apply Store Logo
         run: |
@@ -78,24 +94,11 @@ jobs:
 
       - name: Build Signed Public APK
         env:
-          KEYSTORE_FILE: my-upload-key.jks
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'Kiryana@786' }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'kiryanakey' }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'Kiryana@786' }}
-          ORG_GRADLE_PROJECT_KEYSTORE_FILE: my-upload-key.jks
-          ORG_GRADLE_PROJECT_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'Kiryana@786' }}
-          ORG_GRADLE_PROJECT_KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'kiryanakey' }}
-          ORG_GRADLE_PROJECT_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'Kiryana@786' }}
-          ORG_GRADLE_PROJECT_MYAPP_UPLOAD_STORE_FILE: my-upload-key.jks
-          ORG_GRADLE_PROJECT_MYAPP_UPLOAD_STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'Kiryana@786' }}
-          ORG_GRADLE_PROJECT_MYAPP_UPLOAD_KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'kiryanakey' }}
-          ORG_GRADLE_PROJECT_MYAPP_UPLOAD_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'Kiryana@786' }}
-          ORG_GRADLE_PROJECT_RELEASE_STORE_FILE: my-upload-key.jks
-          ORG_GRADLE_PROJECT_RELEASE_STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'Kiryana@786' }}
-          ORG_GRADLE_PROJECT_RELEASE_KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'kiryanakey' }}
-          ORG_GRADLE_PROJECT_RELEASE_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'Kiryana@786' }}
         run: |
-          gradle assembleRelease --stacktrace
+          gradle assembleRelease --no-configuration-cache --stacktrace
           mkdir -p final_apk
           RAW_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
           BUILD_TOOLS=$(ls -d $ANDROID_HOME/build-tools/* | tail -n 1)
