@@ -1,0 +1,82 @@
+name: Build Ahmad Bilal Kiryana Store APK
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Setup Permanent Release Keystore
+        run: |
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > kiryana-release.jks
+            cp kiryana-release.jks app/kiryana-release.jks
+            cp kiryana-release.jks debug.keystore
+          elif [ ! -f debug.keystore ]; then
+            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+      - name: Fix Icons and Apply Store Logo
+        run: |
+          rm -rf app/src/main/res/mipmap-anydpi*
+          rm -f app/src/main/res/drawable*/ic_launcher*.xml
+          python3 -m pip install -q pillow
+          python3 - << 'EOF'
+          import os, re, glob
+          from PIL import Image
+
+          candidates = (
+              sorted(glob.glob("app_logo.*"))
+              + sorted(glob.glob("public/assets/aistudio/*.*"), key=os.path.getmtime, reverse=True)
+              + sorted(glob.glob("app/src/main/res/drawable*/*logo*.*"))
+          )
+          logo_file = next((f for f in candidates if f.lower().endswith((".png", ".jpg", ".jpeg", ".webp"))), None)
+          if logo_file:
+              print("Applying logo:", logo_file)
+              img = Image.open(logo_file).convert("RGBA")
+              sizes = {'mdpi': 48, 'hdpi': 72, 'xhdpi': 96, 'xxhdpi': 144, 'xxxhdpi': 192}
+              for k, v in sizes.items():
+                  out_dir = f"app/src/main/res/mipmap-{k}"
+                  os.makedirs(out_dir, exist_ok=True)
+                  for name in ("ic_launcher", "ic_launcher_round", "ic_launcher_foreground"):
+                      img.resize((v, v), Image.Resampling.LANCZOS).save(os.path.join(out_dir, f"{name}.png"))
+          EOF
+
+      - name: Set up Gradle 9.3.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+
+      - name: Build Signed Public APK
+        env:
+          KEYSTORE_FILE: kiryana-release.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          gradle assembleRelease --stacktrace
+          mkdir -p final_apk
+          RAW_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          BUILD_TOOLS=$(ls -d $ANDROID_HOME/build-tools/* | tail -n 1)
+          $BUILD_TOOLS/zipalign -f -p 4 "$RAW_APK" final_apk/aligned.apk
+          $BUILD_TOOLS/apksigner sign --ks kiryana-release.jks --ks-pass pass:"$KEYSTORE_PASSWORD" --ks-key-alias "$KEY_ALIAS" --key-pass pass:"$KEY_PASSWORD" --out final_apk/Ahmad-Bilal-Kiryana-Store.apk final_apk/aligned.apk
+          rm -f final_apk/aligned.apk
+
+      - name: Upload Public APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ahmad-Bilal-Kiryana-Store-Public-APK
+          path: final_apk/Ahmad-Bilal-Kiryana-Store.apk
+          
