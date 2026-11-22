@@ -23,6 +23,8 @@ jobs:
           if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
             echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > kiryana-release.jks
             cp kiryana-release.jks app/kiryana-release.jks
+            cp kiryana-release.jks my-upload-key.jks
+            cp kiryana-release.jks app/my-upload-key.jks
             cp kiryana-release.jks debug.keystore
           elif [ ! -f debug.keystore ]; then
             keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
@@ -61,7 +63,7 @@ jobs:
 
       - name: Build Signed Public APK
         env:
-          KEYSTORE_FILE: kiryana-release.jks
+          KEYSTORE_FILE: my-upload-key.jks
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
@@ -79,4 +81,3 @@ jobs:
         with:
           name: Ahmad-Bilal-Kiryana-Store-Public-APK
           path: final_apk/Ahmad-Bilal-Kiryana-Store.apk
-          
