@@ -17,6 +17,8 @@ data class SeedRationItem(
 object MaryamRationCatalogData {
 
     const val DEFAULT_MONTHLY_SUBSIDY_PKR = 3000.0
+    const val DEFAULT_SERVICE_FEE_PKR = 100.0
+    const val DEFAULT_NET_RATION_PKR = 2900.0
     const val HELPLINE_NUMBER = "1105"
 
     val defaultItems: List<SeedRationItem> = listOf(
@@ -41,16 +43,16 @@ object MaryamRationCatalogData {
     )
 
     /**
-     * Quick preset bundle (~Rs. 3,000) matching core Punjab Maryam Nawaz Rashan staples:
+     * Quick preset bundle (Rs. 2,890) fitting cleanly inside the Rs. 2,900 Net POS Ration limit
+     * (Rs. 3,000 total card quota - Rs. 100 service fee deduction):
      * 1x Atta 10kg (880) + 2x Ghee 1kg (1100) + 2x Sugar 1kg (310) + 1x Daal Chana (290)
-     * + 1x Rice (330) + 1x Salt (60) = Rs. 2,970
+     * + 1x Besan (310) = Rs. 2,890
      */
     val standard3000PackQuantities: Map<String, Double> = mapOf(
         "mn_atta_10kg" to 1.0,
         "mn_ghee_1kg" to 2.0,
         "mn_sugar_1kg" to 2.0,
         "mn_daal_chana" to 1.0,
-        "mn_rice_basmati" to 1.0,
-        "mn_salt_800g" to 1.0
+        "mn_besan_1kg" to 1.0
     )
 }

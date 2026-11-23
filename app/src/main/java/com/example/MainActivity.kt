@@ -33,6 +33,9 @@ import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.LocalShipping
+import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VolunteerActivism
@@ -86,9 +89,13 @@ import androidx.compose.material.icons.filled.PhoneAndroid
 import com.example.auth.AuthScreen
 import com.example.auth.onGoogleSignInClicked
 import com.example.auth.signOutShopAccount
+import com.example.data.DailyCashType
+import com.example.data.DailyPaymentSource
+import com.example.data.Order
 import com.example.data.ShopPreferences
 import com.example.data.ShopRepository
 import com.example.data.ShopSettings
+import com.example.data.StockMovementType
 import com.example.data.UiState
 import com.example.i18n.AppLanguage
 import com.example.i18n.LocalAppLanguage
@@ -97,18 +104,25 @@ import com.example.services.BarcodeScannerDialog
 import com.example.services.BluetoothPrinterManager
 import com.example.services.NetworkMonitor
 import com.example.services.NfcRationCardReader
+import com.example.services.QrScanAndPaymentDialog
 import com.example.services.ScannedNfcCard
 import com.example.ui.components.AutoReceiptDialog
+import com.example.ui.components.BillEditorDialog
+import com.example.ui.components.LowStockReportDialog
 import com.example.ui.components.PaymentReceiptDialog
 import com.example.ui.components.RationCardReceiptDialog
 import com.example.ui.components.ShopLogoBadge
 import com.example.ui.screens.BillingScreen
+import com.example.ui.screens.CustomerOrderScreen
+import com.example.ui.screens.DailyRoznamchaScreen
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.KhataScreen
 import com.example.ui.screens.MaryamRationCardScreen
 import com.example.ui.screens.RationFundScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.StockScreen
+import com.example.ui.screens.isManualRoznamchaEntry
+import java.util.Calendar
 import com.example.ui.theme.EmeraldPrimary
 import com.example.ui.theme.GoldShimmer
 import com.example.ui.theme.KiryanaTheme
@@ -129,9 +143,11 @@ enum class ShopDestination(
 ) {
     HOME("ہوم", "Home", Icons.Default.Dashboard),
     BILLING("بلنگ", "Bill", Icons.Default.ReceiptLong),
-    RATION_CARD("راشن کارڈ", "Rashan", Icons.Default.CreditCard),
+    RATION_CARD("پی او ایس", "POS", Icons.Default.CreditCard),
     STOCK("اسٹاک", "Stock", Icons.Default.Inventory2),
     KHATA("کھاتہ", "Khata", Icons.Default.AccountBalanceWallet),
+    ROZNAMCHA("روزنامچہ", "Cashbook", Icons.Default.MenuBook),
+    CUSTOMER_ORDER("سامان آرڈر", "Order", Icons.Default.LocalShipping),
     RATION_FUND("امداد فنڈ", "Charity", Icons.Default.VolunteerActivism),
     SETTINGS("سیٹنگز", "Settings", Icons.Default.Settings)
 }
@@ -155,11 +171,21 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        NfcRationCardReader.enableForegroundDispatch(this)
+        try {
+            NfcRationCardReader.enableNfcReading(this) { card ->
+                _incomingNfcCard.value = card
+            }
+        } catch (_: Throwable) {
+            // Gracefully continue in manual mode on devices without NFC
+        }
     }
 
     override fun onPause() {
-        NfcRationCardReader.disableForegroundDispatch(this)
+        try {
+            NfcRationCardReader.disableNfcReading(this)
+        } catch (_: Throwable) {
+            // Ignore on devices without NFC
+        }
         super.onPause()
     }
 
@@ -170,7 +196,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleNfcIntent(intent: Intent?) {
-        val card = NfcRationCardReader.extractCardFromIntent(intent)
+        val card = try {
+            NfcRationCardReader.extractCardFromIntent(this, intent)
+        } catch (_: Throwable) {
+            null
+        }
         if (card != null) {
             _incomingNfcCard.value = card
         }
@@ -288,6 +318,7 @@ private fun MainShopShell(
     val donationsState by viewModel.donationsState.collectAsStateWithLifecycle()
     val rationItemsState by viewModel.rationItemsState.collectAsStateWithLifecycle()
     val rationCardBillsState by viewModel.rationCardBillsState.collectAsStateWithLifecycle()
+    val dailyCashEntriesState by viewModel.dailyCashEntriesState.collectAsStateWithLifecycle()
     val cartItems by viewModel.cartItems.collectAsStateWithLifecycle()
     val selectedCustomer by viewModel.selectedCustomer.collectAsStateWithLifecycle()
     val manualCustomerName by viewModel.manualCustomerName.collectAsStateWithLifecycle()
@@ -309,14 +340,37 @@ private fun MainShopShell(
     val donations = (donationsState as? UiState.Success)?.data ?: emptyList()
     val rationItems = (rationItemsState as? UiState.Success)?.data ?: emptyList()
     val rationCardBills = (rationCardBillsState as? UiState.Success)?.data ?: emptyList()
+    val dailyCashEntries = (dailyCashEntriesState as? UiState.Success)?.data ?: emptyList()
+
+    val todayManualCashNet = remember(dailyCashEntries) {
+        val startOfTodayMs = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        val todayManual = dailyCashEntries.filter {
+            it.entryDateMs >= startOfTodayMs && isManualRoznamchaEntry(it)
+        }
+        val inAmt = todayManual.filter { it.entryTypeEnum() == DailyCashType.CASH_IN }.sumOf { it.amount }
+        val outAmt = todayManual.filter { it.entryTypeEnum() == DailyCashType.CASH_OUT }.sumOf { it.amount }
+        inAmt - outAmt
+    }
+
+    val lowStockProducts = remember(products) { products.filter { it.isLowStock() } }
 
     var currentDestination by rememberSaveable { mutableStateOf(ShopDestination.HOME) }
     var showBarcodeScanner by remember { mutableStateOf(false) }
+    var showQrPaymentModal by remember { mutableStateOf(false) }
+    var showLowStockReportDialog by remember { mutableStateOf(false) }
+    var editingOrder by remember { mutableStateOf<Order?>(null) }
 
-    // Route real NFC card taps straight to the Maryam Nawaz Ration Card screen
+    // Route real NFC card taps straight to the POS / پی او ایس Card screen
     val incomingNfc by incomingNfcFlow.collectAsStateWithLifecycle()
     LaunchedEffect(incomingNfc?.scannedAtMs) {
         val card = incomingNfc ?: return@LaunchedEffect
+        showQrPaymentModal = false
+        showBarcodeScanner = false
         viewModel.onNfcCardScanned(card)
         currentDestination = ShopDestination.RATION_CARD
         onConsumeIncomingNfc()
@@ -344,7 +398,9 @@ private fun MainShopShell(
     )
 
     val isSecondaryScreen = currentDestination == ShopDestination.SETTINGS ||
-        currentDestination == ShopDestination.RATION_FUND
+        currentDestination == ShopDestination.RATION_FUND ||
+        currentDestination == ShopDestination.ROZNAMCHA ||
+        currentDestination == ShopDestination.CUSTOMER_ORDER
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val useRail = maxWidth >= 680.dp
@@ -398,8 +454,8 @@ private fun MainShopShell(
                             Column {
                                 Text(
                                     text = language.pick(
-                                        "احمد بلال کریانہ سٹور ٹانڈہ",
-                                        "Ahmad Bilal Kiryana, Tanda"
+                                        settings.storeNameUrdu,
+                                        settings.storeNameEnglish
                                     ),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.ExtraBold,
@@ -447,6 +503,16 @@ private fun MainShopShell(
                         }
                     },
                     actions = {
+                        IconButton(
+                            onClick = { showQrPaymentModal = true },
+                            modifier = Modifier.testTag("topbar_qr_payment_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.QrCode2,
+                                contentDescription = language.pick("QR سکین و پیمنٹ", "QR Scan & Payment"),
+                                tint = GoldShimmer
+                            )
+                        }
                         Surface(
                             color = SaffronSecondary,
                             shape = RoundedCornerShape(50.dp),
@@ -509,6 +575,10 @@ private fun MainShopShell(
                                 icon = {
                                     if (dest == ShopDestination.BILLING && cartItems.isNotEmpty()) {
                                         BadgedBox(badge = { Badge { Text("${cartItems.size}") } }) {
+                                            Icon(dest.icon, contentDescription = null)
+                                        }
+                                    } else if (dest == ShopDestination.STOCK && lowStockProducts.isNotEmpty()) {
+                                        BadgedBox(badge = { Badge { Text("${lowStockProducts.size}") } }) {
                                             Icon(dest.icon, contentDescription = null)
                                         }
                                     } else {
@@ -577,7 +647,7 @@ private fun MainShopShell(
                                 language = language,
                                 analytics = analytics,
                                 recentOrders = orders,
-                                lowStockProducts = products.filter { it.isLowStock() },
+                                lowStockProducts = lowStockProducts,
                                 rationCardsServedCount = rationCardBills.size,
                                 onGoToBilling = { currentDestination = ShopDestination.BILLING },
                                 onOpenBarcodeScanner = {
@@ -589,7 +659,12 @@ private fun MainShopShell(
                                 onOpenMaryamRationCard = { currentDestination = ShopDestination.RATION_CARD },
                                 onOpenRationFund = { currentDestination = ShopDestination.RATION_FUND },
                                 onSyncGujratRates = { viewModel.syncGujratMarketRates() },
-                                onOpenReceipt = { viewModel.openReceipt(it) }
+                                onOpenReceipt = { viewModel.openReceipt(it) },
+                                todayManualCashNet = todayManualCashNet,
+                                onOpenRoznamcha = { currentDestination = ShopDestination.ROZNAMCHA },
+                                onOpenCustomerOrder = { currentDestination = ShopDestination.CUSTOMER_ORDER },
+                                onEditOrder = { editingOrder = it },
+                                onOpenLowStockReport = { showLowStockReportDialog = true }
                             )
 
                             ShopDestination.BILLING -> BillingScreen(
@@ -614,7 +689,9 @@ private fun MainShopShell(
                                 onCompletePendingOrder = { order, method ->
                                     viewModel.completePendingOrder(order, method)
                                 },
-                                onCancelPendingOrder = { viewModel.cancelPendingOrder(it) }
+                                onCancelPendingOrder = { viewModel.cancelPendingOrder(it) },
+                                onEditOrder = { editingOrder = it },
+                                onOpenLowStockReport = { showLowStockReportDialog = true }
                             )
 
                             ShopDestination.RATION_CARD -> MaryamRationCardScreen(
@@ -628,13 +705,26 @@ private fun MainShopShell(
                                     viewModel.saveRationCardItem(id, ur, en, unit, price, order)
                                 },
                                 onDeleteRationItem = { viewModel.deleteRationCardItem(it) },
-                                onCheckoutRationBill = { items, uid, cardNo, name, cnic, phone, limit, used, viaNfc, note, onClear ->
+                                onCheckoutRationBill = { items, uid, cardNo, name, cnic, phone, limit, fee, used, viaNfc, note, onClear ->
                                     viewModel.checkoutRationCardBill(
-                                        items, uid, cardNo, name, cnic, phone, limit, used, viaNfc, note, onClear
+                                        cartItems = items,
+                                        cardUid = uid,
+                                        cardNumber = cardNo,
+                                        beneficiaryName = name,
+                                        cnic = cnic,
+                                        phone = phone,
+                                        subsidyLimit = limit,
+                                        feeDeduction = fee,
+                                        alreadyUsedThisMonth = used,
+                                        scannedViaNfc = viaNfc,
+                                        note = note,
+                                        onSuccessClear = onClear
                                     )
                                 },
                                 onOpenReceipt = { viewModel.openRationCardReceipt(it) },
-                                onOpenCharityFund = { currentDestination = ShopDestination.RATION_FUND }
+                                onOpenCharityFund = { currentDestination = ShopDestination.RATION_FUND },
+                                lowStockProducts = lowStockProducts,
+                                onOpenLowStockReport = { showLowStockReportDialog = true }
                             )
 
                             ShopDestination.STOCK -> StockScreen(
@@ -650,19 +740,61 @@ private fun MainShopShell(
                                 onRecordStockMovement = { prod, type, qty, cost, note ->
                                     viewModel.recordStockMovement(prod, type, qty, cost, note)
                                 },
-                                onSyncGujratMarketRates = { viewModel.syncGujratMarketRates() }
+                                onSyncGujratMarketRates = { viewModel.syncGujratMarketRates() },
+                                onOpenLowStockReport = { showLowStockReportDialog = true }
                             )
 
                             ShopDestination.KHATA -> KhataScreen(
                                 language = language,
                                 customers = customers,
                                 ledgerEntries = ledgerEntries,
+                                orders = orders,
                                 onAddCustomer = { name, phone, addr, opening ->
                                     viewModel.addCustomer(name, phone, addr, opening)
                                 },
                                 onRecordTransaction = { cust, type, amt, note ->
                                     viewModel.recordCustomerTransaction(cust, type, amt, note)
+                                },
+                                onOpenEntryReceipt = { entry ->
+                                    viewModel.openPaymentReceipt(entry)
+                                },
+                                onEditOrder = { order ->
+                                    editingOrder = order
+                                },
+                                onUpdateTransaction = { entry, newType, newAmt, newNote ->
+                                    viewModel.updateCustomerTransaction(entry, newType, newAmt, newNote)
+                                },
+                                onDeleteTransaction = { entry ->
+                                    viewModel.deleteCustomerTransaction(entry)
                                 }
+                            )
+
+                            ShopDestination.ROZNAMCHA -> DailyRoznamchaScreen(
+                                language = language,
+                                settings = settings,
+                                allCashEntries = dailyCashEntries,
+                                onSaveEntry = { existingId, type, source, title, amt, refId, note, dateMs ->
+                                    viewModel.saveDailyCashEntry(
+                                        existingId = existingId,
+                                        entryType = type,
+                                        paymentSource = source,
+                                        categoryOrTitle = title,
+                                        amount = amt,
+                                        referenceId = refId,
+                                        note = note,
+                                        entryDateMs = dateMs
+                                    )
+                                },
+                                onDeleteEntry = { id ->
+                                    viewModel.deleteDailyCashEntry(id)
+                                }
+                            )
+
+                            ShopDestination.CUSTOMER_ORDER -> CustomerOrderScreen(
+                                language = language,
+                                settings = settings,
+                                products = products,
+                                onShowMessage = { viewModel.postMessage(it) }
                             )
 
                             ShopDestination.RATION_FUND -> RationFundScreen(
@@ -723,10 +855,27 @@ private fun MainShopShell(
                                 onSyncGujratMarketRates = { viewModel.syncGujratMarketRates() },
                                 onUpdateDefaultMargin = { viewModel.updateDefaultMargin(it) },
                                 onUpdateShopPhone = { viewModel.updateShopPhone(it) },
+                                onSaveStoreProfile = { nameUr, nameEn, addrUr, addrEn, phone, bank, title, accNo, iban, branch ->
+                                    viewModel.saveStoreProfile(
+                                        storeNameUrdu = nameUr,
+                                        storeNameEnglish = nameEn,
+                                        addressUrdu = addrUr,
+                                        addressEnglish = addrEn,
+                                        phone = phone,
+                                        bankName = bank,
+                                        accountTitle = title,
+                                        accountNumber = accNo,
+                                        iban = iban,
+                                        branchName = branch
+                                    )
+                                },
                                 onRefreshPairedPrinters = { viewModel.refreshPairedPrinters() },
                                 onSelectBluetoothPrinter = { viewModel.selectBluetoothPrinter(it) },
                                 onTestBluetoothPrint = { viewModel.printBluetoothTestSlip() },
                                 onOpenRationFund = { currentDestination = ShopDestination.RATION_FUND },
+                                onUpdateShopLocation = { lat, lng, addr ->
+                                    viewModel.updateShopGpsLocation(lat, lng, addr)
+                                },
                                 onSignOut = {
                                     if (Firebase.auth.currentUser != null) {
                                         signOutShopAccount(
@@ -749,23 +898,56 @@ private fun MainShopShell(
     // Automatic Receipt Modal after every normal bill
     val receiptOrder = activeReceiptOrder
     if (receiptOrder != null) {
+        val matchedCustomerPhone = remember(receiptOrder.customerId, customers) {
+            customers.firstOrNull { it.id == receiptOrder.customerId }?.phone.orEmpty()
+        }
         AutoReceiptDialog(
             order = receiptOrder,
             language = language,
-            shopPhone = settings.shopPhone,
+            settings = settings,
+            customerPhone = matchedCustomerPhone,
             hasBluetoothPrinter = settings.selectedPrinterAddress.isNotBlank(),
             onBluetoothPrint = { viewModel.printOrderOnBluetooth(receiptOrder) },
+            onEditOrder = { orderToEdit ->
+                viewModel.dismissReceipt()
+                editingOrder = orderToEdit
+            },
             onDismiss = { viewModel.dismissReceipt() }
         )
     }
 
-    // Automatic Receipt Modal after Maryam Nawaz Ration Card bill
+    // Full Manual Bill Editor & Amount Adjustment Dialog
+    val orderBeingEdited = editingOrder
+    if (orderBeingEdited != null) {
+        BillEditorDialog(
+            order = orderBeingEdited,
+            products = products,
+            language = language,
+            isBusy = isBusy,
+            onSaveUpdatedOrder = { updatedItems, discount, extraCharges, finalOverride, method, paid, note ->
+                viewModel.updateExistingOrder(
+                    existingOrder = orderBeingEdited,
+                    updatedItems = updatedItems,
+                    discount = discount,
+                    extraCharges = extraCharges,
+                    finalTotalOverride = finalOverride,
+                    paymentMethod = method,
+                    paidAmountInput = paid,
+                    note = note,
+                    onUpdated = { editingOrder = null }
+                )
+            },
+            onDismiss = { editingOrder = null }
+        )
+    }
+
+    // Automatic Receipt Modal after POS Card bill
     val rationReceipt = activeRationCardReceipt
     if (rationReceipt != null) {
         RationCardReceiptDialog(
             bill = rationReceipt,
             language = language,
-            shopPhone = settings.shopPhone,
+            settings = settings,
             onBluetoothPrint = { viewModel.printRationCardBillOnBluetooth(rationReceipt) },
             onDismiss = { viewModel.dismissRationCardReceipt() }
         )
@@ -774,9 +956,15 @@ private fun MainShopShell(
     // Automatic Payment Receipt after Udhar Khata transaction
     val payReceipt = activePaymentReceipt
     if (payReceipt != null) {
+        val matchedCustomerPhone = remember(payReceipt.customerId, customers) {
+            customers.firstOrNull { it.id == payReceipt.customerId }?.phone.orEmpty()
+        }
         PaymentReceiptDialog(
             entry = payReceipt,
             language = language,
+            settings = settings,
+            customerPhone = matchedCustomerPhone,
+            onBluetoothPrint = { viewModel.printLedgerEntryOnBluetooth(payReceipt) },
             onDismiss = { viewModel.dismissPaymentReceipt() }
         )
     }
@@ -790,6 +978,83 @@ private fun MainShopShell(
                 viewModel.addProductByBarcode(code)
             },
             onDismiss = { showBarcodeScanner = false }
+        )
+    }
+
+    // 2-Tab "QR سکین و پیمنٹ" Modal (My Bank EMVCo/RAAST QR + CameraX QR/Card Scanner with Torch)
+    if (showQrPaymentModal) {
+        QrScanAndPaymentDialog(
+            language = language,
+            settings = settings,
+            onRecordPaymentReceived = { amountPkr, refNote ->
+                viewModel.saveDailyCashEntry(
+                    existingId = null,
+                    entryType = DailyCashType.CASH_IN,
+                    paymentSource = DailyPaymentSource.HBL_QR,
+                    categoryOrTitle = language.pick(
+                        "بینک QR پیمنٹ وصولی (${settings.bankName})",
+                        "Bank QR Payment Received (${settings.bankName})"
+                    ),
+                    amount = amountPkr,
+                    referenceId = refNote.ifBlank { "RAAST-QR" },
+                    note = refNote.ifBlank {
+                        language.pick("RAAST / بینک QR پیمنٹ", "RAAST / Bank QR Payment")
+                    }
+                )
+            },
+            onScannedProductBarcode = { barcode ->
+                currentDestination = ShopDestination.BILLING
+                viewModel.addProductByBarcode(barcode)
+            },
+            onScannedCardNumber = { scannedCode ->
+                viewModel.onNfcCardScanned(
+                    ScannedNfcCard(
+                        uidHex = scannedCode.take(24),
+                        techSummary = "QR / Camera Scan",
+                        ndefText = scannedCode,
+                        suggestedCardNumber = scannedCode
+                    )
+                )
+                currentDestination = ShopDestination.RATION_CARD
+            },
+            onShowMessage = { viewModel.postMessage(it) },
+            onDismiss = { showQrPaymentModal = false }
+        )
+    }
+
+    // Low Stock Replenishment Report & PDF Export Modal
+    if (showLowStockReportDialog) {
+        LowStockReportDialog(
+            language = language,
+            settings = settings,
+            lowStockProducts = lowStockProducts,
+            onUpdateThreshold = { prod, newThreshold ->
+                viewModel.saveProduct(
+                    existingId = prod.id,
+                    nameUrdu = prod.nameUrdu,
+                    nameEnglish = prod.nameEnglish,
+                    category = prod.categoryEnum(),
+                    unit = prod.unit,
+                    costPrice = prod.costPrice,
+                    sellingPrice = prod.sellingPrice,
+                    marginPercent = prod.marginPercent,
+                    autoPriceEnabled = prod.autoPriceEnabled,
+                    stockQty = prod.stockQty,
+                    lowStockThreshold = newThreshold,
+                    barcode = prod.barcode
+                )
+            },
+            onQuickRestock = { prod, reorderQty ->
+                viewModel.recordStockMovement(
+                    product = prod,
+                    type = StockMovementType.STOCK_IN,
+                    quantity = reorderQty,
+                    newUnitCost = prod.costPrice,
+                    note = language.pick("کم اسٹاک رپورٹ سے فوری ری اسٹاک", "Quick restock from Low Stock Report")
+                )
+            },
+            onReportGeneratedMessage = { msg -> viewModel.postMessage(msg) },
+            onDismiss = { showLowStockReportDialog = false }
         )
     }
 }

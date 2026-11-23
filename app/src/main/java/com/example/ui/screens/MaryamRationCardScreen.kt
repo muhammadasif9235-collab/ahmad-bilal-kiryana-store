@@ -5,6 +5,7 @@ import android.provider.Settings
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -43,6 +45,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -74,6 +77,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.MaryamRationCatalogData
+import com.example.data.Product
 import com.example.data.RationCardBill
 import com.example.data.RationCardItem
 import com.example.data.RationCartItem
@@ -86,6 +90,7 @@ import com.example.services.NfcHardwareStatus
 import com.example.services.NfcRationCardReader
 import com.example.services.ReceiptFormatter
 import com.example.services.ScannedNfcCard
+import com.example.ui.components.PosLowStockWarningBanner
 import com.example.ui.theme.EmeraldPrimary
 import com.example.ui.theme.EmeraldPrimaryDark
 import com.example.ui.theme.GoldShimmer
@@ -98,6 +103,8 @@ import java.util.Date
 import java.util.Locale
 
 private enum class RationCardTab { BILL, ITEMS, HISTORY }
+
+private val QUICK_SERVICE_FEE_PRESETS = listOf(0, 50, 70, 80, 100)
 
 @Composable
 fun MaryamRationCardScreen(
@@ -117,31 +124,41 @@ fun MaryamRationCardScreen(
         cnic: String,
         phone: String,
         subsidyLimit: Double,
+        feeDeduction: Double,
         alreadyUsedThisMonth: Double,
         scannedViaNfc: Boolean,
         note: String,
         onSuccessClear: () -> Unit
     ) -> Unit,
     onOpenReceipt: (RationCardBill) -> Unit,
-    onOpenCharityFund: () -> Unit
+    onOpenCharityFund: () -> Unit,
+    lowStockProducts: List<Product> = emptyList(),
+    onOpenLowStockReport: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    val nfcStatus = remember(context) { NfcRationCardReader.checkHardwareStatus(context) }
+    val nfcStatus = remember(context) {
+        try {
+            NfcRationCardReader.checkHardwareStatus(context)
+        } catch (_: Throwable) {
+            NfcHardwareStatus.NOT_SUPPORTED
+        }
+    }
     val currentMonthKey = remember { SimpleDateFormat("yyyy-MM", Locale.US).format(Date()) }
 
     var activeTab by remember { mutableStateOf(RationCardTab.BILL) }
 
-    // Beneficiary & NFC Card Form State
+    // Beneficiary & POS/NFC Card Form State
     var cardUid by remember { mutableStateOf("") }
     var cardNumber by remember { mutableStateOf("") }
     var beneficiaryName by remember { mutableStateOf("") }
     var cnic by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var subsidyLimitStr by remember { mutableStateOf("3000") }
+    var feeDeductionStr by remember { mutableStateOf("100") }
     var note by remember { mutableStateOf("") }
     var scannedViaNfc by remember { mutableStateOf(false) }
 
-    // Ration Bill Cart State
+    // POS Bill Cart State
     var cartItems by remember { mutableStateOf<List<RationCartItem>>(emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
     var catalogSearchQuery by remember { mutableStateOf("") }
@@ -153,13 +170,15 @@ fun MaryamRationCardScreen(
     var editingCartPriceItem by remember { mutableStateOf<RationCartItem?>(null) }
     var showProgramInfoDialog by remember { mutableStateOf(false) }
 
-    // Automatically populate fields when a real Maryam Nawaz Ration Card is tapped via NFC!
+    // Automatically populate fields when a real POS / Ration Card is tapped via NFC!
     LaunchedEffect(scannedNfcCard?.scannedAtMs) {
         val card = scannedNfcCard ?: return@LaunchedEffect
         cardUid = card.uidHex
         scannedViaNfc = true
         if (card.ndefText.isNotBlank() && cardNumber.isBlank()) {
             cardNumber = card.ndefText.take(60)
+        } else if (card.suggestedCardNumber.isNotBlank() && cardNumber.isBlank()) {
+            cardNumber = card.suggestedCardNumber.take(60)
         }
         // Auto-fill returning beneficiary details if this NFC UID was previously served
         val prevBill = rationBills.firstOrNull {
@@ -174,7 +193,7 @@ fun MaryamRationCardScreen(
         activeTab = RationCardTab.BILL
     }
 
-    // Track how much of this card's Rs. 3,000 monthly allowance was already used this month
+    // Track how much of this card's net monthly allowance was already used this month
     val alreadyUsedThisMonth = remember(cardUid, cnic, cardNumber, rationBills, currentMonthKey) {
         val keyUid = cardUid.trim()
         val keyCnic = cnic.trim()
@@ -192,9 +211,24 @@ fun MaryamRationCardScreen(
         }
     }
 
-    val subsidyLimit = (subsidyLimitStr.toDoubleOrNull() ?: MaryamRationCatalogData.DEFAULT_MONTHLY_SUBSIDY_PKR)
-        .coerceAtLeast(0.0)
-    val availableAllowance = (subsidyLimit - alreadyUsedThisMonth).coerceAtLeast(0.0)
+    // Manual-mode helper: detect returning beneficiary by typed CNIC or Card #
+    val matchedManualBeneficiary = remember(cnic, cardNumber, beneficiaryName, rationBills) {
+        val keyCnic = cnic.trim()
+        val keyCard = cardNumber.trim()
+        if (beneficiaryName.isNotBlank() || (keyCnic.length < 5 && keyCard.length < 4)) {
+            null
+        } else {
+            rationBills.firstOrNull { bill ->
+                (keyCnic.length >= 5 && bill.cnic.equals(keyCnic, ignoreCase = true)) ||
+                    (keyCard.length >= 4 && bill.cardNumber.equals(keyCard, ignoreCase = true))
+            }
+        }
+    }
+
+    val subsidyLimit = (subsidyLimitStr.toDoubleOrNull() ?: 0.0).coerceIn(0.0, 1_000_000.0)
+    val feeDeduction = (feeDeductionStr.toDoubleOrNull() ?: 0.0).coerceIn(0.0, subsidyLimit)
+    val netRationValue = (subsidyLimit - feeDeduction).coerceAtLeast(0.0)
+    val availableAllowance = (netRationValue - alreadyUsedThisMonth).coerceAtLeast(0.0)
     val cartTotal = cartItems.sumOf { it.lineTotal }
     val subsidyDeducted = cartTotal.coerceAtMost(availableAllowance)
     val extraCashNeeded = (cartTotal - subsidyDeducted).coerceAtLeast(0.0)
@@ -264,6 +298,17 @@ fun MaryamRationCardScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            if (lowStockProducts.isNotEmpty()) {
+                item {
+                    PosLowStockWarningBanner(
+                        language = language,
+                        lowStockProducts = lowStockProducts,
+                        onOpenLowStockReport = onOpenLowStockReport,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+
             // 1. Royal Punjab Government Maryam Nawaz Ration Card Header Card
             item {
                 Card(
@@ -310,8 +355,8 @@ fun MaryamRationCardScreen(
                                     Column {
                                         Text(
                                             text = language.pick(
-                                                "مریم نواز راشن کارڈ (NFC)",
-                                                "Maryam Nawaz Ration Card (NFC)"
+                                                "POS / پی او ایس کارڈ (NFC)",
+                                                "POS / پی او ایس Card (NFC)"
                                             ),
                                             style = MaterialTheme.typography.titleLarge,
                                             fontWeight = FontWeight.ExtraBold,
@@ -319,8 +364,8 @@ fun MaryamRationCardScreen(
                                         )
                                         Text(
                                             text = language.pick(
-                                                "حکومت پنجاب • 3,000 روپے ماہانہ سبسڈی • احمد بلال ٹانڈہ",
-                                                "Govt of Punjab • Rs. 3,000 Monthly Subsidy • Tanda"
+                                                "کوٹہ ${subsidyLimit.toLong()} - فیس ${feeDeduction.toLong()} = خالص راشن ${netRationValue.toLong()} روپے • ٹانڈہ",
+                                                "Quota Rs. ${subsidyLimit.toLong()} - Fee Rs. ${feeDeduction.toLong()} = Net Rs. ${netRationValue.toLong()} • Tanda"
                                             ),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = GoldShimmer
@@ -333,7 +378,7 @@ fun MaryamRationCardScreen(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Info,
-                                        contentDescription = language.pick("پروگرام معلومات", "Program Info"),
+                                        contentDescription = language.pick("POS معلومات", "POS Info"),
                                         tint = GoldShimmer
                                     )
                                 }
@@ -350,7 +395,7 @@ fun MaryamRationCardScreen(
                                 ) {
                                     Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
                                         Text(
-                                            text = language.pick("کل کارڈ بلز", "Cards Served"),
+                                            text = language.pick("کل POS بلز", "POS Bills"),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = Color.White.copy(alpha = 0.8f)
                                         )
@@ -369,7 +414,7 @@ fun MaryamRationCardScreen(
                                 ) {
                                     Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
                                         Text(
-                                            text = language.pick("کل سبسڈی راشن", "Total Subsidy Given"),
+                                            text = language.pick("کل POS راشن", "Total POS Given"),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = Color.White.copy(alpha = 0.8f)
                                         )
@@ -417,7 +462,7 @@ fun MaryamRationCardScreen(
             item {
                 SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                     val tabs = listOf(
-                        RationCardTab.BILL to language.pick("نیا کارڈ بل", "New Bill"),
+                        RationCardTab.BILL to language.pick("نیا POS بل", "New POS Bill"),
                         RationCardTab.ITEMS to language.pick("اشیاء و ریٹس", "Items & Rates"),
                         RationCardTab.HISTORY to language.pick("ریکارڈ (${rationBills.size})", "History (${rationBills.size})")
                     )
@@ -436,21 +481,24 @@ fun MaryamRationCardScreen(
 
             when (activeTab) {
                 RationCardTab.BILL -> {
-                    // 3A. NFC Tap Card Scanner Banner
+                    // 3A. NFC Tap Card Scanner / Graceful Manual Mode Banner
                     item {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(18.dp),
                             border = BorderStroke(
                                 1.5.dp,
-                                if (scannedViaNfc && cardUid.isNotBlank()) ProfitGreen
-                                else MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                                when {
+                                    scannedViaNfc && cardUid.isNotBlank() -> ProfitGreen
+                                    nfcStatus == NfcHardwareStatus.NOT_SUPPORTED -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.45f)
+                                    else -> MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                                }
                             ),
                             colors = CardDefaults.cardColors(
-                                containerColor = if (scannedViaNfc && cardUid.isNotBlank()) {
-                                    ProfitGreen.copy(alpha = 0.08f)
-                                } else {
-                                    MaterialTheme.colorScheme.surface
+                                containerColor = when {
+                                    scannedViaNfc && cardUid.isNotBlank() -> ProfitGreen.copy(alpha = 0.08f)
+                                    nfcStatus == NfcHardwareStatus.NOT_SUPPORTED -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.25f)
+                                    else -> MaterialTheme.colorScheme.surface
                                 }
                             )
                         ) {
@@ -473,41 +521,44 @@ fun MaryamRationCardScreen(
                                                 .size(42.dp)
                                                 .clip(CircleShape)
                                                 .background(
-                                                    if (scannedViaNfc && cardUid.isNotBlank()) ProfitGreen
-                                                    else if (nfcStatus == NfcHardwareStatus.READY) EmeraldPrimary
-                                                    else WarningAmber
+                                                    when {
+                                                        scannedViaNfc && cardUid.isNotBlank() -> ProfitGreen
+                                                        nfcStatus == NfcHardwareStatus.READY -> EmeraldPrimary
+                                                        nfcStatus == NfcHardwareStatus.DISABLED -> WarningAmber
+                                                        else -> MaterialTheme.colorScheme.secondary
+                                                    }
                                                 ),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Icon(
-                                                imageVector = if (scannedViaNfc && cardUid.isNotBlank()) {
-                                                    Icons.Default.CheckCircle
-                                                } else {
-                                                    Icons.Default.Nfc
+                                                imageVector = when {
+                                                    scannedViaNfc && cardUid.isNotBlank() -> Icons.Default.CheckCircle
+                                                    nfcStatus == NfcHardwareStatus.NOT_SUPPORTED -> Icons.Default.CreditCard
+                                                    else -> Icons.Default.Nfc
                                                 },
                                                 contentDescription = null,
                                                 tint = Color.White,
                                                 modifier = Modifier.size(22.dp)
                                             )
                                         }
-                                        Column {
+                                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                             Text(
                                                 text = when {
                                                     scannedViaNfc && cardUid.isNotBlank() -> language.pick(
-                                                        "راشن کارڈ NFC سے اسکین ہو گیا!",
-                                                        "Ration Card Scanned via NFC!"
+                                                        "POS کارڈ NFC سے اسکین ہو گیا!",
+                                                        "POS Card Scanned via NFC!"
                                                     )
                                                     nfcStatus == NfcHardwareStatus.READY -> language.pick(
-                                                        "NFC تیار ہے — راشن کارڈ فون کے پیچھے ٹچ کریں",
-                                                        "NFC Ready — Tap Ration Card on back of phone"
+                                                        "NFC تیار ہے — POS کارڈ فون کے پیچھے ٹچ کریں",
+                                                        "NFC Ready — Tap POS Card on back of phone"
                                                     )
                                                     nfcStatus == NfcHardwareStatus.DISABLED -> language.pick(
-                                                        "فون کا NFC بند ہے — براہ کرم آن کریں",
-                                                        "Phone NFC is OFF — Enable to scan cards"
+                                                        "فون کا NFC بند ہے — آن کریں یا دستی اندراج کریں",
+                                                        "Phone NFC is OFF — Enable or use manual entry below"
                                                     )
                                                     else -> language.pick(
-                                                        "دستی اندراج موڈ (فون میں NFC دستیاب نہیں)",
-                                                        "Manual Entry Mode (NFC hardware unavailable)"
+                                                        "دستی POS کارڈ موڈ فعال (بغیر NFC)",
+                                                        "Manual POS Card Mode Active (No NFC Required)"
                                                     )
                                                 },
                                                 style = MaterialTheme.typography.titleSmall,
@@ -521,6 +572,15 @@ fun MaryamRationCardScreen(
                                                     color = ProfitGreen,
                                                     fontWeight = FontWeight.Bold
                                                 )
+                                            } else if (nfcStatus == NfcHardwareStatus.NOT_SUPPORTED) {
+                                                Text(
+                                                    text = language.pick(
+                                                        "اس ڈیوائس میں NFC نہیں — کارڈ نمبر، شناختی کارڈ یا نام نیچے دستی درج کر کے مکمل POS بل اور رسید بنائیں۔",
+                                                        "NFC hardware unavailable on this device — type Card #, CNIC, or Name below for full POS billing & receipts."
+                                                    ),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
                                             }
                                         }
                                     }
@@ -530,8 +590,8 @@ fun MaryamRationCardScreen(
                                             onClick = {
                                                 try {
                                                     context.startActivity(Intent(Settings.ACTION_NFC_SETTINGS))
-                                                } catch (_: Exception) {
-                                                    // Ignore if settings unavailable
+                                                } catch (_: Throwable) {
+                                                    // Ignore gracefully if NFC settings screen is unavailable
                                                 }
                                             }
                                         ) {
@@ -553,7 +613,7 @@ fun MaryamRationCardScreen(
                         }
                     }
 
-                    // 3B. Beneficiary & Card Details Form
+                    // 3B. Beneficiary, Manual Card Entry & Live Quota / Fee Deduction Form
                     item {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
@@ -563,10 +623,10 @@ fun MaryamRationCardScreen(
                         ) {
                             Column(
                                 modifier = Modifier.padding(14.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 Text(
-                                    text = language.pick("راشن کارڈ صارف کی تفصیل", "Beneficiary & Card Details"),
+                                    text = language.pick("POS / پی او ایس کارڈ اور صارف کی تفصیل", "POS Card & Beneficiary Details"),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary
@@ -582,6 +642,16 @@ fun MaryamRationCardScreen(
                                 )
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     OutlinedTextField(
+                                        value = cardNumber,
+                                        onValueChange = { cardNumber = it },
+                                        label = { Text(language.pick("POS کارڈ نمبر / BOP", "POS Card # / BOP")) },
+                                        placeholder = { Text("BOP-XXXX") },
+                                        singleLine = true,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .testTag("pos_card_number_input")
+                                    )
+                                    OutlinedTextField(
                                         value = cnic,
                                         onValueChange = { cnic = it },
                                         label = { Text(language.pick("شناختی کارڈ (CNIC)", "CNIC Number")) },
@@ -589,43 +659,153 @@ fun MaryamRationCardScreen(
                                         singleLine = true,
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                         modifier = Modifier
-                                            .weight(1.2f)
+                                            .weight(1f)
                                             .testTag("ration_cnic_input")
                                     )
-                                    OutlinedTextField(
-                                        value = subsidyLimitStr,
-                                        onValueChange = { subsidyLimitStr = it.filter { c -> c.isDigit() } },
-                                        label = { Text(language.pick("کوٹہ (Rs.)", "Quota (Rs.)")) },
-                                        singleLine = true,
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                        modifier = Modifier.weight(0.8f)
-                                    )
                                 }
+                                OutlinedTextField(
+                                    value = phone,
+                                    onValueChange = { phone = it },
+                                    label = { Text(language.pick("موبائل نمبر", "Phone Number")) },
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                if (matchedManualBeneficiary != null) {
+                                    FilledTonalButton(
+                                        onClick = {
+                                            beneficiaryName = matchedManualBeneficiary.beneficiaryName
+                                            if (cnic.isBlank()) cnic = matchedManualBeneficiary.cnic
+                                            if (phone.isBlank()) phone = matchedManualBeneficiary.phone
+                                            if (cardNumber.isBlank()) cardNumber = matchedManualBeneficiary.cardNumber
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            language.pick(
+                                                "سابقہ ریکارڈ ملا: ${matchedManualBeneficiary.beneficiaryName} (خودکار بھریں)",
+                                                "Returning Card Found: ${matchedManualBeneficiary.beneficiaryName} (Auto-Fill)"
+                                            )
+                                        )
+                                    }
+                                }
+
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+
+                                // Live Editable Total Quota & Service Fee Deduction Controls
+                                Text(
+                                    text = language.pick(
+                                        "کل کوٹہ اور سروس فیس کٹوتی (فوری حساب)",
+                                        "Total Quota & Service Fee Deduction (Live Calculation)"
+                                    ),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     OutlinedTextField(
-                                        value = cardNumber,
-                                        onValueChange = { cardNumber = it },
-                                        label = { Text(language.pick("کارڈ نمبر / BOP", "Card # / BOP")) },
+                                        value = subsidyLimitStr,
+                                        onValueChange = { raw ->
+                                            subsidyLimitStr = raw.filter { c -> c.isDigit() || c == '.' }
+                                        },
+                                        label = { Text(language.pick("کل کوٹہ (روپے)", "Total Quota (Rs.)")) },
+                                        placeholder = { Text("3000") },
                                         singleLine = true,
-                                        modifier = Modifier.weight(1f)
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .testTag("pos_quota_input")
                                     )
                                     OutlinedTextField(
-                                        value = phone,
-                                        onValueChange = { phone = it },
-                                        label = { Text(language.pick("موبائل نمبر", "Phone")) },
+                                        value = feeDeductionStr,
+                                        onValueChange = { raw ->
+                                            feeDeductionStr = raw.filter { c -> c.isDigit() || c == '.' }
+                                        },
+                                        label = { Text(language.pick("سروس فیس (روپے)", "Service Fee (Rs.)")) },
+                                        placeholder = { Text("100") },
                                         singleLine = true,
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                                        modifier = Modifier.weight(1f)
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .testTag("pos_fee_custom_input")
                                     )
+                                }
+
+                                // Quick Service Fee Chips: 0, 50, 70, 80, 100
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    QUICK_SERVICE_FEE_PRESETS.forEach { presetFee ->
+                                        val selected = feeDeductionStr.isNotBlank() &&
+                                            feeDeduction.toLong() == presetFee.toLong()
+                                        FilterChip(
+                                            selected = selected,
+                                            onClick = { feeDeductionStr = presetFee.toString() },
+                                            label = {
+                                                Text(
+                                                    text = if (presetFee == 0) {
+                                                        language.pick("0 (فری)", "Rs. 0")
+                                                    } else {
+                                                        language.pick("فیس $presetFee", "Rs. $presetFee")
+                                                    },
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                                                )
+                                            },
+                                            modifier = Modifier.testTag("pos_fee_chip_$presetFee")
+                                        )
+                                    }
+                                }
+
+                                // Live Net Ration Value Breakdown Box
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = BorderStroke(1.dp, EmeraldPrimary.copy(alpha = 0.35f)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column {
+                                            Text(
+                                                text = language.pick("خالص راشن ویلیو (کوٹہ − فیس)", "Net Ration Value (Quota − Fee)"),
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                            )
+                                            Text(
+                                                text = "${formatPkr(subsidyLimit, language)} − ${formatPkr(feeDeduction, language)}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        Text(
+                                            text = formatPkr(netRationValue, language),
+                                            style = MaterialTheme.typography.titleLarge,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = ProfitGreen,
+                                            modifier = Modifier.testTag("pos_net_ration_value")
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
 
-                    // 3C. Live Rs. 3,000 Subsidy Quota Meter & Cart Summary
+                    // 3C. Live POS Net Ration Quota Meter & Cart Summary
                     item {
-                        val progress = if (subsidyLimit > 0) {
-                            ((alreadyUsedThisMonth + subsidyDeducted) / subsidyLimit).toFloat().coerceIn(0f, 1f)
+                        val progress = if (netRationValue > 0.0) {
+                            ((alreadyUsedThisMonth + subsidyDeducted) / netRationValue).toFloat().coerceIn(0f, 1f)
                         } else 0f
                         Card(
                             modifier = Modifier.fillMaxWidth(),
@@ -643,12 +823,25 @@ fun MaryamRationCardScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(
-                                        text = language.pick("ماہانہ 3,000 سبسڈی میٹر ($currentMonthKey)", "Rs. 3,000 Quota Meter ($currentMonthKey)"),
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = language.pick(
+                                                "POS / پی او ایس خالص راشن میٹر ($currentMonthKey)",
+                                                "POS Net Ration Meter ($currentMonthKey)"
+                                            ),
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
+                                        Text(
+                                            text = language.pick(
+                                                "کل کوٹہ: ${subsidyLimit.toLong()} • فیس: -${feeDeduction.toLong()} • خالص: ${netRationValue.toLong()}",
+                                                "Quota: ${subsidyLimit.toLong()} • Fee: -${feeDeduction.toLong()} • Net: ${netRationValue.toLong()}"
+                                            ),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                     Text(
                                         text = formatPkr(cartTotal, language),
                                         style = MaterialTheme.typography.titleLarge,
@@ -673,7 +866,7 @@ fun MaryamRationCardScreen(
                                 ) {
                                     Column {
                                         Text(
-                                            text = language.pick("کارڈ سے کٹوتی", "From Card"),
+                                            text = language.pick("POS کارڈ سے کٹوتی", "From POS Card"),
                                             style = MaterialTheme.typography.labelSmall
                                         )
                                         Text(
@@ -685,7 +878,7 @@ fun MaryamRationCardScreen(
                                     }
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(
-                                            text = language.pick("کارڈ بقایا بیلنس", "Remaining"),
+                                            text = language.pick("خالص بقایا بیلنس", "Net Remaining"),
                                             style = MaterialTheme.typography.labelSmall
                                         )
                                         Text(
@@ -720,7 +913,7 @@ fun MaryamRationCardScreen(
                                     )
                                 }
 
-                                // Quick 3,000 Pack + Clear Row
+                                // Quick Standard Pack + Clear Row
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -734,7 +927,7 @@ fun MaryamRationCardScreen(
                                         Icon(Icons.Default.ShoppingBag, contentDescription = null, modifier = Modifier.size(16.dp))
                                         Spacer(Modifier.size(4.dp))
                                         Text(
-                                            language.pick("3,000 اسٹینڈرڈ پیک", "Load Rs. 3,000 Pack"),
+                                            language.pick("اسٹینڈرڈ POS پیک لوڈ کریں", "Load Standard POS Pack"),
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
@@ -842,6 +1035,7 @@ fun MaryamRationCardScreen(
                                                 cnic,
                                                 phone,
                                                 subsidyLimit,
+                                                feeDeduction,
                                                 alreadyUsedThisMonth,
                                                 scannedViaNfc,
                                                 note
@@ -869,8 +1063,8 @@ fun MaryamRationCardScreen(
                                         Spacer(Modifier.size(8.dp))
                                         Text(
                                             text = language.pick(
-                                                "راشن کارڈ بل محفوظ کریں اور رسید بنائیں",
-                                                "Save Ration Card Bill & Print Receipt"
+                                                "POS / پی او ایس بل محفوظ کریں اور رسید بنائیں",
+                                                "Save POS Bill & Print Receipt"
                                             ),
                                             style = MaterialTheme.typography.titleSmall,
                                             fontWeight = FontWeight.Bold
@@ -1136,8 +1330,8 @@ fun MaryamRationCardScreen(
                                     )
                                     Text(
                                         text = language.pick(
-                                            "ابھی تک کوئی مریم نواز راشن کارڈ بل درج نہیں ہوا۔",
-                                            "No Maryam Nawaz Ration Card bills recorded yet."
+                                            "ابھی تک کوئی POS / پی او ایس کارڈ بل درج نہیں ہوا۔",
+                                            "No POS / پی او ایس card bills recorded yet."
                                         ),
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1197,6 +1391,14 @@ fun MaryamRationCardScreen(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                         Text(
+                                            text = language.pick(
+                                                "کوٹہ ${bill.subsidyLimit.toLong()} − فیس ${bill.feeDeduction.toLong()} = خالص ${bill.netSubsidyLimit.toLong()}",
+                                                "Quota ${bill.subsidyLimit.toLong()} − Fee ${bill.feeDeduction.toLong()} = Net ${bill.netSubsidyLimit.toLong()}"
+                                            ),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Text(
                                             text = ReceiptFormatter.formatDateTime(
                                                 bill.createdAt?.toDate()?.time ?: System.currentTimeMillis()
                                             ),
@@ -1213,8 +1415,8 @@ fun MaryamRationCardScreen(
                                         )
                                         Text(
                                             text = language.pick(
-                                                "سبسڈی: ${bill.subsidyUsed.toLong()}",
-                                                "Card: ${bill.subsidyUsed.toLong()}"
+                                                "POS کارڈ: ${bill.subsidyUsed.toLong()}",
+                                                "POS Card: ${bill.subsidyUsed.toLong()}"
                                             ),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = ProfitGreen
@@ -1306,22 +1508,22 @@ fun MaryamRationCardScreen(
         )
     }
 
-    // Program Info Dialog (Punjab Maryam Nawaz Rashan Card)
+    // Program Info Dialog (POS / پی او ایس Card)
     if (showProgramInfoDialog) {
         AlertDialog(
             onDismissRequest = { showProgramInfoDialog = false },
-            title = { Text(language.pick("مریم نواز راشن کارڈ معلومات", "Maryam Nawaz Ration Card Info")) },
+            title = { Text(language.pick("POS / پی او ایس کارڈ معلومات", "POS / پی او ایس Card Info")) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
                         text = language.pick(
-                            "• حکومت پنجاب / بینک آف پنجاب (BOP) اور PESSI / PSER کے تحت رجسٹرڈ مزدور اور مستحق خاندانوں کو ماہانہ 3,000 روپے راشن سبسڈی ملتی ہے۔\n" +
+                            "• POS / پی او ایس کارڈ کے تحت کل کوٹہ (ڈیفالٹ 3,000 روپے) اور سروس فیس کٹوتی (ڈیفالٹ 100 روپے) کو آپ فوری تبدیل کر سکتے ہیں — خالص راشن (کوٹہ − فیس) خودکار شمار ہو گا۔\n" +
                                 "• اہل بنیادی اشیاء: آٹا، بناسپتی گھی، کوکنگ آئل، چینی، دالیں، چاول، چائے، بیسن، نمک اور مصالحہ جات۔\n" +
-                                "• NFC کے ذریعے کارڈ اسکین کر کے صارف کا ریکارڈ اور رسید فوری محفوظ کریں۔\n" +
+                                "• NFC والے فون پر کارڈ ٹچ کر کے فوری اسکین کریں، اور بغیر NFC والے فون پر کارڈ نمبر / شناختی کارڈ دستی درج کر کے مکمل POS بل اور رسید بنائیں۔\n" +
                                 "• سرکاری ہیلپ لائن: 1105",
-                            "• Under Govt of Punjab / Bank of Punjab (BOP) & PESSI / PSER, eligible workers & families receive Rs. 3,000/month grocery subsidy.\n" +
+                            "• Under POS / پی او ایس Card billing, Total Quota (default Rs. 3,000) and Service Fee Deduction (default Rs. 100) are editable in real time — Net Ration Value (Quota − Fee) updates automatically for totals & receipts.\n" +
                                 "• Core eligible items: Atta (Flour), Ghee/Cooking Oil, Sugar, Pulses (Daal), Rice, Tea, Besan, Salt & Spices.\n" +
-                                "• Tap the smart card on the phone's NFC reader to auto-read its UID, track monthly Rs. 3,000 usage, and print receipts.\n" +
+                                "• Tap smart cards on NFC-enabled phones, or enter Card # / CNIC manually on non-NFC devices without any errors.\n" +
                                 "• Official Helpline: 1105"
                         ),
                         style = MaterialTheme.typography.bodySmall

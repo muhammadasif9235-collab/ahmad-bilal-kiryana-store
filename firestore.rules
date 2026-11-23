@@ -190,7 +190,8 @@ service cloud.firestore {
              ]) &&
              data.keys().hasOnly([
                'billNumber', 'cardUid', 'cardNumber', 'beneficiaryName', 'cnic', 'phone',
-               'monthKey', 'subsidyLimit', 'totalAmount', 'subsidyUsed', 'cashTopUp',
+               'monthKey', 'subsidyLimit', 'feeDeduction', 'netSubsidyLimit',
+               'totalAmount', 'subsidyUsed', 'cashTopUp',
                'remainingSubsidy', 'items', 'scannedViaNfc', 'note', 'createdAt'
              ]) &&
              data.billNumber is string && data.billNumber.size() >= 1 && data.billNumber.size() <= 40 &&
@@ -201,6 +202,8 @@ service cloud.firestore {
              data.phone is string && data.phone.size() <= 30 &&
              data.monthKey is string && data.monthKey.size() >= 4 && data.monthKey.size() <= 16 &&
              data.subsidyLimit is number && data.subsidyLimit >= 0 && data.subsidyLimit <= 1000000 &&
+             (!('feeDeduction' in data) || (data.feeDeduction is number && data.feeDeduction >= 0 && data.feeDeduction <= 1000000)) &&
+             (!('netSubsidyLimit' in data) || (data.netSubsidyLimit is number && data.netSubsidyLimit >= 0 && data.netSubsidyLimit <= 1000000)) &&
              data.totalAmount is number && data.totalAmount > 0 && data.totalAmount <= 10000000 &&
              data.subsidyUsed is number && data.subsidyUsed >= 0 && data.subsidyUsed <= 1000000 &&
              data.cashTopUp is number && data.cashTopUp >= 0 && data.cashTopUp <= 10000000 &&
@@ -208,6 +211,69 @@ service cloud.firestore {
              data.items is list && data.items.size() >= 1 && data.items.size() <= 100 && data.items[0] is map &&
              data.scannedViaNfc is bool &&
              data.note is string && data.note.size() <= 300 &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    function isValidDailyCashEntry(data) {
+      return data.keys().hasAll([
+               'entryType', 'paymentSource', 'categoryOrTitle', 'amount',
+               'referenceId', 'note', 'entryDateMs', 'createdAt'
+             ]) &&
+             data.keys().hasOnly([
+               'entryType', 'paymentSource', 'categoryOrTitle', 'amount',
+               'referenceId', 'note', 'entryDateMs', 'createdAt'
+             ]) &&
+             data.entryType in ['CASH_IN', 'CASH_OUT'] &&
+             data.paymentSource in ['CASH', 'HBL_QR', 'ONLINE'] &&
+             data.categoryOrTitle is string && data.categoryOrTitle.size() >= 1 && data.categoryOrTitle.size() <= 120 &&
+             data.amount is number && data.amount > 0 && data.amount <= 100000000 &&
+             data.referenceId is string && data.referenceId.size() <= 100 &&
+             data.note is string && data.note.size() <= 300 &&
+             data.entryDateMs is number && data.entryDateMs > 0 &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    function isValidWholesaler(data) {
+      return data.keys().hasAll([
+               'name', 'phone', 'cityOrMarket', 'notes',
+               'totalPurchased', 'totalPaid', 'payableBalance', 'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'name', 'phone', 'cityOrMarket', 'notes',
+               'totalPurchased', 'totalPaid', 'payableBalance', 'createdAt', 'updatedAt'
+             ]) &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+             data.phone is string && data.phone.size() <= 30 &&
+             data.cityOrMarket is string && data.cityOrMarket.size() <= 120 &&
+             data.notes is string && data.notes.size() <= 300 &&
+             data.totalPurchased is number && data.totalPurchased >= 0 && data.totalPurchased <= 100000000 &&
+             data.totalPaid is number && data.totalPaid >= 0 && data.totalPaid <= 100000000 &&
+             data.payableBalance is number && data.payableBalance >= -100000000 && data.payableBalance <= 100000000 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidWholesalerEntry(data) {
+      return data.keys().hasAll([
+               'wholesalerId', 'wholesalerName', 'entryType', 'invoiceNumber',
+               'description', 'paymentSource', 'referenceId', 'amount',
+               'balanceAfter', 'entryDateMs', 'createdAt'
+             ]) &&
+             data.keys().hasOnly([
+               'wholesalerId', 'wholesalerName', 'entryType', 'invoiceNumber',
+               'description', 'paymentSource', 'referenceId', 'amount',
+               'balanceAfter', 'entryDateMs', 'createdAt'
+             ]) &&
+             data.wholesalerId is string && data.wholesalerId.size() >= 1 && data.wholesalerId.size() <= 128 &&
+             data.wholesalerName is string && data.wholesalerName.size() >= 1 && data.wholesalerName.size() <= 120 &&
+             data.entryType in ['STOCK_IN', 'PAYMENT_OUT'] &&
+             data.invoiceNumber is string && data.invoiceNumber.size() <= 60 &&
+             data.description is string && data.description.size() <= 300 &&
+             data.paymentSource in ['CASH', 'HBL_QR', 'ONLINE'] &&
+             data.referenceId is string && data.referenceId.size() <= 100 &&
+             data.amount is number && data.amount > 0 && data.amount <= 100000000 &&
+             data.balanceAfter is number && data.balanceAfter >= -100000000 && data.balanceAfter <= 100000000 &&
+             data.entryDateMs is number && data.entryDateMs > 0 &&
              isValidTimestamp(data.createdAt);
     }
 
@@ -288,14 +354,16 @@ service cloud.firestore {
         allow delete: if isOwner(userId) && isValidId(orderId);
       }
 
-      // 4. Customer Ledger Entries (Append-Only Audit Trail)
+      // 4. Customer Ledger Entries (Editable with owner validation)
       match /ledgerEntries/{entryId} {
         allow list: if isOwner(userId);
         allow get: if isOwner(userId) && isValidId(entryId);
         allow create: if isOwner(userId) &&
                          isValidId(entryId) &&
                          isValidLedgerEntry(incoming());
-        allow update: if false;
+        allow update: if isOwner(userId) &&
+                         isValidId(entryId) &&
+                         isValidLedgerEntry(incoming());
         allow delete: if isOwner(userId) && isValidId(entryId);
       }
 
@@ -338,7 +406,7 @@ service cloud.firestore {
         allow delete: if isOwner(userId) && isValidId(itemId);
       }
 
-      // 8. Maryam Nawaz Ration Card NFC Subsidy Bills (Append-Only Audit Trail)
+      // 8. POS Card Subsidy Bills (Append-Only Audit Trail)
       match /rationCardBills/{billId} {
         allow list: if isOwner(userId);
         allow get: if isOwner(userId) && isValidId(billId);
@@ -347,6 +415,45 @@ service cloud.firestore {
                          isValidRationCardBill(incoming());
         allow update: if false;
         allow delete: if isOwner(userId) && isValidId(billId);
+      }
+
+      // 9. Daily Cash In / Out Ledger
+      match /dailyCashEntries/{entryId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(entryId);
+        allow create: if isOwner(userId) &&
+                         isValidId(entryId) &&
+                         isValidDailyCashEntry(incoming());
+        allow update: if isOwner(userId) &&
+                         isValidId(entryId) &&
+                         isValidDailyCashEntry(incoming());
+        allow delete: if isOwner(userId) && isValidId(entryId);
+      }
+
+      // 10. Wholesalers & Suppliers Profiles
+      match /wholesalers/{wholesalerId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(wholesalerId);
+        allow create: if isOwner(userId) &&
+                         isValidId(wholesalerId) &&
+                         isValidWholesaler(incoming());
+        allow update: if isOwner(userId) &&
+                         isValidId(wholesalerId) &&
+                         isValidWholesaler(incoming());
+        allow delete: if isOwner(userId) && isValidId(wholesalerId);
+      }
+
+      // 11. Wholesalers & Suppliers In / Out Ledger Entries
+      match /wholesalerEntries/{entryId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(entryId);
+        allow create: if isOwner(userId) &&
+                         isValidId(entryId) &&
+                         isValidWholesalerEntry(incoming());
+        allow update: if isOwner(userId) &&
+                         isValidId(entryId) &&
+                         isValidWholesalerEntry(incoming());
+        allow delete: if isOwner(userId) && isValidId(entryId);
       }
     }
   }

@@ -3,6 +3,7 @@ package com.example.data.local
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.example.data.Customer
+import com.example.data.DailyCashEntry
 import com.example.data.LedgerEntry
 import com.example.data.Order
 import com.example.data.OrderItem
@@ -11,6 +12,8 @@ import com.example.data.RationCardBill
 import com.example.data.RationCardItem
 import com.example.data.RationDonation
 import com.example.data.StockMovement
+import com.example.data.Wholesaler
+import com.example.data.WholesalerLedgerEntry
 import com.google.firebase.Timestamp
 import org.json.JSONArray
 import org.json.JSONObject
@@ -380,6 +383,8 @@ data class RationCardBillEntity(
     val phone: String,
     val monthKey: String,
     val subsidyLimit: Double,
+    val feeDeduction: Double = 100.0,
+    val netSubsidyLimit: Double = 2900.0,
     val totalAmount: Double,
     val subsidyUsed: Double,
     val cashTopUp: Double,
@@ -399,6 +404,8 @@ data class RationCardBillEntity(
         phone = phone,
         monthKey = monthKey,
         subsidyLimit = subsidyLimit,
+        feeDeduction = feeDeduction,
+        netSubsidyLimit = netSubsidyLimit,
         totalAmount = totalAmount,
         subsidyUsed = subsidyUsed,
         cashTopUp = cashTopUp,
@@ -420,6 +427,8 @@ fun RationCardBill.toEntity(nowMs: Long = System.currentTimeMillis()): RationCar
     phone = phone,
     monthKey = monthKey,
     subsidyLimit = subsidyLimit,
+    feeDeduction = feeDeduction,
+    netSubsidyLimit = netSubsidyLimit,
     totalAmount = totalAmount,
     subsidyUsed = subsidyUsed,
     cashTopUp = cashTopUp,
@@ -429,3 +438,127 @@ fun RationCardBill.toEntity(nowMs: Long = System.currentTimeMillis()): RationCar
     note = note,
     createdAtMs = createdAt?.toEpochMs() ?: nowMs
 )
+
+@Entity(tableName = "daily_cash_entries")
+data class DailyCashEntryEntity(
+    @PrimaryKey val id: String,
+    val entryType: String,
+    val paymentSource: String,
+    val categoryOrTitle: String,
+    val amount: Double,
+    val referenceId: String,
+    val note: String,
+    val entryDateMs: Long,
+    val createdAtMs: Long
+) {
+    fun toDomain(): DailyCashEntry = DailyCashEntry(
+        id = id,
+        entryType = entryType,
+        paymentSource = paymentSource,
+        categoryOrTitle = categoryOrTitle,
+        amount = amount,
+        referenceId = referenceId,
+        note = note,
+        entryDateMs = entryDateMs,
+        createdAt = createdAtMs.toFirebaseTimestamp()
+    )
+}
+
+fun DailyCashEntry.toEntity(nowMs: Long = System.currentTimeMillis()): DailyCashEntryEntity = DailyCashEntryEntity(
+    id = id,
+    entryType = entryType,
+    paymentSource = paymentSource,
+    categoryOrTitle = categoryOrTitle,
+    amount = amount,
+    referenceId = referenceId,
+    note = note,
+    entryDateMs = if (entryDateMs > 0L) entryDateMs else nowMs,
+    createdAtMs = createdAt?.toEpochMs() ?: nowMs
+)
+
+@Entity(tableName = "wholesalers")
+data class WholesalerEntity(
+    @PrimaryKey val id: String,
+    val name: String,
+    val phone: String,
+    val cityOrMarket: String,
+    val notes: String,
+    val totalPurchased: Double,
+    val totalPaid: Double,
+    val payableBalance: Double,
+    val createdAtMs: Long,
+    val updatedAtMs: Long
+) {
+    fun toDomain(): Wholesaler = Wholesaler(
+        id = id,
+        name = name,
+        phone = phone,
+        cityOrMarket = cityOrMarket,
+        notes = notes,
+        totalPurchased = totalPurchased,
+        totalPaid = totalPaid,
+        payableBalance = payableBalance,
+        createdAt = createdAtMs.toFirebaseTimestamp(),
+        updatedAt = updatedAtMs.toFirebaseTimestamp()
+    )
+}
+
+fun Wholesaler.toEntity(nowMs: Long = System.currentTimeMillis()): WholesalerEntity = WholesalerEntity(
+    id = id,
+    name = name,
+    phone = phone,
+    cityOrMarket = cityOrMarket,
+    notes = notes,
+    totalPurchased = totalPurchased,
+    totalPaid = totalPaid,
+    payableBalance = payableBalance,
+    createdAtMs = createdAt?.toEpochMs() ?: nowMs,
+    updatedAtMs = updatedAt?.toEpochMs() ?: nowMs
+)
+
+@Entity(tableName = "wholesaler_ledger_entries")
+data class WholesalerLedgerEntryEntity(
+    @PrimaryKey val id: String,
+    val wholesalerId: String,
+    val wholesalerName: String,
+    val entryType: String,
+    val invoiceNumber: String,
+    val description: String,
+    val paymentSource: String,
+    val referenceId: String,
+    val amount: Double,
+    val balanceAfter: Double,
+    val entryDateMs: Long,
+    val createdAtMs: Long
+) {
+    fun toDomain(): WholesalerLedgerEntry = WholesalerLedgerEntry(
+        id = id,
+        wholesalerId = wholesalerId,
+        wholesalerName = wholesalerName,
+        entryType = entryType,
+        invoiceNumber = invoiceNumber,
+        description = description,
+        paymentSource = paymentSource,
+        referenceId = referenceId,
+        amount = amount,
+        balanceAfter = balanceAfter,
+        entryDateMs = entryDateMs,
+        createdAt = createdAtMs.toFirebaseTimestamp()
+    )
+}
+
+fun WholesalerLedgerEntry.toEntity(nowMs: Long = System.currentTimeMillis()): WholesalerLedgerEntryEntity =
+    WholesalerLedgerEntryEntity(
+        id = id,
+        wholesalerId = wholesalerId,
+        wholesalerName = wholesalerName,
+        entryType = entryType,
+        invoiceNumber = invoiceNumber,
+        description = description,
+        paymentSource = paymentSource,
+        referenceId = referenceId,
+        amount = amount,
+        balanceAfter = balanceAfter,
+        entryDateMs = if (entryDateMs > 0L) entryDateMs else nowMs,
+        createdAtMs = createdAt?.toEpochMs() ?: nowMs
+    )

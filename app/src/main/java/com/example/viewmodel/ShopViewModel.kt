@@ -5,11 +5,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.CartItem
 import com.example.data.Customer
+import com.example.data.DailyCashEntry
+import com.example.data.DailyCashType
+import com.example.data.DailyPaymentSource
 import com.example.data.DonationEntryType
 import com.example.data.DonationStatus
 import com.example.data.LedgerEntry
 import com.example.data.LedgerEntryType
+import com.example.data.MaryamRationCatalogData
 import com.example.data.Order
+import com.example.data.OrderItem
 import com.example.data.OrderStatus
 import com.example.data.PaymentMethod
 import com.example.data.Product
@@ -24,6 +29,9 @@ import com.example.data.ShopSettings
 import com.example.data.StockMovement
 import com.example.data.StockMovementType
 import com.example.data.UiState
+import com.example.data.Wholesaler
+import com.example.data.WholesalerEntryType
+import com.example.data.WholesalerLedgerEntry
 import com.example.i18n.AppLanguage
 import com.example.i18n.pick
 import com.example.services.BluetoothPrinterManager
@@ -104,6 +112,15 @@ class ShopViewModel(
     val rationCardBillsState: StateFlow<UiState<List<RationCardBill>>> =
         repository.observeRationCardBills().toUiState("rationCardBills")
 
+    val dailyCashEntriesState: StateFlow<UiState<List<DailyCashEntry>>> =
+        repository.observeDailyCashEntries().toUiState("dailyCashEntries")
+
+    val wholesalersState: StateFlow<UiState<List<Wholesaler>>> =
+        repository.observeWholesalers().toUiState("wholesalers")
+
+    val wholesalerEntriesState: StateFlow<UiState<List<WholesalerLedgerEntry>>> =
+        repository.observeWholesalerEntries().toUiState("wholesalerEntries")
+
     // Compute dashboard analytics off the Main Thread so frame rendering never stalls
     val analytics: StateFlow<ShopAnalytics> = combine(
         productsState,
@@ -145,6 +162,9 @@ class ShopViewModel(
     private val _manualCustomerName = MutableStateFlow("")
     val manualCustomerName: StateFlow<String> = _manualCustomerName.asStateFlow()
 
+    private val _manualCustomerPhone = MutableStateFlow("")
+    val manualCustomerPhone: StateFlow<String> = _manualCustomerPhone.asStateFlow()
+
     private val _activeReceiptOrder = MutableStateFlow<Order?>(null)
     val activeReceiptOrder: StateFlow<Order?> = _activeReceiptOrder.asStateFlow()
 
@@ -156,6 +176,9 @@ class ShopViewModel(
 
     private val _scannedNfcCard = MutableStateFlow<ScannedNfcCard?>(null)
     val scannedNfcCard: StateFlow<ScannedNfcCard?> = _scannedNfcCard.asStateFlow()
+
+    private val _pendingPosScannedCardNumber = MutableStateFlow<String?>(null)
+    val pendingPosScannedCardNumber: StateFlow<String?> = _pendingPosScannedCardNumber.asStateFlow()
 
     private val _pairedPrinters = MutableStateFlow<List<PairedBluetoothPrinter>>(emptyList())
     val pairedPrinters: StateFlow<List<PairedBluetoothPrinter>> = _pairedPrinters.asStateFlow()
@@ -208,11 +231,81 @@ class ShopViewModel(
         }
     }
 
+    fun updateHblBankDetails(
+        accountTitle: String,
+        accountNumber: String,
+        iban: String,
+        branchName: String,
+        bankName: String = settings.value.bankName
+    ) {
+        viewModelScope.launch {
+            preferences.setHblBankDetails(accountTitle, accountNumber, iban, branchName, bankName)
+            showMessage("بینک اکاؤنٹ اور RAAST QR تفصیلات محفوظ ہو گئیں", "Bank account & RAAST QR settings saved")
+        }
+    }
+
+    fun saveStoreProfile(
+        storeNameUrdu: String,
+        storeNameEnglish: String,
+        addressUrdu: String,
+        addressEnglish: String,
+        phone: String,
+        bankName: String,
+        accountTitle: String,
+        accountNumber: String,
+        iban: String,
+        branchName: String
+    ) {
+        viewModelScope.launch {
+            preferences.saveStoreProfile(
+                storeNameUrdu = storeNameUrdu,
+                storeNameEnglish = storeNameEnglish,
+                addressUrdu = addressUrdu,
+                addressEnglish = addressEnglish,
+                phone = phone,
+                bankName = bankName,
+                accountTitle = accountTitle,
+                accountNumber = accountNumber,
+                iban = iban,
+                branchName = branchName,
+                markSetupCompleted = true
+            )
+            showMessage("دکان کا پروفائل اور بینک سیٹ اپ محفوظ ہو گیا!", "Store profile & bank setup saved!")
+        }
+    }
+
+    fun updateDefaultPosFee(fee: Double) {
+        viewModelScope.launch {
+            preferences.setDefaultPosFee(fee)
+            showMessage("ڈیفالٹ POS سروس فیس محفوظ ہو گئی (Rs. ${fee.toLong()})", "Default POS fee saved (Rs. ${fee.toLong()})")
+        }
+    }
+
+    fun updateShopGpsLocation(
+        latitude: Double,
+        longitude: Double,
+        detectedAddress: String?
+    ) {
+        viewModelScope.launch {
+            preferences.setShopLocation(
+                latitude = latitude,
+                longitude = longitude,
+                addressUrdu = detectedAddress,
+                addressEnglish = detectedAddress
+            )
+            showMessage(
+                "دکان کی GPS لوکیشن اور پتہ محفوظ ہو گیا!",
+                "Shop GPS location & address saved!"
+            )
+        }
+    }
+
     // --- BILLING CART OPERATIONS ---
     fun selectCustomerForBill(customer: Customer?) {
         _selectedCustomer.value = customer
         if (customer != null) {
             _manualCustomerName.value = customer.name
+            _manualCustomerPhone.value = customer.phone
         }
     }
 
@@ -223,26 +316,52 @@ class ShopViewModel(
         }
     }
 
+    fun updateManualCustomerPhone(phone: String) {
+        _manualCustomerPhone.value = phone
+    }
+
     fun addProductToCart(product: Product, qtyDelta: Double = 1.0) {
+        if (qtyDelta <= 0.0) return
         _cartItems.update { current ->
             val idx = current.indexOfFirst { it.product.id == product.id }
             if (idx >= 0) {
                 val updated = current.toMutableList()
                 val existing = updated[idx]
-                updated[idx] = existing.copy(quantity = (existing.quantity + qtyDelta).coerceAtLeast(0.25))
+                updated[idx] = existing.copy(quantity = (existing.quantity + qtyDelta).coerceAtLeast(0.001))
                 updated
             } else {
-                current + CartItem(product = product, quantity = qtyDelta.coerceAtLeast(0.25))
+                current + CartItem(product = product, quantity = qtyDelta.coerceAtLeast(0.001))
             }
+        }
+    }
+
+    fun addProductByRupeeAmount(product: Product, amountPkr: Double, replaceExisting: Boolean = false) {
+        if (amountPkr <= 0.0 || product.sellingPrice <= 0.0) return
+        val exactWeight = (amountPkr / product.sellingPrice).coerceAtLeast(0.001)
+        if (replaceExisting) {
+            setCartItemQuantity(product.id, exactWeight)
+        } else {
+            addProductToCart(product, exactWeight)
         }
     }
 
     fun setCartItemQuantity(productId: String, newQty: Double) {
         _cartItems.update { current ->
-            if (newQty <= 0.0) {
+            if (newQty <= 0.0005) {
                 current.filterNot { it.product.id == productId }
             } else {
-                current.map { if (it.product.id == productId) it.copy(quantity = newQty) else it }
+                val exists = current.any { it.product.id == productId }
+                if (exists) {
+                    current.map { if (it.product.id == productId) it.copy(quantity = newQty) else it }
+                } else {
+                    val product = (productsState.value as? UiState.Success)?.data
+                        ?.firstOrNull { it.id == productId }
+                    if (product != null) {
+                        current + CartItem(product = product, quantity = newQty)
+                    } else {
+                        current
+                    }
+                }
             }
         }
     }
@@ -259,6 +378,7 @@ class ShopViewModel(
         _cartItems.value = emptyList()
         _selectedCustomer.value = null
         _manualCustomerName.value = ""
+        _manualCustomerPhone.value = ""
     }
 
     fun addProductByBarcode(barcode: String): Boolean {
@@ -294,10 +414,41 @@ class ShopViewModel(
             showMessage("بل میں کم از کم ایک آئٹم شامل کریں", "Add at least one item to the bill")
             return
         }
-        if (!saveAsPendingOrder && (paymentMethod == PaymentMethod.UDHAR || paymentMethod == PaymentMethod.PARTIAL) && _selectedCustomer.value == null) {
+
+        // Unpack optional phone metadata encoded by CheckoutDialog when creating a new Khata customer
+        val (unpackedPhone, cleanNote) = if (note.startsWith("\u001FCP:")) {
+            val endIdx = note.indexOf('\u001F', startIndex = 4)
+            if (endIdx > 4) {
+                val phonePart = note.substring(4, endIdx).trim()
+                val restNote = note.substring(endIdx + 1)
+                phonePart to restNote
+            } else {
+                "" to note
+            }
+        } else {
+            "" to note
+        }
+        val effectivePhone = unpackedPhone.ifBlank { _manualCustomerPhone.value.trim() }
+
+        val cleanManualName = _manualCustomerName.value.trim()
+        val isWalkInPlaceholder = cleanManualName.isBlank() ||
+            cleanManualName.equals("نقد کسٹمر", ignoreCase = true) ||
+            cleanManualName.equals("Walk-in Customer", ignoreCase = true)
+        val subtotal = items.sumOf { it.lineTotal }
+        val grandTotal = (subtotal - discount.coerceIn(0.0, subtotal)).coerceAtLeast(0.0)
+        val estimatedUdhar = when {
+            saveAsPendingOrder -> 0.0
+            paymentMethod == PaymentMethod.UDHAR -> grandTotal
+            paymentMethod == PaymentMethod.PARTIAL -> (grandTotal - paidAmount.coerceIn(0.0, grandTotal)).coerceAtLeast(0.0)
+            else -> 0.0
+        }
+        val isCreditMode = !saveAsPendingOrder &&
+            (paymentMethod == PaymentMethod.UDHAR || paymentMethod == PaymentMethod.PARTIAL) &&
+            estimatedUdhar > 0.0
+        if (isCreditMode && _selectedCustomer.value == null && isWalkInPlaceholder) {
             showMessage(
-                "ادھار بل کے لیے کسٹمر لسٹ سے کسٹمر منتخب کریں",
-                "Select a customer from Udhar Khata for credit billing"
+                "ادھار بل کے لیے کسٹمر منتخب کریں یا نیا کسٹمر نام درج کریں",
+                "Select a customer or type a new customer name for credit billing"
             )
             return
         }
@@ -307,12 +458,13 @@ class ShopViewModel(
             val result = repository.createOrderOrBill(
                 cartItems = items,
                 customer = _selectedCustomer.value,
-                customerNameInput = _manualCustomerName.value,
+                customerNameInput = cleanManualName,
+                customerPhoneInput = effectivePhone,
                 paymentMethod = paymentMethod,
                 discount = discount,
                 paidAmountInput = paidAmount,
                 saveAsPendingOrder = saveAsPendingOrder,
-                note = note
+                note = cleanNote
             )
             _isBusy.value = false
             result.onSuccess { createdOrder ->
@@ -320,6 +472,11 @@ class ShopViewModel(
                 _activeReceiptOrder.value = createdOrder
                 if (saveAsPendingOrder) {
                     showMessage("آرڈر محفوظ ہو گیا (#${createdOrder.billNumber})", "Order saved (#${createdOrder.billNumber})")
+                } else if (createdOrder.remainingUdhar > 0.0) {
+                    showMessage(
+                        "بل بن گیا اور ادھار کھاتہ میں خودکار درج ہو گیا (#${createdOrder.billNumber})",
+                        "Bill saved & credit auto-posted to Khata (#${createdOrder.billNumber})"
+                    )
                 } else {
                     showMessage("بل بن گیا اور خودکار رسید تیار ہے", "Bill completed & receipt generated")
                 }
@@ -354,12 +511,64 @@ class ShopViewModel(
         }
     }
 
+    fun deleteOrder(orderId: String) {
+        viewModelScope.launch {
+            repository.deleteOrder(orderId).onSuccess {
+                showMessage("بل ریکارڈ ڈیلیٹ ہو گیا", "Bill record deleted")
+            }
+        }
+    }
+
+    fun updateExistingOrder(
+        existingOrder: Order,
+        updatedItems: List<OrderItem>,
+        discount: Double,
+        extraCharges: Double,
+        finalTotalOverride: Double?,
+        paymentMethod: PaymentMethod,
+        paidAmountInput: Double,
+        note: String,
+        onUpdated: (Order) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            _isBusy.value = true
+            val result = repository.updateExistingOrder(
+                existingOrder = existingOrder,
+                updatedItems = updatedItems,
+                discount = discount,
+                extraCharges = extraCharges,
+                finalTotalOverride = finalTotalOverride,
+                paymentMethod = paymentMethod,
+                paidAmountInput = paidAmountInput,
+                note = note
+            )
+            _isBusy.value = false
+            result.onSuccess { updatedOrder ->
+                _activeReceiptOrder.value = updatedOrder
+                onUpdated(updatedOrder)
+                showMessage(
+                    "بل #${updatedOrder.billNumber} اپڈیٹ ہو گیا اور کھاتہ بیلنس خودکار درست ہو گیا!",
+                    "Bill #${updatedOrder.billNumber} updated & Khata balance recalculated!"
+                )
+            }.onFailure { err ->
+                showMessage(
+                    "بل اپڈیٹ نہ ہو سکا: ${err.localizedMessage}",
+                    "Bill update failed: ${err.localizedMessage}"
+                )
+            }
+        }
+    }
+
     fun openReceipt(order: Order) {
         _activeReceiptOrder.value = order
     }
 
     fun dismissReceipt() {
         _activeReceiptOrder.value = null
+    }
+
+    fun openPaymentReceipt(entry: LedgerEntry) {
+        _activePaymentReceipt.value = entry
     }
 
     fun dismissPaymentReceipt() {
@@ -477,6 +686,50 @@ class ShopViewModel(
         }
     }
 
+    fun updateCustomerTransaction(
+        entry: LedgerEntry,
+        newType: LedgerEntryType,
+        newAmount: Double,
+        newNote: String
+    ) {
+        viewModelScope.launch {
+            _isBusy.value = true
+            val result = repository.updateLedgerTransaction(entry, newType, newAmount, newNote)
+            _isBusy.value = false
+            result.onSuccess {
+                showMessage("کھاتہ انٹری اپڈیٹ ہو گئی اور بیلنس تازہ ہو گیا", "Ledger entry updated & balance recalculated")
+            }.onFailure { err ->
+                showMessage("اپڈیٹ نہ ہو سکا: ${err.localizedMessage}", "Update failed: ${err.localizedMessage}")
+            }
+        }
+    }
+
+    fun deleteCustomerTransaction(entry: LedgerEntry) {
+        viewModelScope.launch {
+            _isBusy.value = true
+            val result = repository.deleteLedgerTransaction(entry)
+            _isBusy.value = false
+            result.onSuccess {
+                showMessage("انٹری ڈیلیٹ ہو گئی اور بقایا بیلنس اپڈیٹ ہو گیا", "Entry deleted & remaining balance recalculated")
+            }.onFailure { err ->
+                showMessage("ڈیلیٹ نہ ہو سکا: ${err.localizedMessage}", "Delete failed: ${err.localizedMessage}")
+            }
+        }
+    }
+
+    fun deleteCustomer(customerId: String) {
+        viewModelScope.launch {
+            _isBusy.value = true
+            val result = repository.deleteCustomer(customerId)
+            _isBusy.value = false
+            result.onSuccess {
+                showMessage("کسٹمر کھاتہ مستقل طور پر ڈیلیٹ ہو گیا", "Customer account permanently deleted")
+            }.onFailure { err ->
+                showMessage("کھاتہ ڈیلیٹ نہ ہو سکا: ${err.localizedMessage}", "Failed to delete customer: ${err.localizedMessage}")
+            }
+        }
+    }
+
     // --- RATION CHARITY FUND (Pending Until Shop Owner Verifies in HBL) ---
     fun recordRationDonation(
         entryType: DonationEntryType,
@@ -541,17 +794,21 @@ class ShopViewModel(
         }
     }
 
-    // --- MARYAM NAWAZ RATION CARD (NFC & RS. 3,000 SUBSIDY) ---
+    // --- POS CARD (NFC & RS. 3,000 - RS. 100 FEE = RS. 2,900 NET RATION) ---
     fun onNfcCardScanned(card: ScannedNfcCard) {
         _scannedNfcCard.value = card
         showMessage(
-            "مریم نواز راشن کارڈ NFC اسکین ہو گیا (${card.uidHex})",
-            "Maryam Nawaz Ration Card scanned via NFC (${card.uidHex})"
+            "POS کارڈ NFC سے سکین ہو گیا! (${card.uidHex})",
+            "POS Card scanned via NFC! (${card.uidHex})"
         )
     }
 
     fun clearScannedNfcCard() {
         _scannedNfcCard.value = null
+    }
+
+    fun setPendingPosScannedCardNumber(cardNo: String?) {
+        _pendingPosScannedCardNumber.value = cardNo
     }
 
     fun saveRationCardItem(
@@ -567,7 +824,7 @@ class ShopViewModel(
             val result = repository.saveRationCardItem(existingId, nameUrdu, nameEnglish, unit, price, sortOrder)
             _isBusy.value = false
             result.onSuccess {
-                showMessage("راشن آئٹم محفوظ ہو گیا", "Ration item saved")
+                showMessage("POS آئٹم محفوظ ہو گیا", "POS item saved")
             }.onFailure { err ->
                 showMessage("محفوظ نہ ہو سکا: ${err.localizedMessage}", "Save failed: ${err.localizedMessage}")
             }
@@ -577,7 +834,7 @@ class ShopViewModel(
     fun deleteRationCardItem(itemId: String) {
         viewModelScope.launch {
             repository.deleteRationCardItem(itemId).onSuccess {
-                showMessage("راشن آئٹم حذف کر دیا گیا", "Ration item deleted")
+                showMessage("POS آئٹم حذف کر دیا گیا", "POS item deleted")
             }
         }
     }
@@ -590,13 +847,14 @@ class ShopViewModel(
         cnic: String,
         phone: String,
         subsidyLimit: Double,
+        feeDeduction: Double = MaryamRationCatalogData.DEFAULT_SERVICE_FEE_PKR,
         alreadyUsedThisMonth: Double,
         scannedViaNfc: Boolean,
         note: String,
         onSuccessClear: () -> Unit
     ) {
         if (cartItems.isEmpty()) {
-            showMessage("بل میں کم از کم ایک راشن آئٹم شامل کریں", "Add at least one ration item")
+            showMessage("بل میں کم از کم ایک POS آئٹم شامل کریں", "Add at least one POS item")
             return
         }
         viewModelScope.launch {
@@ -609,6 +867,7 @@ class ShopViewModel(
                 cnic = cnic,
                 phone = phone,
                 subsidyLimit = subsidyLimit,
+                feeDeduction = feeDeduction,
                 alreadyUsedThisMonth = alreadyUsedThisMonth,
                 scannedViaNfc = scannedViaNfc,
                 note = note
@@ -618,8 +877,8 @@ class ShopViewModel(
                 onSuccessClear()
                 _activeRationCardReceipt.value = bill
                 showMessage(
-                    "مریم نواز راشن کارڈ بل محفوظ ہو گیا (#${bill.billNumber})",
-                    "Ration Card bill saved (#${bill.billNumber})"
+                    "POS کارڈ بل محفوظ ہو گیا (#${bill.billNumber})",
+                    "POS Card bill saved (#${bill.billNumber})"
                 )
             }.onFailure { err ->
                 showMessage("بل محفوظ نہ ہو سکا: ${err.localizedMessage}", "Failed: ${err.localizedMessage}")
@@ -635,20 +894,216 @@ class ShopViewModel(
         _activeRationCardReceipt.value = null
     }
 
+    fun deleteRationCardBill(billId: String) {
+        viewModelScope.launch {
+            repository.deleteRationCardBill(billId).onSuccess {
+                showMessage("POS کارڈ ریکارڈ ڈیلیٹ ہو گیا", "POS card bill deleted")
+            }
+        }
+    }
+
+    // --- DAILY CASH IN / OUT LEDGER ---
+    fun saveDailyCashEntry(
+        existingId: String?,
+        entryType: DailyCashType,
+        paymentSource: DailyPaymentSource,
+        categoryOrTitle: String,
+        amount: Double,
+        referenceId: String,
+        note: String,
+        entryDateMs: Long = System.currentTimeMillis()
+    ) {
+        viewModelScope.launch {
+            _isBusy.value = true
+            val result = repository.saveDailyCashEntry(
+                existingId = existingId,
+                entryType = entryType,
+                paymentSource = paymentSource,
+                categoryOrTitle = categoryOrTitle,
+                amount = amount,
+                referenceId = referenceId,
+                note = note,
+                entryDateMs = entryDateMs
+            )
+            _isBusy.value = false
+            result.onSuccess {
+                if (entryType == DailyCashType.CASH_IN) {
+                    showMessage("آمدن / سیل کھاتے میں محفوظ ہو گئی", "Cash In / Daily Sale recorded")
+                } else {
+                    showMessage("اخراجات / خریداری محفوظ ہو گئی", "Cash Out / Expense recorded")
+                }
+            }.onFailure { err ->
+                showMessage("اندراج نہ ہو سکا: ${err.localizedMessage}", "Save failed: ${err.localizedMessage}")
+            }
+        }
+    }
+
+    fun deleteDailyCashEntry(entryId: String) {
+        viewModelScope.launch {
+            repository.deleteDailyCashEntry(entryId).onSuccess {
+                showMessage("روزانہ کیش انٹری ڈیلیٹ ہو گئی", "Daily cash entry deleted")
+            }
+        }
+    }
+
+    // --- WHOLESALERS / SUPPLIERS IN / OUT LEDGER ---
+    fun saveWholesaler(
+        existingId: String?,
+        name: String,
+        phone: String,
+        cityOrMarket: String,
+        notes: String
+    ) {
+        viewModelScope.launch {
+            _isBusy.value = true
+            val result = repository.saveWholesaler(existingId, name, phone, cityOrMarket, notes)
+            _isBusy.value = false
+            result.onSuccess {
+                showMessage("ہول سیلر / سپلائر پروفائل محفوظ ہو گیا", "Wholesaler profile saved")
+            }.onFailure { err ->
+                showMessage("محفوظ نہ ہو سکا: ${err.localizedMessage}", "Save failed: ${err.localizedMessage}")
+            }
+        }
+    }
+
+    fun deleteWholesaler(wholesalerId: String) {
+        viewModelScope.launch {
+            _isBusy.value = true
+            val result = repository.deleteWholesaler(wholesalerId)
+            _isBusy.value = false
+            result.onSuccess {
+                showMessage("ہول سیلر کھاتہ ڈیلیٹ ہو گیا", "Wholesaler account deleted")
+            }.onFailure { err ->
+                showMessage("ڈیلیٹ نہ ہو سکا: ${err.localizedMessage}", "Delete failed: ${err.localizedMessage}")
+            }
+        }
+    }
+
+    fun recordWholesalerEntry(
+        wholesaler: Wholesaler,
+        entryType: WholesalerEntryType,
+        amount: Double,
+        invoiceNumber: String,
+        description: String,
+        paymentSource: DailyPaymentSource,
+        referenceId: String,
+        entryDateMs: Long = System.currentTimeMillis(),
+        onSaved: (WholesalerLedgerEntry) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            _isBusy.value = true
+            val result = repository.recordWholesalerEntry(
+                wholesaler = wholesaler,
+                entryType = entryType,
+                amount = amount,
+                invoiceNumber = invoiceNumber,
+                description = description,
+                paymentSource = paymentSource,
+                referenceId = referenceId,
+                entryDateMs = entryDateMs
+            )
+            _isBusy.value = false
+            result.onSuccess { saved ->
+                onSaved(saved)
+                if (entryType == WholesalerEntryType.STOCK_IN) {
+                    showMessage("ہول سیلر سامان خریداری درج ہو گئی", "Wholesaler stock purchase recorded")
+                } else {
+                    showMessage("ہول سیلر ادائیگی درج ہو گئی", "Wholesaler payment recorded")
+                }
+            }.onFailure { err ->
+                showMessage("اندراج نہ ہو سکا: ${err.localizedMessage}", "Save failed: ${err.localizedMessage}")
+            }
+        }
+    }
+
+    fun updateWholesalerEntry(
+        entry: WholesalerLedgerEntry,
+        newType: WholesalerEntryType,
+        newAmount: Double,
+        newInvoiceNumber: String,
+        newDescription: String,
+        newPaymentSource: DailyPaymentSource,
+        newReferenceId: String
+    ) {
+        viewModelScope.launch {
+            _isBusy.value = true
+            val result = repository.updateWholesalerEntry(
+                entry = entry,
+                newType = newType,
+                newAmount = newAmount,
+                newInvoiceNumber = newInvoiceNumber,
+                newDescription = newDescription,
+                newPaymentSource = newPaymentSource,
+                newReferenceId = newReferenceId
+            )
+            _isBusy.value = false
+            result.onSuccess {
+                showMessage("ہول سیلر انٹری اپڈیٹ ہو گئی", "Wholesaler entry updated")
+            }.onFailure { err ->
+                showMessage("اپڈیٹ نہ ہو سکا: ${err.localizedMessage}", "Update failed: ${err.localizedMessage}")
+            }
+        }
+    }
+
+    fun deleteWholesalerEntry(entry: WholesalerLedgerEntry) {
+        viewModelScope.launch {
+            _isBusy.value = true
+            val result = repository.deleteWholesalerEntry(entry)
+            _isBusy.value = false
+            result.onSuccess {
+                showMessage("ہول سیلر انٹری ڈیلیٹ ہو گئی اور بقایا تازہ ہو گیا", "Wholesaler entry deleted & balance updated")
+            }.onFailure { err ->
+                showMessage("ڈیلیٹ نہ ہو سکا: ${err.localizedMessage}", "Delete failed: ${err.localizedMessage}")
+            }
+        }
+    }
+
     fun printRationCardBillOnBluetooth(bill: RationCardBill) {
-        val address = settings.value.selectedPrinterAddress
+        val currentSettings = settings.value
+        val address = currentSettings.selectedPrinterAddress
         if (address.isBlank()) {
             showMessage("پہلے سیٹنگز میں بلوٹوتھ پرنٹر منتخب کریں", "Select a Bluetooth printer in Settings first")
             return
         }
         viewModelScope.launch {
             _isBusy.value = true
-            val result = bluetoothPrinterManager.printRationCardReceipt(address, bill, settings.value.shopPhone)
+            val result = bluetoothPrinterManager.printRationCardReceipt(
+                deviceAddress = address,
+                bill = bill,
+                shopPhone = currentSettings.shopPhone,
+                shopNameEnglish = currentSettings.storeNameEnglish,
+                shopAddressEnglish = currentSettings.shopAddressEnglish
+            )
             _isBusy.value = false
             result.onSuccess {
-                showMessage("راشن کارڈ رسید پرنٹ ہو گئی", "Ration Card receipt sent to printer")
+                showMessage("POS کارڈ رسید 58mm پرنٹر پر پرنٹ ہو گئی", "POS receipt sent to 58mm Bluetooth printer")
             }.onFailure { err ->
                 showMessage("پرنٹ ناکام: ${err.localizedMessage}", "Print failed: ${err.localizedMessage}")
+            }
+        }
+    }
+
+    fun printLedgerEntryOnBluetooth(entry: LedgerEntry) {
+        val currentSettings = settings.value
+        val address = currentSettings.selectedPrinterAddress
+        if (address.isBlank()) {
+            showMessage("پہلے سیٹنگز میں بلوٹوتھ پرنٹر منتخب کریں", "Select a Bluetooth printer in Settings first")
+            return
+        }
+        viewModelScope.launch {
+            _isBusy.value = true
+            val result = bluetoothPrinterManager.printPaymentReceipt(
+                deviceAddress = address,
+                entry = entry,
+                shopPhone = currentSettings.shopPhone,
+                shopNameEnglish = currentSettings.storeNameEnglish,
+                shopAddressEnglish = currentSettings.shopAddressEnglish
+            )
+            _isBusy.value = false
+            result.onSuccess {
+                showMessage("کھاتہ رسید 58mm پرنٹر پر پرنٹ ہو گئی", "Khata receipt sent to 58mm Bluetooth printer")
+            }.onFailure { err ->
+                showMessage("بلوٹوتھ پرنٹ ناکام: ${err.localizedMessage}", "Bluetooth print failed: ${err.localizedMessage}")
             }
         }
     }
@@ -751,7 +1206,8 @@ class ShopViewModel(
     }
 
     fun printOrderOnBluetooth(order: Order) {
-        val address = settings.value.selectedPrinterAddress
+        val currentSettings = settings.value
+        val address = currentSettings.selectedPrinterAddress
         if (address.isBlank()) {
             showMessage(
                 "پہلے سیٹنگز میں بلوٹوتھ پرنٹر منتخب کریں",
@@ -761,10 +1217,16 @@ class ShopViewModel(
         }
         viewModelScope.launch {
             _isBusy.value = true
-            val result = bluetoothPrinterManager.printOrderReceipt(address, order, settings.value.shopPhone)
+            val result = bluetoothPrinterManager.printOrderReceipt(
+                deviceAddress = address,
+                order = order,
+                shopPhone = currentSettings.shopPhone,
+                shopNameEnglish = currentSettings.storeNameEnglish,
+                shopAddressEnglish = currentSettings.shopAddressEnglish
+            )
             _isBusy.value = false
             result.onSuccess {
-                showMessage("رسید بلوٹوتھ پرنٹر پر پرنٹ ہو گئی", "Receipt sent to Bluetooth printer")
+                showMessage("رسید 58mm بلوٹوتھ پرنٹر پر پرنٹ ہو گئی", "Receipt sent to 58mm Bluetooth printer")
             }.onFailure { err ->
                 showMessage(
                     "بلوٹوتھ پرنٹ ناکام: ${err.localizedMessage}",
@@ -775,17 +1237,23 @@ class ShopViewModel(
     }
 
     fun printBluetoothTestSlip() {
-        val address = settings.value.selectedPrinterAddress
+        val currentSettings = settings.value
+        val address = currentSettings.selectedPrinterAddress
         if (address.isBlank()) {
             showMessage("پہلے بلوٹوتھ پرنٹر منتخب کریں", "Select a Bluetooth printer first")
             return
         }
         viewModelScope.launch {
             _isBusy.value = true
-            val result = bluetoothPrinterManager.printTestSlip(address)
+            val result = bluetoothPrinterManager.printTestSlip(
+                deviceAddress = address,
+                shopNameEnglish = currentSettings.storeNameEnglish,
+                shopAddressEnglish = currentSettings.shopAddressEnglish,
+                shopPhone = currentSettings.shopPhone
+            )
             _isBusy.value = false
             result.onSuccess {
-                showMessage("ٹیسٹ پرنٹ بھیج دیا گیا", "Test slip sent to printer")
+                showMessage("58mm ٹیسٹ پرنٹ بھیج دیا گیا", "58mm test slip sent to printer")
             }.onFailure { err ->
                 showMessage("ٹیسٹ پرنٹ ناکام: ${err.localizedMessage}", "Test print failed: ${err.localizedMessage}")
             }

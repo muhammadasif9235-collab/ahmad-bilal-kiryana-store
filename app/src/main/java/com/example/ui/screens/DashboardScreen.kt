@@ -26,18 +26,25 @@ import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.AddShoppingCart
 import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.LocalShipping
+import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Nfc
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.VolunteerActivism
 import androidx.compose.material.icons.filled.WarningAmber
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -95,7 +102,12 @@ fun DashboardScreen(
     onOpenMaryamRationCard: () -> Unit,
     onOpenRationFund: () -> Unit,
     onSyncGujratRates: () -> Unit,
-    onOpenReceipt: (Order) -> Unit
+    onOpenReceipt: (Order) -> Unit,
+    todayManualCashNet: Double = 0.0,
+    onOpenRoznamcha: () -> Unit = {},
+    onOpenCustomerOrder: () -> Unit = {},
+    onEditOrder: (Order) -> Unit = {},
+    onOpenLowStockReport: () -> Unit = {}
 ) {
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -335,7 +347,131 @@ fun DashboardScreen(
                 }
             }
 
-            // 2b. Maryam Nawaz Ration Card (Punjab Govt NFC Rs. 3,000) Hero Feature Card
+            // 2a. Standalone Daily Roznamcha (Manual Cash In/Out) & Customer WhatsApp + GPS Order Cards
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Card(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable(onClick = onOpenRoznamcha)
+                            .testTag("dashboard_roznamcha_card"),
+                        shape = RoundedCornerShape(18.dp),
+                        border = BorderStroke(1.dp, ProfitGreen.copy(alpha = 0.45f)),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(34.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(ProfitGreen.copy(alpha = 0.14f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.MenuBook,
+                                        contentDescription = null,
+                                        tint = ProfitGreen,
+                                        modifier = Modifier.size(19.dp)
+                                    )
+                                }
+                                Text(
+                                    text = language.pick("روزنامچہ", "Roznamcha"),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Text(
+                                text = language.pick("دستی سیل و اخراجات", "Manual Cash In/Out"),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "${language.pick("آج کی بچت", "Today Net")}: ${formatPkr(todayManualCashNet, language)}",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (todayManualCashNet >= 0.0) ProfitGreen else UdharCrimson,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    Card(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable(onClick = onOpenCustomerOrder)
+                            .testTag("dashboard_customer_order_card"),
+                        shape = RoundedCornerShape(18.dp),
+                        border = BorderStroke(1.dp, SaffronSecondary.copy(alpha = 0.5f)),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(34.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(SaffronSecondary.copy(alpha = 0.16f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.LocalShipping,
+                                        contentDescription = null,
+                                        tint = SaffronSecondary,
+                                        modifier = Modifier.size(19.dp)
+                                    )
+                                }
+                                Text(
+                                    text = language.pick("سامان آرڈر", "Order Now"),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Text(
+                                text = language.pick("واٹس ایپ + آٹو GPS", "WhatsApp + Auto-GPS"),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = language.pick("لوکیشن کے ساتھ آرڈر", "Live Maps Delivery"),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = SaffronSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 2b. POS / Maryam Nawaz Ration Card Hero Feature Card
             item {
                 Card(
                     modifier = Modifier
@@ -636,13 +772,45 @@ fun DashboardScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = language.pick("کم اسٹاک الرٹ", "Low Stock Alert"),
+                                    text = language.pick(
+                                        "کم اسٹاک الرٹ (${lowStockProducts.size})",
+                                        "Low Stock Alert (${lowStockProducts.size})"
+                                    ),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = WarningAmber
                                 )
-                                FilledTonalButton(onClick = onGoToStock) {
-                                    Text(language.pick("اسٹاک بھریں", "Restock"))
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Button(
+                                        onClick = onOpenLowStockReport,
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = UdharCrimson,
+                                            contentColor = Color.White
+                                        ),
+                                        modifier = Modifier.testTag("dashboard_low_stock_pdf_button")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.PictureAsPdf,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                        Spacer(Modifier.size(4.dp))
+                                        Text(
+                                            text = language.pick("رپورٹ PDF", "PDF Report"),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    FilledTonalButton(
+                                        onClick = onGoToStock,
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = language.pick("اسٹاک", "Stock"),
+                                            style = MaterialTheme.typography.labelMedium
+                                        )
+                                    }
                                 }
                             }
                             lowStockProducts.take(4).forEach { prod ->
@@ -658,9 +826,10 @@ fun DashboardScreen(
                                         modifier = Modifier.weight(1f)
                                     )
                                     Text(
-                                        text = "${formatQty(prod.stockQty)} ${unitLabel(prod.unit, language)}",
+                                        text = "${formatQty(prod.stockQty)} / ${formatQty(prod.lowStockThreshold)} ${unitLabel(prod.unit, language)}",
                                         style = MaterialTheme.typography.labelLarge,
-                                        color = UdharCrimson
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (prod.isOutOfStock()) UdharCrimson else WarningAmber
                                     )
                                 }
                             }
@@ -758,24 +927,40 @@ fun DashboardScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text(
-                                    text = formatPkr(order.totalAmount, language),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Text(
-                                    text = if (order.statusEnum() == OrderStatus.PENDING) {
-                                        language.pick("زیرِ التواء", "Pending")
-                                    } else if (order.remainingUdhar > 0) {
-                                        language.pick("ادھار", "Udhar")
-                                    } else {
-                                        language.pick("نقد", "Cash")
-                                    },
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = if (order.remainingUdhar > 0) UdharCrimson else ProfitGreen
-                                )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(
+                                        text = formatPkr(order.totalAmount, language),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = if (order.statusEnum() == OrderStatus.PENDING) {
+                                            language.pick("زیرِ التواء", "Pending")
+                                        } else if (order.remainingUdhar > 0) {
+                                            language.pick("ادھار", "Udhar")
+                                        } else {
+                                            language.pick("نقد", "Cash")
+                                        },
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (order.remainingUdhar > 0) UdharCrimson else ProfitGreen
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { onEditOrder(order) },
+                                    modifier = Modifier.testTag("dashboard_edit_order_${order.id}")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Edit,
+                                        contentDescription = language.pick("بل ایڈٹ کریں", "Edit Bill"),
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
                             }
                         }
                     }

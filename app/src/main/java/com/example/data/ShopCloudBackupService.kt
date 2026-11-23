@@ -122,23 +122,20 @@ class ShopCloudBackupService(
                 )
             }
 
-            // 2. Append-only collections (only create docs not yet present in Firestore)
-            val existingLedgerIds = fetchExistingIds(root.collection("ledgerEntries"))
+            // 2. Customer Ledger Entries (sync all including edits)
             for (l in dao.getAllLedgerEntriesOnce()) {
-                if (l.id !in existingLedgerIds) {
-                    ops.add(
-                        root.collection("ledgerEntries").document(l.id) to mapOf(
-                            "customerId" to l.customerId.take(100),
-                            "customerName" to l.customerName.take(100),
-                            "entryType" to l.entryType,
-                            "amount" to l.amount.coerceIn(0.01, 10_000_000.0),
-                            "balanceAfter" to l.balanceAfter.coerceIn(-10_000_000.0, 10_000_000.0),
-                            "orderId" to l.orderId.take(100),
-                            "note" to l.note.take(300),
-                            "createdAt" to l.createdAtMs.toFirebaseTimestamp()
-                        )
+                ops.add(
+                    root.collection("ledgerEntries").document(l.id) to mapOf(
+                        "customerId" to l.customerId.take(100),
+                        "customerName" to l.customerName.take(100),
+                        "entryType" to l.entryType,
+                        "amount" to l.amount.coerceIn(0.01, 10_000_000.0),
+                        "balanceAfter" to l.balanceAfter.coerceIn(-10_000_000.0, 10_000_000.0),
+                        "orderId" to l.orderId.take(100),
+                        "note" to l.note.take(300),
+                        "createdAt" to l.createdAtMs.toFirebaseTimestamp()
                     )
-                }
+                )
             }
 
             val existingMoveIds = fetchExistingIds(root.collection("stockMovements"))
@@ -192,6 +189,8 @@ class ShopCloudBackupService(
                             "phone" to b.phone.take(30),
                             "monthKey" to b.monthKey.take(20),
                             "subsidyLimit" to b.subsidyLimit.coerceIn(0.0, 1_000_000.0),
+                            "feeDeduction" to b.feeDeduction.coerceIn(0.0, 1_000_000.0),
+                            "netSubsidyLimit" to b.netSubsidyLimit.coerceIn(0.0, 1_000_000.0),
                             "totalAmount" to b.totalAmount.coerceIn(0.01, 10_000_000.0),
                             "subsidyUsed" to b.subsidyUsed.coerceIn(0.0, 1_000_000.0),
                             "cashTopUp" to b.cashTopUp.coerceIn(0.0, 10_000_000.0),
@@ -203,6 +202,57 @@ class ShopCloudBackupService(
                         )
                     )
                 }
+            }
+
+            // 3. Daily Cash In/Out Ledger (mutable so edits sync cleanly)
+            for (c in dao.getAllDailyCashEntriesOnce()) {
+                ops.add(
+                    root.collection("dailyCashEntries").document(c.id) to mapOf(
+                        "entryType" to c.entryType,
+                        "paymentSource" to c.paymentSource,
+                        "categoryOrTitle" to c.categoryOrTitle.take(120),
+                        "amount" to c.amount.coerceIn(0.01, 100_000_000.0),
+                        "referenceId" to c.referenceId.take(100),
+                        "note" to c.note.take(300),
+                        "entryDateMs" to c.entryDateMs,
+                        "createdAt" to c.createdAtMs.toFirebaseTimestamp()
+                    )
+                )
+            }
+
+            // 4. Wholesalers & Suppliers Ledger
+            for (w in dao.getAllWholesalersOnce()) {
+                ops.add(
+                    root.collection("wholesalers").document(w.id) to mapOf(
+                        "name" to w.name.take(120),
+                        "phone" to w.phone.take(30),
+                        "cityOrMarket" to w.cityOrMarket.take(120),
+                        "notes" to w.notes.take(300),
+                        "totalPurchased" to w.totalPurchased.coerceIn(0.0, 100_000_000.0),
+                        "totalPaid" to w.totalPaid.coerceIn(0.0, 100_000_000.0),
+                        "payableBalance" to w.payableBalance.coerceIn(-100_000_000.0, 100_000_000.0),
+                        "createdAt" to w.createdAtMs.toFirebaseTimestamp(),
+                        "updatedAt" to w.updatedAtMs.toFirebaseTimestamp()
+                    )
+                )
+            }
+
+            for (e in dao.getAllWholesalerEntriesOnce()) {
+                ops.add(
+                    root.collection("wholesalerEntries").document(e.id) to mapOf(
+                        "wholesalerId" to e.wholesalerId.take(128),
+                        "wholesalerName" to e.wholesalerName.take(120),
+                        "entryType" to e.entryType,
+                        "invoiceNumber" to e.invoiceNumber.take(60),
+                        "description" to e.description.take(300),
+                        "paymentSource" to e.paymentSource,
+                        "referenceId" to e.referenceId.take(100),
+                        "amount" to e.amount.coerceIn(0.01, 100_000_000.0),
+                        "balanceAfter" to e.balanceAfter.coerceIn(-100_000_000.0, 100_000_000.0),
+                        "entryDateMs" to e.entryDateMs,
+                        "createdAt" to e.createdAtMs.toFirebaseTimestamp()
+                    )
+                )
             }
 
             // Commit in safe chunks under Firestore's 500-op batch limit
@@ -245,6 +295,12 @@ class ShopCloudBackupService(
                 .toObjects(RationCardItem::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
             val rationBills = root.collection("rationCardBills").get().await()
                 .toObjects(RationCardBill::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+            val dailyCash = root.collection("dailyCashEntries").get().await()
+                .toObjects(DailyCashEntry::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+            val wholesalers = root.collection("wholesalers").get().await()
+                .toObjects(Wholesaler::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+            val wholesalerEntries = root.collection("wholesalerEntries").get().await()
+                .toObjects(WholesalerLedgerEntry::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
 
             val dao = localDb.shopDao()
             localDb.withTransaction {
@@ -256,10 +312,14 @@ class ShopCloudBackupService(
                 if (donations.isNotEmpty()) dao.upsertDonations(donations.filter { it.id.isNotBlank() }.map { it.toEntity() })
                 if (rationItems.isNotEmpty()) dao.upsertRationCardItems(rationItems.filter { it.id.isNotBlank() }.map { it.toEntity() })
                 if (rationBills.isNotEmpty()) dao.upsertRationCardBills(rationBills.filter { it.id.isNotBlank() }.map { it.toEntity() })
+                if (dailyCash.isNotEmpty()) dao.upsertDailyCashEntries(dailyCash.filter { it.id.isNotBlank() }.map { it.toEntity() })
+                if (wholesalers.isNotEmpty()) dao.upsertWholesalers(wholesalers.filter { it.id.isNotBlank() }.map { it.toEntity() })
+                if (wholesalerEntries.isNotEmpty()) dao.upsertWholesalerEntries(wholesalerEntries.filter { it.id.isNotBlank() }.map { it.toEntity() })
             }
 
             val totalRestored = products.size + customers.size + orders.size + ledger.size +
-                movements.size + donations.size + rationItems.size + rationBills.size
+                movements.size + donations.size + rationItems.size + rationBills.size +
+                dailyCash.size + wholesalers.size + wholesalerEntries.size
             Result.success(totalRestored)
         } catch (e: CancellationException) {
             throw e

@@ -24,10 +24,13 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PriceChange
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -73,6 +76,8 @@ import com.example.i18n.label
 import com.example.i18n.pick
 import com.example.i18n.unitLabel
 import com.example.services.ReceiptFormatter
+import com.example.ui.components.QuickThresholdEditDialog
+import com.example.ui.theme.EmeraldPrimary
 import com.example.ui.theme.ProfitGreen
 import com.example.ui.theme.SaffronSecondary
 import com.example.ui.theme.UdharCrimson
@@ -102,20 +107,29 @@ fun StockScreen(
     ) -> Unit,
     onDeleteProduct: (String) -> Unit,
     onRecordStockMovement: (Product, StockMovementType, Double, Double, String) -> Unit,
-    onSyncGujratMarketRates: () -> Unit
+    onSyncGujratMarketRates: () -> Unit,
+    onOpenLowStockReport: () -> Unit = {}
 ) {
     var activeTab by remember { mutableIntStateOf(0) } // 0 = Inventory, 1 = Stock In/Out, 2 = Profit Report
     var searchQuery by remember { mutableStateOf("") }
+    var showOnlyLowStock by remember { mutableStateOf(false) }
     var editingProduct by remember { mutableStateOf<Product?>(null) }
     var quickPriceProduct by remember { mutableStateOf<Product?>(null) }
+    var quickThresholdProduct by remember { mutableStateOf<Product?>(null) }
     var showAddProductDialog by remember { mutableStateOf(false) }
     var movementProduct by remember { mutableStateOf<Product?>(null) }
 
-    val filteredProducts = remember(products, searchQuery) {
+    val lowStockProducts = remember(products) { products.filter { it.isLowStock() } }
+
+    val filteredProducts = remember(products, searchQuery, showOnlyLowStock) {
         val q = searchQuery.trim()
-        if (q.isBlank()) products
-        else products.filter {
-            it.nameUrdu.contains(q, true) || it.nameEnglish.contains(q, true) || it.barcode.contains(q, true)
+        products.filter { prod ->
+            val matchesLow = !showOnlyLowStock || prod.isLowStock()
+            val matchesQuery = q.isBlank() ||
+                prod.nameUrdu.contains(q, true) ||
+                prod.nameEnglish.contains(q, true) ||
+                prod.barcode.contains(q, true)
+            matchesLow && matchesQuery
         }
     }
 
@@ -198,23 +212,98 @@ fun StockScreen(
                         }
                     }
 
+                    // Filter Row: All vs Low Stock + One-Tap Low Stock Report PDF
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        FilterChip(
+                            selected = !showOnlyLowStock,
+                            onClick = { showOnlyLowStock = false },
+                            label = {
+                                Text(language.pick("تمام (${products.size})", "All (${products.size})"))
+                            },
+                            modifier = Modifier.testTag("stock_filter_all")
+                        )
+                        FilterChip(
+                            selected = showOnlyLowStock,
+                            onClick = { showOnlyLowStock = !showOnlyLowStock },
+                            leadingIcon = if (lowStockProducts.isNotEmpty()) {
+                                {
+                                    Icon(
+                                        imageVector = Icons.Default.WarningAmber,
+                                        contentDescription = null,
+                                        tint = if (showOnlyLowStock) MaterialTheme.colorScheme.onSecondaryContainer else UdharCrimson,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            } else null,
+                            label = {
+                                Text(
+                                    language.pick(
+                                        "کم اسٹاک (${lowStockProducts.size})",
+                                        "Low (${lowStockProducts.size})"
+                                    ),
+                                    fontWeight = if (lowStockProducts.isNotEmpty()) FontWeight.Bold else FontWeight.Normal
+                                )
+                            },
+                            modifier = Modifier.testTag("stock_filter_low")
+                        )
+                        Spacer(Modifier.weight(1f))
+                        FilledTonalButton(
+                            onClick = onOpenLowStockReport,
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                            modifier = Modifier.testTag("stock_low_stock_pdf_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PictureAsPdf,
+                                contentDescription = null,
+                                tint = if (lowStockProducts.isNotEmpty()) UdharCrimson else EmeraldPrimary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.size(4.dp))
+                            Text(
+                                text = language.pick("کم اسٹاک PDF", "Low Stock PDF"),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
+                            )
+                        }
+                    }
+
                     LazyColumn(
                         modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 88.dp),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 88.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         items(filteredProducts, key = { it.id }) { prod ->
+                            val isLow = prod.isLowStock()
+                            val isOut = prod.isOutOfStock()
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable { editingProduct = prod },
                                 shape = RoundedCornerShape(16.dp),
                                 border = BorderStroke(
-                                    1.dp,
-                                    if (prod.autoPriceEnabled) MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
-                                    else SaffronSecondary.copy(alpha = 0.55f)
+                                    if (isLow) 1.4.dp else 1.dp,
+                                    when {
+                                        isOut -> UdharCrimson.copy(alpha = 0.8f)
+                                        isLow -> WarningAmber.copy(alpha = 0.8f)
+                                        prod.autoPriceEnabled -> MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+                                        else -> SaffronSecondary.copy(alpha = 0.55f)
+                                    }
                                 ),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                                colors = CardDefaults.cardColors(
+                                    containerColor = when {
+                                        isOut -> UdharCrimson.copy(alpha = 0.04f)
+                                        isLow -> WarningAmber.copy(alpha = 0.05f)
+                                        else -> MaterialTheme.colorScheme.surface
+                                    }
+                                )
                             ) {
                                 Column(
                                     modifier = Modifier
@@ -294,12 +383,76 @@ fun StockScreen(
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
-                                            Text(
-                                                text = "${language.pick("اسٹاک", "Stock")}: ${formatQty(prod.stockQty)} ${unitLabel(prod.unit, language)}",
-                                                style = MaterialTheme.typography.labelMedium,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = if (prod.isLowStock()) UdharCrimson else ProfitGreen
-                                            )
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = "${language.pick("اسٹاک", "Stock")}: ${formatQty(prod.stockQty)} ${unitLabel(prod.unit, language)}",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = when {
+                                                        isOut -> UdharCrimson
+                                                        isLow -> WarningAmber
+                                                        else -> ProfitGreen
+                                                    }
+                                                )
+                                                if (isLow) {
+                                                    Surface(
+                                                        color = if (isOut) UdharCrimson else WarningAmber,
+                                                        shape = RoundedCornerShape(50.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = if (isOut) {
+                                                                language.pick("ختم", "OUT")
+                                                            } else {
+                                                                language.pick("کم اسٹاک", "LOW")
+                                                            },
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = Color.White,
+                                                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 1.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            // Tappable Minimum Stock Threshold chip per product
+                                            Surface(
+                                                color = if (isLow) {
+                                                    WarningAmber.copy(alpha = 0.14f)
+                                                } else {
+                                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
+                                                },
+                                                shape = RoundedCornerShape(8.dp),
+                                                border = BorderStroke(
+                                                    0.8.dp,
+                                                    if (isLow) WarningAmber.copy(alpha = 0.6f)
+                                                    else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+                                                ),
+                                                modifier = Modifier
+                                                    .padding(top = 2.dp)
+                                                    .clickable { quickThresholdProduct = prod }
+                                                    .testTag("edit_threshold_chip_${prod.id}")
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Tune,
+                                                        contentDescription = null,
+                                                        tint = if (isLow) WarningAmber else MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(13.dp)
+                                                    )
+                                                    Text(
+                                                        text = "${language.pick("کم از کم حد", "Min Threshold")}: ${formatQty(prod.lowStockThreshold)} ${unitLabel(prod.unit, language)}",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        color = if (isLow) WarningAmber else MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            }
                                         }
 
                                         Row(
@@ -602,6 +755,32 @@ fun StockScreen(
                 quickPriceProduct = null
             },
             onDismiss = { quickPriceProduct = null }
+        )
+    }
+
+    if (quickThresholdProduct != null) {
+        val target = quickThresholdProduct!!
+        QuickThresholdEditDialog(
+            language = language,
+            product = target,
+            onSaveThreshold = { newThreshold ->
+                onSaveProduct(
+                    target.id,
+                    target.nameUrdu,
+                    target.nameEnglish,
+                    target.categoryEnum(),
+                    target.unit,
+                    target.costPrice,
+                    target.sellingPrice,
+                    target.marginPercent,
+                    target.autoPriceEnabled,
+                    target.stockQty,
+                    newThreshold,
+                    target.barcode
+                )
+                quickThresholdProduct = null
+            },
+            onDismiss = { quickThresholdProduct = null }
         )
     }
 
@@ -1036,10 +1215,21 @@ private fun ProductEditorDialog(
                     OutlinedTextField(
                         value = lowStr,
                         onValueChange = { lowStr = it.filter { c -> c.isDigit() || c == '.' } },
-                        label = { Text(language.pick("کم اسٹاک الرٹ", "Low Alert")) },
+                        label = { Text(language.pick("کم از کم حد (Min Limit)", "Min Stock Threshold")) },
+                        supportingText = {
+                            Text(
+                                language.pick(
+                                    "کم ہونے پر POS وارننگ اور PDF",
+                                    "Triggers POS alert & PDF"
+                                ),
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("product_low_threshold_input")
                     )
                 }
 

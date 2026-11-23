@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.VolunteerActivism
@@ -87,6 +88,7 @@ import com.example.data.RationDonation
 import com.example.i18n.AppLanguage
 import com.example.i18n.formatPkr
 import com.example.i18n.pick
+import com.example.services.RaastEmvQrHelper
 import com.example.services.ReceiptFormatter
 import com.example.services.ReceiptPrintHelper
 import com.example.ui.theme.EmeraldPrimary
@@ -104,13 +106,27 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 
+/**
+ * Permanently hardcoded and locked central charity donation account for راشن امداد فنڈ.
+ * Intentionally immutable and decoupled from ShopSettings so no shopkeeper can edit or change it.
+ */
 object RationBankDetails {
     const val BANK_NAME = "HBL (Habib Bank Limited)"
     const val ACCOUNT_TITLE = "Muhammad Asif"
     const val ACCOUNT_NUMBER = "16857900668003"
     const val IBAN = "PK08HABB0016857900668003"
     const val BRANCH_NAME = "MOTA, (TANDA)"
-    const val QR_PAYLOAD = "IBAN:PK08HABB0016857900668003|ACC:16857900668003|NAME:Muhammad Asif|BRANCH:MOTA (TANDA)"
+
+    val OFFICIAL_HBL_QR_PAYLOAD: String by lazy {
+        RaastEmvQrHelper.buildRaastEmvQrPayload(
+            iban = IBAN,
+            accountNumber = ACCOUNT_NUMBER,
+            merchantName = ACCOUNT_TITLE,
+            merchantCity = "Tanda Gujrat",
+            amountPkr = null,
+            billReference = "RATION FUND"
+        )
+    }
 }
 
 @Composable
@@ -167,9 +183,9 @@ fun RationFundScreen(
         donations.count { it.entryTypeEnum() == DonationEntryType.RATION_OUT }
     }
 
-    val qrBitmap by produceState<Bitmap?>(initialValue = null, key1 = RationBankDetails.QR_PAYLOAD) {
+    val qrBitmap by produceState<Bitmap?>(initialValue = null, key1 = RationBankDetails.OFFICIAL_HBL_QR_PAYLOAD) {
         value = withContext(Dispatchers.Default) {
-            generateHblQrBitmap(RationBankDetails.QR_PAYLOAD, 384)
+            generateHblQrBitmap(RationBankDetails.OFFICIAL_HBL_QR_PAYLOAD, 512)
         }
     }
 
@@ -299,11 +315,38 @@ fun RationFundScreen(
                             color = Color(0xFF007A5E),
                             shape = RoundedCornerShape(50.dp)
                         ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = RationBankDetails.BANK_NAME,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = Color.White
+                                )
+                            }
+                        }
+
+                        Surface(
+                            color = Color(0xFF007A5E).copy(alpha = 0.1f),
+                            shape = RoundedCornerShape(50.dp)
+                        ) {
                             Text(
-                                text = "HBL • Habib Bank Limited",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 5.dp)
+                                text = language.pick(
+                                    "مستقل مرکزی امداد اکاؤنٹ • ناقابلِ ترمیم (Official HBL RAAST QR)",
+                                    "Locked Central Charity Account • Read-Only (Official HBL RAAST QR)"
+                                ),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF007A5E),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                             )
                         }
 
@@ -354,6 +397,24 @@ fun RationFundScreen(
                         )
 
                         HorizontalDivider()
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = language.pick("بینک", "Bank"),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = RationBankDetails.BANK_NAME,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF007A5E)
+                            )
+                        }
 
                         BankCopyRow(
                             label = language.pick("اکاؤنٹ نمبر (HBL)", "HBL Account Number"),

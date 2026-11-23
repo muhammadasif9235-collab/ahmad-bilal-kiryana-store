@@ -92,7 +92,15 @@ data class Product(
 ) {
     fun categoryEnum(): ProductCategory = ProductCategory.safeValueOf(category)
     fun profitPerUnit(): Double = (sellingPrice - costPrice).coerceAtLeast(0.0)
-    fun isLowStock(): Boolean = stockQty <= lowStockThreshold
+    fun isOutOfStock(): Boolean = stockQty <= 0.0
+    fun isLowStock(): Boolean = (lowStockThreshold > 0.0 && stockQty <= lowStockThreshold) || stockQty <= 0.0
+    fun stockDeficit(): Double = (lowStockThreshold - stockQty.coerceAtLeast(0.0)).coerceAtLeast(0.0)
+    fun suggestedRestockQty(): Double {
+        val targetStock = maxOf(lowStockThreshold * 2.0, lowStockThreshold + 5.0)
+        val raw = (targetStock - stockQty.coerceAtLeast(0.0)).coerceAtLeast(1.0)
+        return kotlin.math.ceil(raw)
+    }
+    fun estimatedRestockCost(): Double = suggestedRestockQty() * costPrice.coerceAtLeast(0.0)
 }
 
 @Keep
@@ -266,6 +274,8 @@ data class RationCardBill(
     val phone: String = "",
     val monthKey: String = "",
     val subsidyLimit: Double = 3000.0,
+    val feeDeduction: Double = 100.0,
+    val netSubsidyLimit: Double = 2900.0,
     val totalAmount: Double = 0.0,
     val subsidyUsed: Double = 0.0,
     val cashTopUp: Double = 0.0,
@@ -283,4 +293,87 @@ data class RationCartItem(
 ) {
     val effectivePrice: Double get() = customUnitPrice ?: item.price
     val lineTotal: Double get() = effectivePrice * quantity
+}
+
+enum class DailyCashType {
+    CASH_IN,
+    CASH_OUT;
+
+    companion object {
+        fun safeValueOf(raw: String?): DailyCashType =
+            entries.firstOrNull { it.name == raw } ?: CASH_IN
+    }
+}
+
+enum class DailyPaymentSource {
+    CASH,
+    HBL_QR,
+    ONLINE;
+
+    companion object {
+        fun safeValueOf(raw: String?): DailyPaymentSource =
+            entries.firstOrNull { it.name == raw } ?: CASH
+    }
+}
+
+@Keep
+@IgnoreExtraProperties
+data class DailyCashEntry(
+    @DocumentId val id: String = "",
+    val entryType: String = DailyCashType.CASH_IN.name,
+    val paymentSource: String = DailyPaymentSource.CASH.name,
+    val categoryOrTitle: String = "",
+    val amount: Double = 0.0,
+    val referenceId: String = "",
+    val note: String = "",
+    val entryDateMs: Long = System.currentTimeMillis(),
+    @ServerTimestamp val createdAt: Timestamp? = null
+) {
+    fun entryTypeEnum(): DailyCashType = DailyCashType.safeValueOf(entryType)
+    fun paymentSourceEnum(): DailyPaymentSource = DailyPaymentSource.safeValueOf(paymentSource)
+}
+
+enum class WholesalerEntryType {
+    STOCK_IN,
+    PAYMENT_OUT;
+
+    companion object {
+        fun safeValueOf(raw: String?): WholesalerEntryType =
+            entries.firstOrNull { it.name == raw } ?: STOCK_IN
+    }
+}
+
+@Keep
+@IgnoreExtraProperties
+data class Wholesaler(
+    @DocumentId val id: String = "",
+    val name: String = "",
+    val phone: String = "",
+    val cityOrMarket: String = "",
+    val notes: String = "",
+    val totalPurchased: Double = 0.0,
+    val totalPaid: Double = 0.0,
+    val payableBalance: Double = 0.0,
+    @ServerTimestamp val createdAt: Timestamp? = null,
+    @ServerTimestamp val updatedAt: Timestamp? = null
+)
+
+@Keep
+@IgnoreExtraProperties
+data class WholesalerLedgerEntry(
+    @DocumentId val id: String = "",
+    val wholesalerId: String = "",
+    val wholesalerName: String = "",
+    val entryType: String = WholesalerEntryType.STOCK_IN.name,
+    val invoiceNumber: String = "",
+    val description: String = "",
+    val paymentSource: String = DailyPaymentSource.CASH.name,
+    val referenceId: String = "",
+    val amount: Double = 0.0,
+    val balanceAfter: Double = 0.0,
+    val entryDateMs: Long = System.currentTimeMillis(),
+    @ServerTimestamp val createdAt: Timestamp? = null
+) {
+    fun entryTypeEnum(): WholesalerEntryType = WholesalerEntryType.safeValueOf(entryType)
+    fun paymentSourceEnum(): DailyPaymentSource = DailyPaymentSource.safeValueOf(paymentSource)
 }

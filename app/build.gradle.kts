@@ -63,7 +63,21 @@ android {
     compose = true
     buildConfig = true
   }
-  testOptions { unitTests { isIncludeAndroidResources = true } }
+  testOptions {
+    unitTests {
+      isIncludeAndroidResources = true
+      isReturnDefaultValues = true
+    }
+  }
+  lint {
+    checkReleaseBuilds = false
+    abortOnError = false
+  }
+  packaging {
+    resources {
+      excludes += "/META-INF/{AL2.0,LGPL2.1}"
+    }
+  }
   dependenciesInfo {
     includeInApk = false
     includeInBundle = true

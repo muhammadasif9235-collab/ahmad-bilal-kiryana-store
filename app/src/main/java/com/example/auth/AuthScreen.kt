@@ -3,6 +3,7 @@ package com.example.auth
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,9 +25,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Storefront
@@ -34,6 +37,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -41,6 +45,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -68,6 +73,8 @@ import com.example.R
 import com.example.i18n.AppLanguage
 import com.example.i18n.pick
 import com.example.ui.components.AsyncBannerImage
+import com.example.ui.components.LegalDocumentTab
+import com.example.ui.components.LegalDocumentsDialog
 import com.example.ui.components.ShopLogoBadge
 import com.example.ui.theme.EmeraldPrimary
 import com.example.ui.theme.EmeraldPrimaryDark
@@ -87,6 +94,8 @@ fun AuthScreen(
 
     var isGoogleLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var acceptedLegalTerms by remember { mutableStateOf(false) }
+    var activeLegalDialogTab by remember { mutableStateOf<LegalDocumentTab?>(null) }
 
     Box(
         modifier = Modifier
@@ -244,12 +253,111 @@ fun AuthScreen(
                 }
             }
 
+            // Legal Acceptance Checkbox + Interactive Privacy Policy & Terms Links (Account Setup Wizard)
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                border = BorderStroke(
+                    1.2.dp,
+                    if (acceptedLegalTerms) EmeraldPrimary.copy(alpha = 0.55f)
+                    else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                ),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                acceptedLegalTerms = !acceptedLegalTerms
+                                if (acceptedLegalTerms) errorMessage = null
+                            },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Checkbox(
+                            checked = acceptedLegalTerms,
+                            onCheckedChange = {
+                                acceptedLegalTerms = it
+                                if (it) errorMessage = null
+                            },
+                            modifier = Modifier.testTag("auth_legal_accept_checkbox")
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = language.pick(
+                                    "میں شرائط و ضوابط اور پرائیویسی پالیسی سے اتفاق کرتا ہوں",
+                                    "I agree to the Terms & Conditions and Privacy Policy"
+                                ),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = language.pick(
+                                    "نجی POS / کھاتہ ایپ (غیر سرکاری) • PECA 2016 اور SBP RAAST اصول",
+                                    "Independent private POS app (Non-Government) • PECA 2016 & SBP RAAST"
+                                ),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        TextButton(
+                            onClick = { activeLegalDialogTab = LegalDocumentTab.PRIVACY_POLICY },
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("auth_privacy_policy_link")
+                        ) {
+                            Icon(Icons.Default.Policy, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.size(4.dp))
+                            Text(
+                                text = language.pick("پرائیویسی پالیسی", "Privacy Policy"),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        TextButton(
+                            onClick = { activeLegalDialogTab = LegalDocumentTab.TERMS_AND_CONDITIONS },
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("auth_terms_conditions_link")
+                        ) {
+                            Icon(Icons.Default.Gavel, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.size(4.dp))
+                            Text(
+                                text = language.pick("شرائط و ضوابط", "Terms & Conditions"),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+
             // PRIMARY CTA: One-Tap Local Shop Owner Login (Works 100% on Standalone APKs)
             Button(
-                onClick = onLocalOwnerLogin,
+                onClick = {
+                    if (!acceptedLegalTerms) {
+                        errorMessage = language.pick(
+                            "براہِ کرم آگے بڑھنے سے پہلے «شرائط و ضوابط اور پرائیویسی پالیسی» کے باکس پر نشان لگائیں۔",
+                            "Please check the box agreeing to the Terms & Conditions and Privacy Policy to continue."
+                        )
+                    } else {
+                        onLocalOwnerLogin()
+                    }
+                },
                 shape = RoundedCornerShape(18.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = EmeraldPrimary,
+                    containerColor = if (acceptedLegalTerms) EmeraldPrimary else EmeraldPrimary.copy(alpha = 0.55f),
                     contentColor = Color.White
                 ),
                 modifier = Modifier
@@ -320,6 +428,13 @@ fun AuthScreen(
             // SECONDARY OPTIONAL CTA: Google Sign-In for Cloud Backup
             OutlinedButton(
                 onClick = {
+                    if (!acceptedLegalTerms) {
+                        errorMessage = language.pick(
+                            "براہِ کرم آگے بڑھنے سے پہلے «شرائط و ضوابط اور پرائیویسی پالیسی» سے اتفاق کریں۔",
+                            "Please agree to the Terms & Conditions and Privacy Policy first."
+                        )
+                        return@OutlinedButton
+                    }
                     errorMessage = null
                     isGoogleLoading = true
                     onGoogleSignInClicked(
@@ -434,6 +549,15 @@ fun AuthScreen(
                 }
             }
         }
+    }
+
+    val legalTab = activeLegalDialogTab
+    if (legalTab != null) {
+        LegalDocumentsDialog(
+            initialTab = legalTab,
+            language = language,
+            onDismiss = { activeLegalDialogTab = null }
+        )
     }
 }
 

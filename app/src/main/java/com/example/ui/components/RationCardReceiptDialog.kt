@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Nfc
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
@@ -41,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.data.RationCardBill
+import com.example.data.ShopSettings
 import com.example.i18n.AppLanguage
 import com.example.i18n.formatPkr
 import com.example.i18n.formatQty
@@ -55,12 +57,13 @@ import com.example.ui.theme.SaffronSecondary
 fun RationCardReceiptDialog(
     bill: RationCardBill,
     language: AppLanguage,
-    shopPhone: String,
+    settings: ShopSettings,
     onBluetoothPrint: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
     val dateStr = ReceiptFormatter.formatDateTime(bill.createdAt?.toDate()?.time ?: System.currentTimeMillis())
+    val netLimit = if (bill.netSubsidyLimit > 0.0) bill.netSubsidyLimit else (bill.subsidyLimit - bill.feeDeduction).coerceAtLeast(0.0)
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -77,7 +80,7 @@ fun RationCardReceiptDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 690.dp)
+                    .heightIn(max = 710.dp)
                     .padding(18.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
@@ -97,7 +100,7 @@ fun RationCardReceiptDialog(
                             modifier = Modifier.size(26.dp)
                         )
                         Text(
-                            text = language.pick("مریم نواز راشن کارڈ رسید", "Ration Card Receipt"),
+                            text = language.pick("POS / پی او ایس رسید", "POS Card Receipt"),
                             style = MaterialTheme.typography.titleLarge,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -126,10 +129,11 @@ fun RationCardReceiptDialog(
                     ) {
                         Text(
                             text = language.pick(
-                                ReceiptFormatter.SHOP_NAME_URDU,
-                                ReceiptFormatter.SHOP_NAME_ENGLISH
+                                settings.storeNameUrdu,
+                                settings.storeNameEnglish
                             ),
-                            style = MaterialTheme.typography.headlineMedium,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth()
@@ -141,8 +145,8 @@ fun RationCardReceiptDialog(
                         ) {
                             Text(
                                 text = language.pick(
-                                    "مریم نواز راشن کارڈ • حکومت پنجاب سبسڈی",
-                                    "Maryam Nawaz Ration Card • Punjab Govt"
+                                    "POS / پی او ایس کارڈ • کل ${bill.subsidyLimit.toLong()} | فیس ${bill.feeDeduction.toLong()} | خالص ${netLimit.toLong()}",
+                                    "POS Card • Quota ${bill.subsidyLimit.toLong()} | Fee ${bill.feeDeduction.toLong()} | Net ${netLimit.toLong()}"
                                 ),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color.White,
@@ -151,20 +155,30 @@ fun RationCardReceiptDialog(
                         }
                         Text(
                             text = language.pick(
-                                ReceiptFormatter.SHOP_CITY_URDU,
-                                ReceiptFormatter.SHOP_CITY_ENGLISH
+                                settings.shopAddressUrdu,
+                                settings.shopAddressEnglish
                             ),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth()
                         )
+                        if (settings.shopPhone.isNotBlank()) {
+                            Text(
+                                text = settings.shopPhone,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
 
                         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
                         MetaRow(language.pick("رسید نمبر:", "Receipt #:"), "${bill.billNumber} (${bill.monthKey})")
                         MetaRow(language.pick("تاریخ:", "Date:"), dateStr)
-                        MetaRow(language.pick("صارف کا نام:", "Beneficiary:"), bill.beneficiaryName, bold = true)
+                        MetaRow(language.pick("صارف کا نام:", "Customer:"), bill.beneficiaryName, bold = true)
+                        if (bill.phone.isNotBlank()) MetaRow(language.pick("موبائل:", "Phone:"), bill.phone)
                         if (bill.cnic.isNotBlank()) MetaRow(language.pick("شناختی کارڈ:", "CNIC:"), bill.cnic)
                         if (bill.cardNumber.isNotBlank()) MetaRow(language.pick("کارڈ نمبر:", "Card #:"), bill.cardNumber)
                         if (bill.cardUid.isNotBlank()) {
@@ -265,12 +279,25 @@ fun RationCardReceiptDialog(
                         }
 
                         MetaRow(
-                            language.pick("کل راشن بل:", "Total Ration Bill:"),
+                            language.pick("کل کارڈ کوٹہ:", "Total Quota:"),
+                            formatPkr(bill.subsidyLimit, language)
+                        )
+                        MetaRow(
+                            language.pick("سروس فیس کٹوتی:", "Service Fee:"),
+                            "-${formatPkr(bill.feeDeduction, language)}"
+                        )
+                        MetaRow(
+                            language.pick("خالص راشن ویلیو:", "Net Ration Value:"),
+                            formatPkr(netLimit, language),
+                            bold = true
+                        )
+                        MetaRow(
+                            language.pick("کل POS بل:", "Total POS Bill:"),
                             formatPkr(bill.totalAmount, language),
                             bold = true
                         )
                         MetaRow(
-                            language.pick("راشن کارڈ سے کٹوتی:", "Ration Card Deducted:"),
+                            language.pick("کارڈ سے کٹوتی:", "POS Card Deducted:"),
                             formatPkr(bill.subsidyUsed, language),
                             bold = true,
                             valueColor = ProfitGreen
@@ -284,12 +311,55 @@ fun RationCardReceiptDialog(
                             )
                         }
                         MetaRow(
-                            language.pick("کارڈ میں بقایا کوٹہ:", "Remaining Monthly Quota:"),
+                            language.pick("بقایا خالص بیلنس:", "Remaining Net Balance:"),
                             formatPkr(bill.remainingSubsidy, language)
                         )
                     }
                 }
 
+                // Row 1: One-tap WhatsApp Text & WhatsApp PDF
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            ReceiptPrintHelper.shareRationCardOnWhatsAppText(
+                                context = context,
+                                bill = bill,
+                                language = language,
+                                settings = settings
+                            )
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("ration_receipt_whatsapp_text")
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(17.dp))
+                        Spacer(Modifier.size(4.dp))
+                        Text(language.pick("واٹس ایپ ٹیکسٹ", "WhatsApp Text"), maxLines = 1)
+                    }
+                    FilledTonalButton(
+                        onClick = {
+                            ReceiptPrintHelper.shareRationCardPdfOnWhatsApp(
+                                context = context,
+                                bill = bill,
+                                language = language,
+                                settings = settings
+                            )
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("ration_receipt_whatsapp_pdf")
+                    ) {
+                        Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(17.dp))
+                        Spacer(Modifier.size(4.dp))
+                        Text(language.pick("واٹس ایپ PDF", "WhatsApp PDF"), maxLines = 1)
+                    }
+                }
+
+                // Row 2: 58mm ESC/POS Bluetooth Thermal Print & System Print / Save PDF
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -301,45 +371,28 @@ fun RationCardReceiptDialog(
                             .testTag("ration_receipt_bt_print"),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
-                        Icon(Icons.Default.Bluetooth, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Bluetooth, contentDescription = null, modifier = Modifier.size(17.dp))
                         Spacer(Modifier.size(4.dp))
-                        Text(language.pick("بلوٹوتھ پرنٹ", "BT Print"), maxLines = 1)
+                        Text(language.pick("58mm بلوٹوتھ", "58mm BT Print"), maxLines = 1)
                     }
-                    FilledTonalButton(
+                    OutlinedButton(
                         onClick = {
                             ReceiptPrintHelper.printRationCardWithSystemPrint(
                                 context = context,
                                 bill = bill,
                                 language = language,
-                                shopPhone = shopPhone
+                                shopPhone = settings.shopPhone,
+                                settings = settings
                             )
                         },
                         modifier = Modifier
                             .weight(1f)
                             .testTag("ration_receipt_pdf_print")
                     ) {
-                        Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(17.dp))
                         Spacer(Modifier.size(4.dp))
                         Text(language.pick("پرنٹ / PDF", "Print / PDF"), maxLines = 1)
                     }
-                }
-
-                OutlinedButton(
-                    onClick = {
-                        val shareText = ReceiptFormatter.buildRationCardShareText(bill, language, shopPhone)
-                        ReceiptPrintHelper.shareText(
-                            context = context,
-                            text = shareText,
-                            title = language.pick("راشن کارڈ رسید شیئر کریں", "Share Ration Card Receipt")
-                        )
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("ration_receipt_share")
-                ) {
-                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.size(6.dp))
-                    Text(language.pick("واٹس ایپ پر رسید شیئر کریں", "Share Receipt on WhatsApp"))
                 }
             }
         }

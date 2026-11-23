@@ -18,6 +18,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
@@ -47,6 +49,7 @@ import com.example.data.LedgerEntry
 import com.example.data.LedgerEntryType
 import com.example.data.Order
 import com.example.data.OrderStatus
+import com.example.data.ShopSettings
 import com.example.i18n.AppLanguage
 import com.example.i18n.formatPkr
 import com.example.i18n.formatQty
@@ -62,9 +65,11 @@ import com.example.ui.theme.UdharCrimson
 fun AutoReceiptDialog(
     order: Order,
     language: AppLanguage,
-    shopPhone: String,
+    settings: ShopSettings,
+    customerPhone: String = "",
     hasBluetoothPrinter: Boolean,
     onBluetoothPrint: () -> Unit,
+    onEditOrder: ((Order) -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -85,7 +90,7 @@ fun AutoReceiptDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 680.dp)
+                    .heightIn(max = 700.dp)
                     .padding(18.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
@@ -109,7 +114,7 @@ fun AutoReceiptDialog(
                             text = if (order.statusEnum() == OrderStatus.PENDING) {
                                 language.pick("آرڈر رسید تیار ہے", "Order Slip Ready")
                             } else {
-                                language.pick("خودکار رسید", "Auto Receipt")
+                                language.pick("خودکار بل رسید", "Auto Bill Receipt")
                             },
                             style = MaterialTheme.typography.titleLarge,
                             color = MaterialTheme.colorScheme.primary
@@ -143,27 +148,28 @@ fun AutoReceiptDialog(
                     ) {
                         Text(
                             text = language.pick(
-                                ReceiptFormatter.SHOP_NAME_URDU,
-                                ReceiptFormatter.SHOP_NAME_ENGLISH
+                                settings.storeNameUrdu,
+                                settings.storeNameEnglish
                             ),
-                            style = MaterialTheme.typography.headlineMedium,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth()
                         )
                         Text(
                             text = language.pick(
-                                ReceiptFormatter.SHOP_CITY_URDU,
-                                ReceiptFormatter.SHOP_CITY_ENGLISH
+                                settings.shopAddressUrdu,
+                                settings.shopAddressEnglish
                             ),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth()
                         )
-                        if (shopPhone.isNotBlank()) {
+                        if (settings.shopPhone.isNotBlank()) {
                             Text(
-                                text = shopPhone,
+                                text = settings.shopPhone,
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center,
@@ -316,8 +322,8 @@ fun AutoReceiptDialog(
                         DashedReceiptDivider()
                         Text(
                             text = language.pick(
-                                "خریداری کا شکریہ! دوبارہ تشریف لائیں",
-                                "Thank you for shopping at Ahmad Bilal Kiryana Store!"
+                                "خریداری کا شکریہ! ${settings.storeNameUrdu}",
+                                "Thank you for shopping at ${settings.storeNameEnglish}!"
                             ),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -327,7 +333,51 @@ fun AutoReceiptDialog(
                     }
                 }
 
-                // Print & Share Action Row
+                // Row 1: One-tap WhatsApp Text & WhatsApp PDF sharing
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            ReceiptPrintHelper.shareOrderOnWhatsAppText(
+                                context = context,
+                                order = order,
+                                language = language,
+                                settings = settings,
+                                customerPhone = customerPhone
+                            )
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("receipt_whatsapp_text_button")
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(17.dp))
+                        Spacer(Modifier.size(4.dp))
+                        Text(language.pick("واٹس ایپ ٹیکسٹ", "WhatsApp Text"), maxLines = 1)
+                    }
+
+                    FilledTonalButton(
+                        onClick = {
+                            ReceiptPrintHelper.shareOrderPdfOnWhatsApp(
+                                context = context,
+                                order = order,
+                                language = language,
+                                settings = settings
+                            )
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("receipt_whatsapp_pdf_button")
+                    ) {
+                        Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(17.dp))
+                        Spacer(Modifier.size(4.dp))
+                        Text(language.pick("واٹس ایپ PDF", "WhatsApp PDF"), maxLines = 1)
+                    }
+                }
+
+                // Row 2: 58mm ESC/POS Bluetooth Thermal Print & System Print/Save PDF
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -344,26 +394,27 @@ fun AutoReceiptDialog(
                         Icon(
                             imageVector = Icons.Default.Bluetooth,
                             contentDescription = null,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(17.dp)
                         )
                         Spacer(Modifier.size(4.dp))
                         Text(
                             text = if (hasBluetoothPrinter) {
-                                language.pick("بلوٹوتھ پرنٹ", "BT Print")
+                                language.pick("58mm بلوٹوتھ", "58mm BT Print")
                             } else {
-                                language.pick("بلوٹوتھ", "BT Print")
+                                language.pick("58mm پرنٹ", "58mm BT Print")
                             },
                             maxLines = 1
                         )
                     }
 
-                    FilledTonalButton(
+                    OutlinedButton(
                         onClick = {
                             ReceiptPrintHelper.printOrderWithSystemPrint(
                                 context = context,
                                 order = order,
                                 language = language,
-                                shopPhone = shopPhone
+                                shopPhone = settings.shopPhone,
+                                settings = settings
                             )
                         },
                         modifier = Modifier
@@ -373,33 +424,33 @@ fun AutoReceiptDialog(
                         Icon(
                             imageVector = Icons.Default.Print,
                             contentDescription = null,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(17.dp)
                         )
                         Spacer(Modifier.size(4.dp))
                         Text(language.pick("پرنٹ / PDF", "Print / PDF"), maxLines = 1)
                     }
                 }
 
-                OutlinedButton(
-                    onClick = {
-                        val shareText = ReceiptFormatter.buildShareText(order, language, shopPhone)
-                        ReceiptPrintHelper.shareText(
-                            context = context,
-                            text = shareText,
-                            title = language.pick("رسید شیئر کریں", "Share Receipt")
+                if (onEditOrder != null) {
+                    OutlinedButton(
+                        onClick = { onEditOrder(order) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("receipt_edit_bill_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = null,
+                            modifier = Modifier.size(17.dp)
                         )
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("receipt_share_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Share,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(Modifier.size(6.dp))
-                    Text(language.pick("واٹس ایپ / میسج پر رسید شیئر کریں", "Share Receipt (WhatsApp / SMS)"))
+                        Spacer(Modifier.size(6.dp))
+                        Text(
+                            language.pick(
+                                "بل ایڈٹ / رقم کم یا زیادہ کریں",
+                                "Edit Bill / Adjust Amount"
+                            )
+                        )
+                    }
                 }
             }
         }
@@ -410,12 +461,21 @@ fun AutoReceiptDialog(
 fun PaymentReceiptDialog(
     entry: LedgerEntry,
     language: AppLanguage,
+    settings: ShopSettings,
+    customerPhone: String = "",
+    onBluetoothPrint: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
     val isCredit = entry.entryTypeEnum() == LedgerEntryType.CREDIT
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
         Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp),
             shape = RoundedCornerShape(22.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
@@ -434,10 +494,16 @@ fun PaymentReceiptDialog(
                     modifier = Modifier.size(42.dp)
                 )
                 Text(
+                    text = language.pick(settings.storeNameUrdu, settings.storeNameEnglish),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+                Text(
                     text = if (isCredit) {
-                        language.pick("وصولی رسید محفوظ ہو گئی", "Payment Receipt Saved")
+                        language.pick("کھاتہ وصولی رسید محفوظ ہو گئی", "Khata Payment Receipt Saved")
                     } else {
-                        language.pick("ادھار اندراج محفوظ ہو گیا", "Udhar Entry Recorded")
+                        language.pick("ادھار کھاتہ اندراج محفوظ ہو گیا", "Khata Udhar Entry Recorded")
                     },
                     style = MaterialTheme.typography.titleLarge,
                     textAlign = TextAlign.Center
@@ -445,11 +511,13 @@ fun PaymentReceiptDialog(
                 Text(
                     text = entry.customerName,
                     style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = formatPkr(entry.amount, language),
                     style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
                     color = if (isCredit) ProfitGreen else UdharCrimson
                 )
                 Text(
@@ -459,28 +527,80 @@ fun PaymentReceiptDialog(
                     ),
                     style = MaterialTheme.typography.bodyMedium
                 )
+                if (entry.note.isNotBlank()) {
+                    Text(
+                        text = entry.note,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+
+                Spacer(Modifier.height(2.dp))
+
+                // Row 1: One-tap WhatsApp Text & WhatsApp PDF
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    OutlinedButton(
+                    Button(
                         onClick = {
-                            val text = ReceiptFormatter.buildPaymentShareText(entry, language)
-                            ReceiptPrintHelper.shareText(
-                                context,
-                                text,
-                                language.pick("کھاتہ رسید", "Khata Receipt")
+                            ReceiptPrintHelper.shareKhataOnWhatsAppText(
+                                context = context,
+                                entry = entry,
+                                language = language,
+                                settings = settings,
+                                customerPhone = customerPhone
                             )
                         },
-                        modifier = Modifier.weight(1f)
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("khata_receipt_whatsapp_text_button")
                     ) {
                         Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.size(4.dp))
-                        Text(language.pick("شیئر", "Share"))
+                        Text(language.pick("واٹس ایپ ٹیکسٹ", "WhatsApp"), maxLines = 1)
                     }
+                    FilledTonalButton(
+                        onClick = {
+                            ReceiptPrintHelper.shareKhataPdfOnWhatsApp(
+                                context = context,
+                                entry = entry,
+                                language = language,
+                                settings = settings
+                            )
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("khata_receipt_whatsapp_pdf_button")
+                    ) {
+                        Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.size(4.dp))
+                        Text(language.pick("واٹس ایپ PDF", "PDF"), maxLines = 1)
+                    }
+                }
+
+                // Row 2: 58mm ESC/POS Bluetooth Thermal Print & Done
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Button(
+                        onClick = onBluetoothPrint,
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("khata_receipt_bt_print_button")
+                    ) {
+                        Icon(Icons.Default.Bluetooth, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.size(4.dp))
+                        Text(language.pick("58mm بلوٹوتھ", "58mm BT"), maxLines = 1)
+                    }
+                    OutlinedButton(
                         onClick = onDismiss,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("khata_receipt_done_button")
                     ) {
                         Text(language.pick("ٹھیک ہے", "Done"))
                     }

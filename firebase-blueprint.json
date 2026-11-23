@@ -148,7 +148,11 @@
         "phone": { "type": "string" },
         "amount": { "type": "number", "description": "Donation amount or ration pack value in PKR" },
         "rationSummary": { "type": "string", "description": "Summary of ration items or charity note" },
-        "paymentRef": { "type": "string", "description": "HBL transfer reference or Cash" },
+        "paymentRef": { "type": "string", "description": "Bank transfer reference or Cash" },
+        "senderAccount": { "type": "string", "description": "Sender account title/number for verification" },
+        "transactionId": { "type": "string", "description": "Bank transfer Transaction ID (TID)" },
+        "receiptImagePath": { "type": "string", "description": "Local reference path to receipt screenshot" },
+        "status": { "type": "string", "enum": ["PENDING", "VERIFIED", "REJECTED"] },
         "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation" }
       },
       "required": ["entryType", "personName", "phone", "amount", "rationSummary", "paymentRef", "createdAt"]
@@ -181,6 +185,8 @@
         "phone": { "type": "string" },
         "monthKey": { "type": "string", "description": "YYYY-MM subsidy cycle key" },
         "subsidyLimit": { "type": "number", "description": "Punjab Govt monthly ration allowance (default 3000 PKR)" },
+        "feeDeduction": { "type": "number", "description": "Optional POS service fee deduction" },
+        "netSubsidyLimit": { "type": "number", "description": "Net monthly ration limit after fee deduction" },
         "totalAmount": { "type": "number" },
         "subsidyUsed": { "type": "number" },
         "cashTopUp": { "type": "number" },
@@ -207,6 +213,93 @@
         "scannedViaNfc",
         "note",
         "createdAt"
+      ]
+    },
+    "DailyCashEntry": {
+      "title": "DailyCashEntry",
+      "description": "Daily shop cash in/out and bank/QR income or expense ledger entry.",
+      "type": "object",
+      "properties": {
+        "entryType": { "type": "string", "enum": ["CASH_IN", "CASH_OUT"] },
+        "paymentSource": { "type": "string", "enum": ["CASH", "HBL_QR", "ONLINE"] },
+        "categoryOrTitle": { "type": "string" },
+        "amount": { "type": "number" },
+        "referenceId": { "type": "string" },
+        "note": { "type": "string" },
+        "entryDateMs": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["entryType", "paymentSource", "categoryOrTitle", "amount", "referenceId", "note", "entryDateMs", "createdAt"]
+    },
+    "Wholesaler": {
+      "title": "Wholesaler",
+      "description": "Wholesale supplier profile with total purchases, payments, and payable balance.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "cityOrMarket": { "type": "string" },
+        "notes": { "type": "string" },
+        "totalPurchased": { "type": "number" },
+        "totalPaid": { "type": "number" },
+        "payableBalance": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "phone", "cityOrMarket", "notes", "totalPurchased", "totalPaid", "payableBalance", "createdAt", "updatedAt"]
+    },
+    "WholesalerLedgerEntry": {
+      "title": "WholesalerLedgerEntry",
+      "description": "Stock purchase or payment out ledger entry for a wholesaler.",
+      "type": "object",
+      "properties": {
+        "wholesalerId": { "type": "string" },
+        "wholesalerName": { "type": "string" },
+        "entryType": { "type": "string", "enum": ["STOCK_IN", "PAYMENT_OUT"] },
+        "invoiceNumber": { "type": "string" },
+        "description": { "type": "string" },
+        "paymentSource": { "type": "string", "enum": ["CASH", "HBL_QR", "ONLINE"] },
+        "referenceId": { "type": "string" },
+        "amount": { "type": "number" },
+        "balanceAfter": { "type": "number" },
+        "entryDateMs": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["wholesalerId", "wholesalerName", "entryType", "invoiceNumber", "description", "paymentSource", "referenceId", "amount", "balanceAfter", "entryDateMs", "createdAt"]
+    },
+    "StoreProfile": {
+      "title": "StoreProfile",
+      "description": "Shop owner store identity, address, phone, and RAAST merchant bank details.",
+      "type": "object",
+      "properties": {
+        "storeNameUrdu": { "type": "string" },
+        "storeNameEnglish": { "type": "string" },
+        "shopAddressUrdu": { "type": "string" },
+        "shopAddressEnglish": { "type": "string" },
+        "shopPhone": { "type": "string" },
+        "bankName": { "type": "string" },
+        "hblAccountTitle": { "type": "string" },
+        "hblAccountNumber": { "type": "string" },
+        "hblIban": { "type": "string" },
+        "hblBranchName": { "type": "string" },
+        "storeSetupCompleted": { "type": "boolean" },
+        "defaultMarginPercent": { "type": "number" },
+        "defaultPosFee": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "storeNameUrdu",
+        "storeNameEnglish",
+        "shopAddressUrdu",
+        "shopAddressEnglish",
+        "shopPhone",
+        "bankName",
+        "hblAccountTitle",
+        "hblAccountNumber",
+        "hblIban",
+        "hblBranchName",
+        "storeSetupCompleted",
+        "updatedAt"
       ]
     }
   },
@@ -242,6 +335,22 @@
     "/users/{userId}/rationCardBills/{billId}": {
       "schema": { "$ref": "#/entities/RationCardBill" },
       "description": "Per-shop owner Maryam Nawaz Ration Card NFC subsidy bills and beneficiary records"
+    },
+    "/users/{userId}/dailyCashEntries/{entryId}": {
+      "schema": { "$ref": "#/entities/DailyCashEntry" },
+      "description": "Per-shop owner daily cash and bank ledger entries"
+    },
+    "/users/{userId}/wholesalers/{wholesalerId}": {
+      "schema": { "$ref": "#/entities/Wholesaler" },
+      "description": "Per-shop owner wholesaler profiles"
+    },
+    "/users/{userId}/wholesalerEntries/{entryId}": {
+      "schema": { "$ref": "#/entities/WholesalerLedgerEntry" },
+      "description": "Per-shop owner wholesaler purchase & payment entries"
+    },
+    "/users/{userId}/storeProfile/{profileId}": {
+      "schema": { "$ref": "#/entities/StoreProfile" },
+      "description": "Per-shop owner store profile and merchant bank / RAAST settings"
     }
   }
 }

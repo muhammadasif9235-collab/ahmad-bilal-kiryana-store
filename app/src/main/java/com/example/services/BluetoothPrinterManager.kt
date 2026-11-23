@@ -10,11 +10,13 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
+import com.example.data.LedgerEntry
 import com.example.data.Order
 import com.example.data.RationCardBill
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
+import java.util.Locale
 import java.util.UUID
 
 data class PairedBluetoothPrinter(
@@ -104,29 +106,76 @@ class BluetoothPrinterManager(private val context: Context) {
         }
     }
 
-    suspend fun printOrderReceipt(deviceAddress: String, order: Order, shopPhone: String): Result<Unit> {
-        val bytes = ReceiptFormatter.buildEscPosBytes(order, shopPhone)
+    suspend fun printOrderReceipt(
+        deviceAddress: String,
+        order: Order,
+        shopPhone: String,
+        shopNameEnglish: String = ReceiptFormatter.SHOP_NAME_ENGLISH,
+        shopAddressEnglish: String = ReceiptFormatter.SHOP_CITY_ENGLISH
+    ): Result<Unit> {
+        val bytes = ReceiptFormatter.buildEscPosBytes(
+            order = order,
+            shopPhone = shopPhone,
+            shopNameEnglish = shopNameEnglish,
+            shopAddressEnglish = shopAddressEnglish
+        )
         return printBytes(deviceAddress, bytes)
     }
 
-    suspend fun printRationCardReceipt(deviceAddress: String, bill: RationCardBill, shopPhone: String): Result<Unit> {
-        val bytes = ReceiptFormatter.buildRationCardEscPosBytes(bill, shopPhone)
+    suspend fun printPaymentReceipt(
+        deviceAddress: String,
+        entry: LedgerEntry,
+        shopPhone: String,
+        shopNameEnglish: String = ReceiptFormatter.SHOP_NAME_ENGLISH,
+        shopAddressEnglish: String = ReceiptFormatter.SHOP_CITY_ENGLISH
+    ): Result<Unit> {
+        val bytes = ReceiptFormatter.buildPaymentEscPosBytes(
+            entry = entry,
+            shopPhone = shopPhone,
+            shopNameEnglish = shopNameEnglish,
+            shopAddressEnglish = shopAddressEnglish
+        )
         return printBytes(deviceAddress, bytes)
     }
 
-    suspend fun printTestSlip(deviceAddress: String): Result<Unit> {
-        val testText = """
-            ================================
-               AHMAD BILAL KIRYANA STORE
-                TANDA, DISTRICT GUJRAT
-            ================================
-            Bluetooth Thermal Printer Test
-            Status: CONNECTED & READY
-            ================================
+    suspend fun printRationCardReceipt(
+        deviceAddress: String,
+        bill: RationCardBill,
+        shopPhone: String,
+        shopNameEnglish: String = ReceiptFormatter.SHOP_NAME_ENGLISH,
+        shopAddressEnglish: String = ReceiptFormatter.SHOP_CITY_ENGLISH
+    ): Result<Unit> {
+        val bytes = ReceiptFormatter.buildRationCardEscPosBytes(
+            bill = bill,
+            shopPhone = shopPhone,
+            shopNameEnglish = shopNameEnglish,
+            shopAddressEnglish = shopAddressEnglish
+        )
+        return printBytes(deviceAddress, bytes)
+    }
 
-
-
-        """.trimIndent().toByteArray(Charsets.UTF_8)
-        return printBytes(deviceAddress, byteArrayOf(0x1B, 0x40) + testText)
+    suspend fun printTestSlip(
+        deviceAddress: String,
+        shopNameEnglish: String = ReceiptFormatter.SHOP_NAME_ENGLISH,
+        shopAddressEnglish: String = ReceiptFormatter.SHOP_CITY_ENGLISH,
+        shopPhone: String = ""
+    ): Result<Unit> {
+        val nameLine = shopNameEnglish.ifBlank { ReceiptFormatter.SHOP_NAME_ENGLISH }.uppercase(Locale.US).take(32)
+        val addrLine = shopAddressEnglish.ifBlank { ReceiptFormatter.SHOP_CITY_ENGLISH }.take(32)
+        val phoneLine = if (shopPhone.isNotBlank()) "Tel: $shopPhone\n" else ""
+        val testText = (
+            "================================\n" +
+                "$nameLine\n" +
+                "$addrLine\n" +
+                phoneLine +
+                "================================\n" +
+                "58mm ESC/POS Thermal Test\n" +
+                "Status: CONNECTED & READY\n" +
+                "================================\n\n\n\n"
+            ).toByteArray(Charsets.UTF_8)
+        return printBytes(
+            deviceAddress,
+            byteArrayOf(0x1B, 0x40, 0x1B, 0x61, 0x01) + testText + byteArrayOf(0x1D, 0x56, 0x41, 0x03)
+        )
     }
 }

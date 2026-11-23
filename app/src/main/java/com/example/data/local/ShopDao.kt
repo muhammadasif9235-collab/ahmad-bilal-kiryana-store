@@ -47,6 +47,9 @@ interface ShopDao {
     @Query("SELECT * FROM customers")
     suspend fun getAllCustomersOnce(): List<CustomerEntity>
 
+    @Query("SELECT * FROM customers WHERE id = :id LIMIT 1")
+    suspend fun getCustomerById(id: String): CustomerEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertCustomer(entity: CustomerEntity)
 
@@ -56,12 +59,18 @@ interface ShopDao {
     @Query("UPDATE customers SET balance = :balance, updatedAtMs = :updatedAtMs WHERE id = :id")
     suspend fun updateCustomerBalance(id: String, balance: Double, updatedAtMs: Long)
 
+    @Query("DELETE FROM customers WHERE id = :id")
+    suspend fun deleteCustomerById(id: String)
+
     // --- ORDERS ---
     @Query("SELECT * FROM orders ORDER BY createdAtMs DESC")
     fun observeOrders(): Flow<List<OrderEntity>>
 
     @Query("SELECT * FROM orders")
     suspend fun getAllOrdersOnce(): List<OrderEntity>
+
+    @Query("SELECT * FROM orders WHERE id = :id LIMIT 1")
+    suspend fun getOrderById(id: String): OrderEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertOrder(entity: OrderEntity)
@@ -75,6 +84,9 @@ interface ShopDao {
     @Query("UPDATE orders SET status = :status, updatedAtMs = :updatedAtMs WHERE id = :id")
     suspend fun updateOrderStatus(id: String, status: String, updatedAtMs: Long)
 
+    @Query("DELETE FROM orders WHERE id = :id")
+    suspend fun deleteOrderById(id: String)
+
     // --- LEDGER ENTRIES ---
     @Query("SELECT * FROM ledger_entries ORDER BY createdAtMs DESC")
     fun observeLedgerEntries(): Flow<List<LedgerEntryEntity>>
@@ -82,11 +94,20 @@ interface ShopDao {
     @Query("SELECT * FROM ledger_entries")
     suspend fun getAllLedgerEntriesOnce(): List<LedgerEntryEntity>
 
+    @Query("SELECT * FROM ledger_entries WHERE customerId = :customerId ORDER BY createdAtMs ASC")
+    suspend fun getLedgerEntriesByCustomerOnce(customerId: String): List<LedgerEntryEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLedgerEntry(entity: LedgerEntryEntity)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertLedgerEntries(entities: List<LedgerEntryEntity>)
+
+    @Query("DELETE FROM ledger_entries WHERE id = :id")
+    suspend fun deleteLedgerEntryById(id: String)
+
+    @Query("DELETE FROM ledger_entries WHERE customerId = :customerId")
+    suspend fun deleteLedgerEntriesByCustomerId(customerId: String)
 
     // --- STOCK MOVEMENTS ---
     @Query("SELECT * FROM stock_movements ORDER BY createdAtMs DESC")
@@ -148,4 +169,72 @@ interface ShopDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertRationCardBills(entities: List<RationCardBillEntity>)
+
+    @Query("DELETE FROM ration_card_bills WHERE id = :id")
+    suspend fun deleteRationCardBillById(id: String)
+
+    // --- DAILY CASH IN / OUT LEDGER ---
+    @Query("SELECT * FROM daily_cash_entries ORDER BY entryDateMs DESC, createdAtMs DESC")
+    fun observeDailyCashEntries(): Flow<List<DailyCashEntryEntity>>
+
+    @Query("SELECT * FROM daily_cash_entries")
+    suspend fun getAllDailyCashEntriesOnce(): List<DailyCashEntryEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertDailyCashEntry(entity: DailyCashEntryEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertDailyCashEntries(entities: List<DailyCashEntryEntity>)
+
+    @Query("DELETE FROM daily_cash_entries WHERE id = :id")
+    suspend fun deleteDailyCashEntryById(id: String)
+
+    // --- WHOLESALERS / SUPPLIERS LEDGER ---
+    @Query("SELECT * FROM wholesalers ORDER BY payableBalance DESC, name ASC")
+    fun observeWholesalers(): Flow<List<WholesalerEntity>>
+
+    @Query("SELECT * FROM wholesalers")
+    suspend fun getAllWholesalersOnce(): List<WholesalerEntity>
+
+    @Query("SELECT * FROM wholesalers WHERE id = :id LIMIT 1")
+    suspend fun getWholesalerById(id: String): WholesalerEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertWholesaler(entity: WholesalerEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertWholesalers(entities: List<WholesalerEntity>)
+
+    @Query("UPDATE wholesalers SET totalPurchased = :totalPurchased, totalPaid = :totalPaid, payableBalance = :payableBalance, updatedAtMs = :updatedAtMs WHERE id = :id")
+    suspend fun updateWholesalerTotals(
+        id: String,
+        totalPurchased: Double,
+        totalPaid: Double,
+        payableBalance: Double,
+        updatedAtMs: Long
+    )
+
+    @Query("DELETE FROM wholesalers WHERE id = :id")
+    suspend fun deleteWholesalerById(id: String)
+
+    @Query("SELECT * FROM wholesaler_ledger_entries ORDER BY entryDateMs DESC, createdAtMs DESC")
+    fun observeWholesalerEntries(): Flow<List<WholesalerLedgerEntryEntity>>
+
+    @Query("SELECT * FROM wholesaler_ledger_entries")
+    suspend fun getAllWholesalerEntriesOnce(): List<WholesalerLedgerEntryEntity>
+
+    @Query("SELECT * FROM wholesaler_ledger_entries WHERE wholesalerId = :wholesalerId ORDER BY entryDateMs ASC, createdAtMs ASC")
+    suspend fun getWholesalerEntriesByWholesalerOnce(wholesalerId: String): List<WholesalerLedgerEntryEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertWholesalerEntry(entity: WholesalerLedgerEntryEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertWholesalerEntries(entities: List<WholesalerLedgerEntryEntity>)
+
+    @Query("DELETE FROM wholesaler_ledger_entries WHERE id = :id")
+    suspend fun deleteWholesalerEntryById(id: String)
+
+    @Query("DELETE FROM wholesaler_ledger_entries WHERE wholesalerId = :wholesalerId")
+    suspend fun deleteWholesalerEntriesByWholesalerId(wholesalerId: String)
 }
