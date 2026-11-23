@@ -93,38 +93,68 @@ class ShopRepository(
 
     // --- AUTO-SEED INITIAL CATALOGS ON FIRST LAUNCH ---
 
-    suspend fun seedGujratCatalogIfEmpty(): Result<Int> {
+        suspend fun seedGujratCatalogIfEmpty(): Result<Int> {
         return try {
-            if (dao.countProducts() > 0) return Result.success(0)
             val now = System.currentTimeMillis()
-            val entities = GujratCatalogData.initialProducts.map { seed ->
-                ProductEntity(
-                    id = seed.docId,
-                    nameUrdu = seed.nameUrdu,
-                    nameEnglish = seed.nameEnglish,
-                    category = seed.category.name,
-                    unit = seed.unit,
-                    costPrice = seed.costPrice,
-                    sellingPrice = seed.sellingPrice,
-                    marginPercent = seed.marginPercent,
-                    autoPriceEnabled = true,
-                    stockQty = seed.stockQty,
-                    lowStockThreshold = seed.lowStockThreshold,
-                    barcode = seed.barcode,
-                    createdAtMs = now,
+            val existing = dao.getAllProductsOnce()
+            val existingIds = existing.map { it.id }.toSet()
+
+            // Remove old loose milk item if present
+            if ("prod_fresh_milk" in existingIds) {
+                dao.deleteProductById("prod_fresh_milk")
+            }
+
+            // Reset pre-seeded demo stock on legacy items that have no manual stock movements
+            val movedProductIds = dao.getAllStockMovementsOnce().map { it.productId }.toSet()
+            val legacyPreseededToZero = existing.filter { prod ->
+                prod.id.startsWith("prod_") &&
+                    prod.id != "prod_fresh_milk" &&
+                    prod.id !in movedProductIds &&
+                    prod.stockQty > 0.0
+            }.map { prod ->
+                prod.copy(
+                    stockQty = 0.0,
+                    costPrice = 0.0,
+                    sellingPrice = 0.0,
                     updatedAtMs = now
                 )
             }
-            dao.upsertProducts(entities)
-            Result.success(entities.size)
+            if (legacyPreseededToZero.isNotEmpty()) {
+                dao.upsertProducts(legacyPreseededToZero)
+            }
+
+            // Add all new Kiryana items (with 0 stock and 0 price) without duplicating existing ones
+            val missingSeeds = GujratCatalogData.initialProducts.filter { it.docId !in existingIds }
+            if (missingSeeds.isNotEmpty()) {
+                val entities = missingSeeds.map { seed ->
+                    ProductEntity(
+                        id = seed.docId,
+                        nameUrdu = seed.nameUrdu,
+                        nameEnglish = seed.nameEnglish,
+                        category = seed.category.name,
+                        unit = seed.unit,
+                        costPrice = 0.0,
+                        sellingPrice = 0.0,
+                        marginPercent = seed.marginPercent,
+                        autoPriceEnabled = true,
+                        stockQty = 0.0,
+                        lowStockThreshold = seed.lowStockThreshold,
+                        barcode = seed.barcode,
+                        createdAtMs = now,
+                        updatedAtMs = now
+                    )
+                }
+                dao.upsertProducts(entities)
+            }
+            Result.success(missingSeeds.size)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to seed Gujrat catalog", e)
+            Log.e(TAG, "Failed to sync Kiryana catalog", e)
             Result.failure(e)
         }
-    }
-
+        }
+        
     suspend fun seedMaryamRationItemsIfEmpty(): Result<Int> {
         return try {
             if (dao.countRationCardItems() > 0) return Result.success(0)
