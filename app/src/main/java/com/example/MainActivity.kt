@@ -744,30 +744,7 @@ private fun MainShopShell(
                                 onOpenLowStockReport = { showLowStockReportDialog = true }
                             )
 
-                            ShopDestination.KHATA -> KhataScreen(
-                                language = language,
-                                customers = customers,
-                                ledgerEntries = ledgerEntries,
-                                orders = orders,
-                                onAddCustomer = { name, phone, addr, opening ->
-                                    viewModel.addCustomer(name, phone, addr, opening)
-                                },
-                                onRecordTransaction = { cust, type, amt, note ->
-                                    viewModel.recordCustomerTransaction(cust, type, amt, note)
-                                },
-                                onOpenEntryReceipt = { entry ->
-                                    viewModel.openPaymentReceipt(entry)
-                                },
-                                onEditOrder = { order ->
-                                    editingOrder = order
-                                },
-                                onUpdateTransaction = { entry, newType, newAmt, newNote ->
-                                    viewModel.updateCustomerTransaction(entry, newType, newAmt, newNote)
-                                },
-                                onDeleteTransaction = { entry ->
-                                    viewModel.deleteCustomerTransaction(entry)
-                                }
-                            )
+                            
 
                             ShopDestination.ROZNAMCHA -> DailyRoznamchaScreen(
                                 language = language,
@@ -789,7 +766,35 @@ private fun MainShopShell(
                                     viewModel.deleteDailyCashEntry(id)
                                 }
                             )
-
+ 
+                            ShopDestination.KHATA -> KhataScreen(
+    language = language,
+    customers = customers,
+    ledgerEntries = ledgerEntries,
+    orders = orders,
+    onAddCustomer = { name, phone, addr, opening ->
+        viewModel.addCustomer(name, phone, addr, opening)
+    },
+    onRecordTransaction = { cust, type, amt, note ->
+        viewModel.recordCustomerTransaction(cust, type, amt, note)
+    },
+    onOpenEntryReceipt = { entry ->
+        viewModel.openPaymentReceipt(entry)
+    },
+    onEditOrder = { order ->
+        editingOrder = order
+    },
+    onUpdateTransaction = { entry, newType, newAmt, newNote ->
+        viewModel.updateCustomerTransaction(entry, newType, newAmt, newNote)
+    },
+    onDeleteTransaction = { entry ->
+        viewModel.deleteCustomerTransaction(entry)
+    },
+    onDeleteCustomer = { customerId ->
+        viewModel.deleteCustomer(customerId)
+    }
+)
+                            
                             ShopDestination.CUSTOMER_ORDER -> CustomerOrderScreen(
                                 language = language,
                                 settings = settings,
