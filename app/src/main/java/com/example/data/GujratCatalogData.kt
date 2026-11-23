@@ -13,89 +13,113 @@ data class GujratSeedProduct(
     val marginPercent: Double,
     val stockQty: Double,
     val lowStockThreshold: Double,
-    val barcode: String
+    val barcode: String,
+    val marketReferenceCost: Double = 0.0
 )
 
 /**
- * Realistic District Gujrat, Punjab (Pakistan) retail & mandi Kiryana rates in PKR.
+ * Comprehensive Pakistani Kiryana Catalog.
+ * Starts with 0 stock and 0 price until the shopkeeper manually enters stock/rates
+ * or syncs location-based market rates.
  */
 object GujratCatalogData {
 
-    val initialProducts: List<GujratSeedProduct> = listOf(
-        // Flour & Rice (آٹا اور چاول)
-        GujratSeedProduct("prod_atta_10kg", "گندم کا آٹا (10 کلو تھیلا)", "Wheat Flour 10kg Bag", ProductCategory.FLOUR_RICE, "bag", 1390.0, 1460.0, 5.0, 25.0, 6.0, "8961001000004"),
-        GujratSeedProduct("prod_atta_20kg", "گندم کا آٹا (20 کلو تھیلا)", "Wheat Flour 20kg Bag", ProductCategory.FLOUR_RICE, "bag", 2780.0, 2920.0, 5.0, 20.0, 5.0, "8961001000011"),
-        GujratSeedProduct("prod_atta_1kg", "کھلا چکی آٹا", "Chakki Atta (Loose)", ProductCategory.FLOUR_RICE, "kg", 138.0, 148.0, 7.2, 85.0, 15.0, "8961001000028"),
-        GujratSeedProduct("prod_maida", "میدہ فائن", "Fine Maida Flour", ProductCategory.FLOUR_RICE, "kg", 155.0, 170.0, 9.7, 30.0, 8.0, "8961001000035"),
-        GujratSeedProduct("prod_suji", "سوجی صاف", "Semolina (Suji)", ProductCategory.FLOUR_RICE, "kg", 165.0, 185.0, 12.1, 25.0, 5.0, "8961001000042"),
-        GujratSeedProduct("prod_basmati_super", "سپر کرنل باسمتی چاول", "Super Kernel Basmati Rice", ProductCategory.FLOUR_RICE, "kg", 350.0, 385.0, 10.0, 60.0, 12.0, "8961001000059"),
-        GujratSeedProduct("prod_basmati_tota", "ٹوٹا باسمتی چاول", "Broken Basmati Rice", ProductCategory.FLOUR_RICE, "kg", 220.0, 245.0, 11.4, 45.0, 10.0, "8961001000066"),
-        GujratSeedProduct("prod_sella_rice", "سیلا باسمتی چاول", "Sella Basmati Rice", ProductCategory.FLOUR_RICE, "kg", 335.0, 370.0, 10.4, 40.0, 10.0, "8961001000073"),
-
-        // Ghee & Cooking Oil (گھی اور کوکنگ آئل)
-        GujratSeedProduct("prod_dalda_ghee", "ڈالڈا بناسپتی گھی (1 کلو)", "Dalda Banaspati Ghee 1kg", ProductCategory.GHEE_OIL, "pack", 565.0, 595.0, 5.3, 32.0, 8.0, "8961002000018"),
-        GujratSeedProduct("prod_sufi_oil", "صوفی کوکنگ آئل (1 لیٹر)", "Sufi Cooking Oil 1L", ProductCategory.GHEE_OIL, "liter", 580.0, 610.0, 5.2, 28.0, 8.0, "8961002000025"),
-        GujratSeedProduct("prod_meezan_5l", "میزان کوکنگ آئل (5 لیٹر ٹن)", "Meezan Oil 5L Tin", ProductCategory.GHEE_OIL, "tin", 2920.0, 3060.0, 4.8, 12.0, 3.0, "8961002000032"),
-        GujratSeedProduct("prod_kashmir_ghee", "کشمیر بناسپتی گھی (1 کلو)", "Kashmir Banaspati Ghee 1kg", ProductCategory.GHEE_OIL, "pack", 550.0, 580.0, 5.5, 24.0, 6.0, "8961002000049"),
-        GujratSeedProduct("prod_mustard_oil", "سرسوں کا خالص تیل", "Pure Mustard Oil", ProductCategory.GHEE_OIL, "liter", 520.0, 560.0, 7.7, 15.0, 4.0, "8961002000056"),
-
-        // Sugar & Pulses (چینی اور دالیں)
-        GujratSeedProduct("prod_sugar", "چینی سفید", "White Sugar", ProductCategory.SUGAR_PULSES, "kg", 142.0, 152.0, 7.0, 100.0, 20.0, "8961003000015"),
-        GujratSeedProduct("prod_gur", "دیسی گڑ گجرات", "Desi Gur (Jaggery)", ProductCategory.SUGAR_PULSES, "kg", 210.0, 235.0, 11.9, 25.0, 5.0, "8961003000022"),
-        GujratSeedProduct("prod_daal_chana", "دال چنا", "Daal Chana (Gram Pulse)", ProductCategory.SUGAR_PULSES, "kg", 315.0, 345.0, 9.5, 35.0, 8.0, "8961003000039"),
-        GujratSeedProduct("prod_daal_masoor", "دال مسور لال", "Daal Masoor (Red Lentil)", ProductCategory.SUGAR_PULSES, "kg", 275.0, 305.0, 10.9, 30.0, 8.0, "8961003000046"),
-        GujratSeedProduct("prod_daal_moong", "دال مونگ دھلی", "Daal Moong Washed", ProductCategory.SUGAR_PULSES, "kg", 345.0, 375.0, 8.7, 28.0, 6.0, "8961003000053"),
-        GujratSeedProduct("prod_daal_mash", "دال ماش دھلی", "Daal Mash Washed", ProductCategory.SUGAR_PULSES, "kg", 495.0, 535.0, 8.1, 22.0, 5.0, "8961003000060"),
-        GujratSeedProduct("prod_white_chana", "سفید چنا قابلی", "White Chickpeas", ProductCategory.SUGAR_PULSES, "kg", 365.0, 400.0, 9.6, 26.0, 6.0, "8961003000077"),
-        GujratSeedProduct("prod_besan", "خالص بیسن", "Gram Flour (Besan)", ProductCategory.SUGAR_PULSES, "kg", 335.0, 365.0, 9.0, 30.0, 6.0, "8961003000084"),
-
-        // Tea & Dairy (چائے اور دودھ)
-        GujratSeedProduct("prod_tapal_tea", "ٹپال دانے دار چائے (190 گرام)", "Tapal Danedar Tea 190g", ProductCategory.TEA_DAIRY, "pack", 390.0, 420.0, 7.7, 30.0, 6.0, "8961004000012"),
-        GujratSeedProduct("prod_lipton_tea", "لپٹن یلو لیبل (190 گرام)", "Lipton Yellow Label 190g", ProductCategory.TEA_DAIRY, "pack", 400.0, 430.0, 7.5, 24.0, 6.0, "8961004000029"),
-        GujratSeedProduct("prod_olpers_milk", "اولپرز دودھ (1 لیٹر)", "Olper's Milk 1L", ProductCategory.TEA_DAIRY, "pack", 310.0, 330.0, 6.5, 36.0, 10.0, "8961004000036"),
-        GujratSeedProduct("prod_fresh_milk", "تازہ کھلا دودھ", "Fresh Loose Milk", ProductCategory.TEA_DAIRY, "liter", 210.0, 230.0, 9.5, 25.0, 5.0, "8961004000043"),
-        GujratSeedProduct("prod_eggs", "فارمی انڈے (درجن)", "Farm Eggs (Dozen)", ProductCategory.TEA_DAIRY, "dozen", 250.0, 275.0, 10.0, 18.0, 5.0, "8961004000050"),
-        GujratSeedProduct("prod_everyday", "نیسلے ایوری ڈے (85 گرام)", "Nestle Everyday 85g", ProductCategory.TEA_DAIRY, "pack", 195.0, 215.0, 10.3, 25.0, 6.0, "8961004000067"),
-
-        // Spices (مصالحہ جات)
-        GujratSeedProduct("prod_salt", "نیشنل آیوڈین نمک (800 گرام)", "National Iodized Salt 800g", ProductCategory.SPICES, "pack", 65.0, 80.0, 23.1, 40.0, 10.0, "8961005000019"),
-        GujratSeedProduct("prod_red_chilli", "لال مرچ پاؤڈر (200 گرام)", "Red Chilli Powder 200g", ProductCategory.SPICES, "pack", 240.0, 275.0, 14.6, 20.0, 5.0, "8961005000026"),
-        GujratSeedProduct("prod_turmeric", "ہلدی پاؤڈر (100 گرام)", "Turmeric Powder 100g", ProductCategory.SPICES, "pack", 120.0, 145.0, 20.8, 22.0, 5.0, "8961005000033"),
-        GujratSeedProduct("prod_shan_biryani", "شان بریانی مصالحہ", "Shan Biryani Masala", ProductCategory.SPICES, "pack", 125.0, 140.0, 12.0, 35.0, 8.0, "8961005000040"),
-        GujratSeedProduct("prod_black_pepper", "کالی مرچ ثابت (100 گرام)", "Whole Black Pepper 100g", ProductCategory.SPICES, "pack", 260.0, 300.0, 15.4, 15.0, 4.0, "8961005000057"),
-
-        // Soap & Cleaning (صابن اور صفائی)
-        GujratSeedProduct("prod_surf_excel", "سرف ایکسل (500 گرام)", "Surf Excel 500g", ProductCategory.SOAP_CLEANING, "pack", 290.0, 320.0, 10.3, 28.0, 6.0, "8961006000016"),
-        GujratSeedProduct("prod_lifebuoy", "لائف بوائے صابن", "Lifebuoy Soap Bar", ProductCategory.SOAP_CLEANING, "piece", 115.0, 130.0, 13.0, 40.0, 10.0, "8961006000023"),
-        GujratSeedProduct("prod_lux", "لکس صابن", "Lux Beauty Soap", ProductCategory.SOAP_CLEANING, "piece", 135.0, 150.0, 11.1, 35.0, 8.0, "8961006000030"),
-        GujratSeedProduct("prod_lemon_max", "لیمن میکس برتن صابن", "Lemon Max Dishwash Bar", ProductCategory.SOAP_CLEANING, "piece", 65.0, 80.0, 23.1, 45.0, 10.0, "8961006000047"),
-        GujratSeedProduct("prod_colgate", "کولگیٹ ٹوتھ پیسٹ", "Colgate Toothpaste 75g", ProductCategory.SOAP_CLEANING, "piece", 185.0, 210.0, 13.5, 20.0, 5.0, "8961006000054"),
-
-        // Drinks & Snacks (مشروبات و بسکٹ)
-        GujratSeedProduct("prod_rooh_afza", "روح افزا (800 ملی لیٹر)", "Rooh Afza 800ml", ProductCategory.DRINKS_SNACKS, "bottle", 490.0, 530.0, 8.2, 16.0, 4.0, "8961007000013"),
-        GujratSeedProduct("prod_pepsi_15l", "پیپسی (1.5 لیٹر)", "Pepsi 1.5L Bottle", ProductCategory.DRINKS_SNACKS, "bottle", 190.0, 210.0, 10.5, 24.0, 6.0, "8961007000020"),
-        GujratSeedProduct("prod_sooper", "پیک فریز سوپر بسکٹ", "Peek Freans Sooper Pack", ProductCategory.DRINKS_SNACKS, "pack", 32.0, 40.0, 25.0, 50.0, 12.0, "8961007000037"),
-        GujratSeedProduct("prod_knorr", "کنور نوڈلز چٹ پٹا", "Knorr Chatt Patta Noodles", ProductCategory.DRINKS_SNACKS, "pack", 52.0, 60.0, 15.4, 40.0, 10.0, "8961007000044")
+    private fun item(
+        id: String,
+        ur: String,
+        en: String,
+        cat: ProductCategory,
+        unit: String,
+        refCost: Double,
+        margin: Double,
+        lowStock: Double,
+        barcode: String
+    ) = GujratSeedProduct(
+        docId = id,
+        nameUrdu = ur,
+        nameEnglish = en,
+        category = cat,
+        unit = unit,
+        costPrice = 0.0,
+        sellingPrice = 0.0,
+        marginPercent = margin,
+        stockQty = 0.0,
+        lowStockThreshold = lowStock,
+        barcode = barcode,
+        marketReferenceCost = refCost
     )
 
-    /**
-     * Calculates selling price rounded cleanly to nearest 5 PKR for Pakistani Kiryana pricing.
-     */
-    fun calculateAutoSellingPrice(costPrice: Double, marginPercent: Double): Double {
-        if (costPrice <= 0.0) return 0.0
-        val raw = costPrice * (1.0 + marginPercent / 100.0)
-        return ((raw / 5.0).roundToInt() * 5.0).coerceAtLeast(costPrice)
-    }
+    val initialProducts: List<GujratSeedProduct> = listOf(
+        // 1. Flour & Rice (آٹا اور چاول)
+        item("prod_atta_10kg", "گندم کا آٹا (10 کلو تھیلا)", "Wheat Flour 10kg Bag", ProductCategory.FLOUR_RICE, "bag", 1390.0, 5.0, 5.0, "8961001000004"),
+        item("prod_atta_20kg", "گندم کا آٹا (20 کلو تھیلا)", "Wheat Flour 20kg Bag", ProductCategory.FLOUR_RICE, "bag", 2780.0, 5.0, 4.0, "8961001000011"),
+        item("prod_atta_1kg", "کھلا چکی آٹا", "Chakki Atta (Loose)", ProductCategory.FLOUR_RICE, "kg", 138.0, 7.0, 10.0, "8961001000028"),
+        item("prod_fine_atta", "فائن آٹا سفید", "Super Fine White Atta", ProductCategory.FLOUR_RICE, "kg", 150.0, 8.0, 10.0, "8961001000080"),
+        item("prod_maida", "میدہ فائن", "Fine Maida Flour", ProductCategory.FLOUR_RICE, "kg", 155.0, 9.0, 5.0, "8961001000035"),
+        item("prod_suji", "سوجی صاف", "Semolina (Suji)", ProductCategory.FLOUR_RICE, "kg", 165.0, 10.0, 5.0, "8961001000042"),
+        item("prod_basmati_super", "سپر کرنل باسمتی چاول", "Super Kernel Basmati Rice", ProductCategory.FLOUR_RICE, "kg", 350.0, 10.0, 10.0, "8961001000059"),
+        item("prod_kainat_rice", "کائنات اسٹیم باسمتی چاول", "Kainat Steam Basmati Rice", ProductCategory.FLOUR_RICE, "kg", 365.0, 10.0, 10.0, "8961001000097"),
+        item("prod_sella_rice", "سیلا باسمتی چاول", "Sella Basmati Rice", ProductCategory.FLOUR_RICE, "kg", 335.0, 10.0, 10.0, "8961001000073"),
+        item("prod_basmati_tota", "ٹوٹا باسمتی چاول", "Broken Basmati Rice", ProductCategory.FLOUR_RICE, "kg", 220.0, 10.0, 10.0, "8961001000066"),
 
-    /**
-     * Gujrat Mandi Reference Cost Rates lookup by barcode or docId for automatic rate sync.
-     */
-    fun gujratMarketCostLookup(product: Product): Double {
-        val matched = initialProducts.firstOrNull {
-            (product.barcode.isNotBlank() && it.barcode == product.barcode) ||
-                it.docId == product.id ||
-                it.nameUrdu == product.nameUrdu
-        }
-        return matched?.costPrice ?: product.costPrice
-    }
-}
+        // 2. Sugar & All Pulses (چینی، گڑ اور ہر قسم کی دالیں)
+        item("prod_sugar", "چینی سفید", "White Sugar", ProductCategory.SUGAR_PULSES, "kg", 142.0, 7.0, 15.0, "8961003000015"),
+        item("prod_gur", "دیسی گڑ", "Desi Gur (Jaggery)", ProductCategory.SUGAR_PULSES, "kg", 210.0, 10.0, 5.0, "8961003000022"),
+        item("prod_shakkar", "دیسی شکر", "Desi Shakkar (Brown Sugar)", ProductCategory.SUGAR_PULSES, "kg", 220.0, 10.0, 5.0, "8961003000091"),
+        item("prod_daal_chana", "دال چنا", "Daal Chana (Split Chickpeas)", ProductCategory.SUGAR_PULSES, "kg", 315.0, 9.0, 6.0, "8961003000039"),
+        item("prod_daal_masoor_washed", "دال مسور دھلی (لال)", "Daal Masoor Washed (Red)", ProductCategory.SUGAR_PULSES, "kg", 275.0, 10.0, 6.0, "8961003000046"),
+        item("prod_daal_masoor_whole", "ثابت مسور (کالی مسور)", "Whole Masoor (Black Lentil)", ProductCategory.SUGAR_PULSES, "kg", 270.0, 10.0, 5.0, "8961003000107"),
+        item("prod_daal_moong_washed", "دال مونگ دھلی", "Daal Moong Washed (Yellow)", ProductCategory.SUGAR_PULSES, "kg", 345.0, 9.0, 6.0, "8961003000053"),
+        item("prod_daal_moong_chilka", "دال مونگ چھلکا", "Daal Moong Chilka (Green Split)", ProductCategory.SUGAR_PULSES, "kg", 330.0, 9.0, 5.0, "8961003000114"),
+        item("prod_daal_mash_washed", "دال ماش دھلی", "Daal Mash Washed (White)", ProductCategory.SUGAR_PULSES, "kg", 495.0, 8.0, 5.0, "8961003000060"),
+        item("prod_daal_mash_chilka", "دال ماش چھلکا (کالی)", "Daal Mash Chilka (Black Split)", ProductCategory.SUGAR_PULSES, "kg", 465.0, 8.0, 5.0, "8961003000121"),
+        item("prod_daal_arhar", "دال ارہر (تور دال)", "Daal Arhar (Toor Dal)", ProductCategory.SUGAR_PULSES, "kg", 420.0, 9.0, 4.0, "8961003000138"),
+        item("prod_white_chana", "سفید چنا کابلی", "White Chickpeas (Kabuli)", ProductCategory.SUGAR_PULSES, "kg", 365.0, 9.0, 5.0, "8961003000077"),
+        item("prod_black_chana", "کالا چنا دیسی", "Black Chickpeas (Kala Chana)", ProductCategory.SUGAR_PULSES, "kg", 295.0, 9.0, 5.0, "8961003000145"),
+        item("prod_red_lobia", "لال لوبیا", "Red Kidney Beans (Lal Lobia)", ProductCategory.SUGAR_PULSES, "kg", 390.0, 9.0, 5.0, "8961003000152"),
+        item("prod_white_lobia", "سفید لوبیا", "White Kidney Beans (Safaid Lobia)", ProductCategory.SUGAR_PULSES, "kg", 370.0, 9.0, 4.0, "8961003000169"),
+        item("prod_besan", "خالص بیسن", "Pure Gram Flour (Besan)", ProductCategory.SUGAR_PULSES, "kg", 335.0, 9.0, 5.0, "8961003000084"),
+
+        // 3. Ghee & Cooking Oil Brands (صوفی، میزان، حبیب، کشمیر، ڈالڈا اور لوکل گھی)
+        item("prod_sufi_ghee_1kg", "صوفی بناسپتی گھی (1 کلو)", "Sufi Banaspati Ghee 1kg", ProductCategory.GHEE_OIL, "pack", 565.0, 5.0, 6.0, "8961002000063"),
+        item("prod_sufi_oil_1l", "صوفی کوکنگ آئل (1 لیٹر)", "Sufi Cooking Oil 1L", ProductCategory.GHEE_OIL, "liter", 580.0, 5.0, 6.0, "8961002000025"),
+        item("prod_sufi_oil_5l", "صوفی کوکنگ آئل (5 لیٹر)", "Sufi Cooking Oil 5L", ProductCategory.GHEE_OIL, "tin", 2900.0, 5.0, 2.0, "8961002000070"),
+        item("prod_meezan_ghee_1kg", "میزان بناسپتی گھی (1 کلو)", "Meezan Banaspati Ghee 1kg", ProductCategory.GHEE_OIL, "pack", 560.0, 5.0, 6.0, "8961002000087"),
+        item("prod_meezan_oil_1l", "میزان کوکنگ آئل (1 لیٹر)", "Meezan Cooking Oil 1L", ProductCategory.GHEE_OIL, "liter", 575.0, 5.0, 6.0, "8961002000094"),
+        item("prod_meezan_5l", "میزان کوکنگ آئل (5 لیٹر ٹن)", "Meezan Oil 5L Tin", ProductCategory.GHEE_OIL, "tin", 2920.0, 5.0, 2.0, "8961002000032"),
+        item("prod_habib_ghee_1kg", "حبیب بناسپتی گھی (1 کلو)", "Habib Banaspati Ghee 1kg", ProductCategory.GHEE_OIL, "pack", 565.0, 5.0, 5.0, "8961002000100"),
+        item("prod_habib_oil_1l", "حبیب کوکنگ آئل (1 لیٹر)", "Habib Cooking Oil 1L", ProductCategory.GHEE_OIL, "liter", 580.0, 5.0, 5.0, "8961002000117"),
+        item("prod_dalda_ghee", "ڈالڈا بناسپتی گھی (1 کلو)", "Dalda Banaspati Ghee 1kg", ProductCategory.GHEE_OIL, "pack", 565.0, 5.0, 6.0, "8961002000018"),
+        item("prod_dalda_oil_1l", "ڈالڈا کوکنگ آئل (1 لیٹر)", "Dalda Cooking Oil 1L", ProductCategory.GHEE_OIL, "liter", 585.0, 5.0, 5.0, "8961002000124"),
+        item("prod_kashmir_ghee", "کشمیر بناسپتی گھی (1 کلو)", "Kashmir Banaspati Ghee 1kg", ProductCategory.GHEE_OIL, "pack", 550.0, 5.0, 6.0, "8961002000049"),
+        item("prod_kashmir_oil_1l", "کشمیر کوکنگ آئل (1 لیٹر)", "Kashmir Cooking Oil 1L", ProductCategory.GHEE_OIL, "liter", 565.0, 5.0, 5.0, "8961002000131"),
+        item("prod_eva_oil_1l", "ایوا کوکنگ آئل (1 لیٹر)", "Eva Cooking Oil 1L", ProductCategory.GHEE_OIL, "liter", 575.0, 5.0, 4.0, "8961002000148"),
+        item("prod_local_ghee_1kg", "لوکل بناسپتی گھی (1 کلو)", "Local Banaspati Ghee 1kg", ProductCategory.GHEE_OIL, "pack", 510.0, 6.0, 6.0, "8961002000155"),
+        item("prod_mustard_oil", "سرسوں کا خالص تیل", "Pure Mustard Oil", ProductCategory.GHEE_OIL, "liter", 520.0, 7.0, 4.0, "8961002000056"),
+
+        // 4. Tea Brands & Sizes (پتی: لپٹن، سپریم، ٹپال، وائٹل — پاؤ، آدھا کلو، کلو)
+        item("prod_lipton_250", "لپٹن یلو لیبل پتی (پاؤ / 250 گرام)", "Lipton Yellow Label Tea 250g", ProductCategory.TEA_DAIRY, "pack", 430.0, 7.0, 5.0, "8961004000029"),
+        item("prod_lipton_500", "لپٹن یلو لیبل پتی (آدھا کلو / 500 گرام)", "Lipton Yellow Label Tea 500g", ProductCategory.TEA_DAIRY, "pack", 850.0, 7.0, 4.0, "8961004000074"),
+        item("prod_lipton_1kg", "لپٹن یلو لیبل پتی (1 کلو)", "Lipton Yellow Label Tea 1kg", ProductCategory.TEA_DAIRY, "pack", 1680.0, 6.0, 3.0, "8961004000081"),
+        item("prod_lipton_sachet", "لپٹن یلو لیبل ساشے (چھوٹا پیک)", "Lipton Yellow Label Sachet", ProductCategory.TEA_DAIRY, "pack", 45.0, 11.0, 15.0, "8961004000098"),
+        item("prod_supreme_250", "سپریم چائے پتی (پاؤ / 250 گرام)", "Brooke Bond Supreme Tea 250g", ProductCategory.TEA_DAIRY, "pack", 420.0, 7.0, 5.0, "8961004000104"),
+        item("prod_supreme_500", "سپریم چائے پتی (آدھا کلو / 500 گرام)", "Brooke Bond Supreme Tea 500g", ProductCategory.TEA_DAIRY, "pack", 830.0, 7.0, 4.0, "8961004000111"),
+        item("prod_supreme_1kg", "سپریم چائے پتی (1 کلو)", "Brooke Bond Supreme Tea 1kg", ProductCategory.TEA_DAIRY, "pack", 1640.0, 6.0, 3.0, "8961004000128"),
+        item("prod_tapal_250", "ٹپال دانے دار چائے (پاؤ / 250 گرام)", "Tapal Danedar Tea 250g", ProductCategory.TEA_DAIRY, "pack", 425.0, 7.0, 5.0, "8961004000012"),
+        item("prod_tapal_500", "ٹپال دانے دار چائے (آدھا کلو / 500 گرام)", "Tapal Danedar Tea 500g", ProductCategory.TEA_DAIRY, "pack", 840.0, 7.0, 4.0, "8961004000135"),
+        item("prod_tapal_1kg", "ٹپال دانے دار چائے (1 کلو)", "Tapal Danedar Tea 1kg", ProductCategory.TEA_DAIRY, "pack", 1660.0, 6.0, 3.0, "8961004000142"),
+        item("prod_vital_250", "وائٹل چائے پتی (پاؤ / 250 گرام)", "Vital Tea 250g", ProductCategory.TEA_DAIRY, "pack", 410.0, 7.0, 4.0, "8961004000159"),
+        item("prod_vital_500", "وائٹل چائے پتی (آدھا کلو / 500 گرام)", "Vital Tea 500g", ProductCategory.TEA_DAIRY, "pack", 810.0, 7.0, 3.0, "8961004000166"),
+
+        // 5. Packed Dairy, Bakery & Eggs (ڈبے والا دودھ، بیکری اور انڈے — کھلا دودھ ختم)
+        item("prod_olpers_milk", "اولپرز دودھ پیکٹ (1 لیٹر)", "Olper's UHT Milk 1L", ProductCategory.TEA_DAIRY, "pack", 310.0, 6.0, 6.0, "8961004000036"),
+        item("prod_olpers_250", "اولپرز دودھ چھوٹا پیک (250ml)", "Olper's UHT Milk 250ml", ProductCategory.TEA_DAIRY, "pack", 85.0, 10.0, 12.0, "8961004000173"),
+        item("prod_milkpak_1l", "نیسلے ملک پیک دودھ (1 لیٹر)", "Nestle MilkPak 1L", ProductCategory.TEA_DAIRY, "pack", 315.0, 6.0, 6.0, "8961004000180"),
+        item("prod_everyday_85", "نیسلے ایوری ڈے (85 گرام)", "Nestle Everyday 85g", ProductCategory.TEA_DAIRY, "pack", 195.0, 9.0, 6.0, "8961004000067"),
+        item("prod_everyday_sachet", "ایوری ڈے ساشے (چھوٹا پیک)", "Nestle Everyday Sachet", ProductCategory.TEA_DAIRY, "pack", 35.0, 12.0, 20.0, "8961004000197"),
+        item("prod_tarang_1l", "ترنگ چائے وائٹنر (1 لیٹر)", "Tarang Tea Whitener 1L", ProductCategory.TEA_DAIRY, "pack", 250.0, 7.0, 6.0, "8961004000203"),
+        item("prod_eggs", "فارمی انڈے (درجن)", "Farm Eggs (Dozen)", ProductCategory.TEA_DAIRY, "dozen", 260.0, 9.0, 4.0, "8961004000050"),
+        item("prod_reg_bread_lg", "رجسٹرڈ بڑی ڈبل روٹی (Registered Bread)", "Registered Large Bread", ProductCategory.TEA_DAIRY, "piece", 145.0, 10.0, 4.0, "8961004000227"),
+        item("prod_reg_bread_sm", "رجسٹرڈ چھوٹی ڈبل روٹی", "Registered Small Bread", ProductCategory.TEA_DAIRY, "piece", 80.0, 12.0, 4.0, "8961004000234"),
+        item("prod_bakery_bun", "میٹھا بن / برگر بن (Bun)", "Bakery Sweet / Burger Bun", ProductCategory.TEA_DAIRY, "piece", 32.0, 15.0, 6.0, "8961004000241"),
+        
