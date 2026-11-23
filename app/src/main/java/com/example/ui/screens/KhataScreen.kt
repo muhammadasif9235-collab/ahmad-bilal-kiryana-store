@@ -631,4 +631,215 @@ private fun CustomerLedgerDetailDialog(
                         }
                     }
                 }
-                
+                                // Bottom Delete Full Customer Khata Button
+                OutlinedButton(
+                    onClick = { confirmDeleteCustomer = true },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = UdharCrimson),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.DeleteForever, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.size(6.dp))
+                    Text(language.pick("اس کسٹمر کا پورا کھاتہ ڈیلیٹ کریں", "Delete Entire Customer Khata"))
+                }
+            }
+        }
+    }
+
+    if (confirmDeleteCustomer) {
+        AlertDialog(
+            onDismissRequest = { confirmDeleteCustomer = false },
+            title = { Text(language.pick("کھاتہ مستقل ڈیلیٹ کریں؟", "Delete Customer Khata?"), color = UdharCrimson) },
+            text = {
+                Text(
+                    language.pick(
+                        "کیا آپ واقعی «${customer.name}» کا پورا کھاتہ اور اس کا تمام لین دین مستقل طور پر ڈیلیٹ کرنا چاہتے ہیں؟",
+                        "Are you sure you want to permanently delete ${customer.name}'s entire Khata and all its entries?"
+                    )
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        confirmDeleteCustomer = false
+                        onDeleteCustomer()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = UdharCrimson)
+                ) {
+                    Text(language.pick("ہاں، ڈیلیٹ کریں", "Yes, Delete"))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDeleteCustomer = false }) {
+                    Text(language.pick("منسوخ", "Cancel"))
+                }
+            }
+        )
+    }
+
+    val entryToDelete = deletingEntryConfirm
+    if (entryToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { deletingEntryConfirm = null },
+            title = { Text(language.pick("انٹری ڈیلیٹ کریں؟", "Delete This Entry?"), color = UdharCrimson) },
+            text = {
+                Text(
+                    language.pick(
+                        "کیا آپ واقعی ${formatPkr(entryToDelete.amount, language)} کی یہ انٹری ڈیلیٹ کرنا چاہتے ہیں؟ کسٹمر کا بقایا بیلنس خودکار اپڈیٹ ہو جائے گا۔",
+                        "Delete this entry of ${formatPkr(entryToDelete.amount, language)}? Remaining balance will automatically recalculate."
+                    )
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onDeleteTransaction(entryToDelete)
+                        deletingEntryConfirm = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = UdharCrimson)
+                ) {
+                    Text(language.pick("ڈیلیٹ کریں", "Delete"))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deletingEntryConfirm = null }) {
+                    Text(language.pick("منسوخ", "Cancel"))
+                }
+            }
+        )
+    }
+
+    if (pendingEntryType != null) {
+        var amountStr by remember { mutableStateOf("") }
+        var note by remember { mutableStateOf("") }
+        val isCredit = pendingEntryType == LedgerEntryType.CREDIT
+        AlertDialog(
+            onDismissRequest = { pendingEntryType = null },
+            title = {
+                Text(
+                    if (isCredit) language.pick("نقد وصولی درج کریں", "Record Cash Payment")
+                    else language.pick("ادھار رقم درج کریں", "Record Udhar Debit")
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = amountStr,
+                        onValueChange = { amountStr = it.filter { c -> c.isDigit() || c == '.' } },
+                        label = { Text(language.pick("رقم (روپے)*", "Amount (PKR)*")) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = note,
+                        onValueChange = { note = it },
+                        label = { Text(language.pick("تفصیل (اختیاری)", "Note (optional)")) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val amt = amountStr.toDoubleOrNull() ?: 0.0
+                        if (amt > 0) {
+                            onRecordTransaction(pendingEntryType!!, amt, note)
+                            pendingEntryType = null
+                        }
+                    },
+                    enabled = (amountStr.toDoubleOrNull() ?: 0.0) > 0.0
+                ) {
+                    Text(language.pick("محفوظ کریں", "Save"))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingEntryType = null }) {
+                    Text(language.pick("منسوخ", "Cancel"))
+                }
+            }
+        )
+    }
+
+    val editTarget = editingLedgerEntry
+    if (editTarget != null) {
+        var editType by remember(editTarget.id) { mutableStateOf(editTarget.entryTypeEnum()) }
+        var editAmountStr by remember(editTarget.id) {
+            mutableStateOf(
+                if (editTarget.amount % 1.0 == 0.0) editTarget.amount.toLong().toString()
+                else editTarget.amount.toString()
+            )
+        }
+        var editNote by remember(editTarget.id) { mutableStateOf(editTarget.note) }
+
+        AlertDialog(
+            onDismissRequest = { editingLedgerEntry = null },
+            title = { Text(language.pick("کھاتہ انٹری ایڈٹ / رقم تبدیل کریں", "Edit Khata Entry")) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = editType == LedgerEntryType.DEBIT,
+                            onClick = { editType = LedgerEntryType.DEBIT },
+                            label = { Text(language.pick("ادھار (+)", "Udhar (+)")) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilterChip(
+                            selected = editType == LedgerEntryType.CREDIT,
+                            onClick = { editType = LedgerEntryType.CREDIT },
+                            label = { Text(language.pick("وصولی (-)", "Received (-)")) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    OutlinedTextField(
+                        value = editAmountStr,
+                        onValueChange = { editAmountStr = it.filter { c -> c.isDigit() || c == '.' } },
+                        label = { Text(language.pick("رقم (روپے)*", "Amount (PKR)*")) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = editNote,
+                        onValueChange = { editNote = it },
+                        label = { Text(language.pick("تفصیل", "Note")) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            onDeleteTransaction(editTarget)
+                            editingLedgerEntry = null
+                        },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = UdharCrimson),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.size(4.dp))
+                        Text(language.pick("انٹری ڈیلیٹ کریں", "Delete Entry"))
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val amt = editAmountStr.toDoubleOrNull() ?: 0.0
+                        if (amt > 0.0) {
+                            onUpdateTransaction(editTarget, editType, amt, editNote)
+                            editingLedgerEntry = null
+                        }
+                    },
+                    enabled = (editAmountStr.toDoubleOrNull() ?: 0.0) > 0.0
+                ) {
+                    Text(language.pick("اپڈیٹ کریں", "Update"))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingLedgerEntry = null }) {
+                    Text(language.pick("منسوخ", "Cancel"))
+                }
+            }
+        )
+    }
+}
+
