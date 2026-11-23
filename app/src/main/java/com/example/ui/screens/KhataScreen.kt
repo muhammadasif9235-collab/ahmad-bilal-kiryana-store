@@ -441,8 +441,7 @@ private fun CustomerLedgerDetailDialog(
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertic
-                    ally
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(customer.name, style = MaterialTheme.typography.titleLarge)
