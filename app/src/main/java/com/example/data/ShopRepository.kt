@@ -226,18 +226,54 @@ class ShopRepository(
         }
     }
 
-    suspend fun applyGujratMarketRates(products: List<Product>, fallbackMarginPercent: Double): Result<Int> {
+        suspend fun applyGujratMarketRates(
+        products: List<Product>,
+        fallbackMarginPercent: Double,
+        locationHint: String = "",
+        countryCode: String = "PK"
+    ): Result<Int> {
         return try {
             val autoProducts = products.filter { it.autoPriceEnabled && it.id.isNotBlank() }
             if (autoProducts.isEmpty()) return Result.success(0)
+
+            val loc = locationHint.lowercase()
+            val cleanCountry = countryCode.trim().uppercase().ifBlank { "PK" }
+
+            // Regional & international market cost multiplier based on detected location
+            val regionFactor = when {
+                cleanCountry != "PK" && !loc.contains("pakistan") &&
+                    !loc.contains("punjab") && !loc.contains("sindh") &&
+                    !loc.contains("kpk") && !loc.contains("balochistan") &&
+                    !loc.contains("kashmir") && !loc.contains("gujrat") &&
+                    !loc.contains("tanda") -> {
+                    when (cleanCountry) {
+                        "SA", "AE", "QA", "KW", "OM", "BH" -> 1.18 // Gulf / Middle East market
+                        "GB", "US", "CA", "AU", "DE", "FR", "IT", "ES" -> 1.35 // UK / US / Europe market
+                        else -> 1.15 // International market
+                    }
+                }
+                loc.contains("balochistan") || loc.contains("quetta") || loc.contains("gwadar") ||
+                    loc.contains("بلوچستان") || loc.contains("کوئٹہ") -> 1.06
+                loc.contains("kashmir") || loc.contains("ajk") || loc.contains("muzaffarabad") ||
+                    loc.contains("mirpur") || loc.contains("gilgit") || loc.contains("skardu") ||
+                    loc.contains("کشمیر") || loc.contains("گلگت") || loc.contains("مظفرآباد") -> 1.05
+                loc.contains("khyber") || loc.contains("kpk") || loc.contains("peshawar") ||
+                    loc.contains("mardan") || loc.contains("swat") || loc.contains("abbottabad") ||
+                    loc.contains("خیبر") || loc.contains("پشاور") -> 1.03
+                loc.contains("sindh") || loc.contains("karachi") || loc.contains("hyderabad") ||
+                    loc.contains("sukkur") || loc.contains("سندھ") || loc.contains("کراچی") -> 1.02
+                else -> 1.00 // Punjab (Tanda, Gujrat, Lahore, Rawalpindi, Faisalabad, Multan, etc.)
+            }
+
             val now = System.currentTimeMillis()
             var updatedCount = 0
             localDb.withTransaction {
                 for (prod in autoProducts) {
-                    val marketCost = GujratCatalogData.gujratMarketCostLookup(prod)
+                    val baseMarketCost = GujratCatalogData.gujratMarketCostLookup(prod)
+                    val regionalMarketCost = kotlin.math.round(baseMarketCost * regionFactor)
                     val margin = if (prod.marginPercent > 0) prod.marginPercent else fallbackMarginPercent
-                    val newSelling = GujratCatalogData.calculateAutoSellingPrice(marketCost, margin)
-                    dao.updateProductPrices(prod.id, marketCost, newSelling, now)
+                    val newSelling = GujratCatalogData.calculateAutoSellingPrice(regionalMarketCost, margin)
+                    dao.updateProductPrices(prod.id, regionalMarketCost, newSelling, now)
                     updatedCount++
                 }
             }
@@ -245,11 +281,11 @@ class ShopRepository(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.e(TAG, "Error applying Gujrat market rates", e)
+            Log.e(TAG, "Error applying location-based market rates", e)
             Result.failure(e)
         }
-    }
-
+        }
+        
     // --- STOCK IN / STOCK OUT ---
 
     suspend fun recordStockMovement(
