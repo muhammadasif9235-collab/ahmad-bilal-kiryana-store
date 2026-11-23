@@ -123,3 +123,108 @@ object GujratCatalogData {
         item("prod_reg_bread_sm", "رجسٹرڈ چھوٹی ڈبل روٹی", "Registered Small Bread", ProductCategory.TEA_DAIRY, "piece", 80.0, 12.0, 4.0, "8961004000234"),
         item("prod_bakery_bun", "میٹھا بن / برگر بن (Bun)", "Bakery Sweet / Burger Bun", ProductCategory.TEA_DAIRY, "piece", 32.0, 15.0, 6.0, "8961004000241"),
         
+        // 6. Baby Diapers / Pampers (پیمپرز: کیئر بیبی، رائل زون، کین بیبی — تمام سائز)
+        item("prod_carebaby_s", "کیئر بیبی پیمپر سمال (Small)", "Care Baby Diaper Small Pack", ProductCategory.SOAP_CLEANING, "pack", 480.0, 10.0, 4.0, "8961006000061"),
+        item("prod_carebaby_m", "کیئر بیبی پیمپر میڈیم (Medium)", "Care Baby Diaper Medium Pack", ProductCategory.SOAP_CLEANING, "pack", 520.0, 10.0, 4.0, "8961006000078"),
+        item("prod_carebaby_l", "کیئر بیبی پیمپر لارج (Large)", "Care Baby Diaper Large Pack", ProductCategory.SOAP_CLEANING, "pack", 560.0, 10.0, 4.0, "8961006000085"),
+        item("prod_carebaby_xl", "کیئر بیبی پیمپر ایکسٹرا لارج (XL)", "Care Baby Diaper Extra Large Pack", ProductCategory.SOAP_CLEANING, "pack", 600.0, 10.0, 4.0, "8961006000092"),
+        item("prod_royalzone_s", "رائل زون پیمپر سمال (Small)", "Royal Zone Diaper Small Pack", ProductCategory.SOAP_CLEANING, "pack", 450.0, 11.0, 4.0, "8961006000108"),
+        item("prod_royalzone_m", "رائل زون پیمپر میڈیم (Medium)", "Royal Zone Diaper Medium Pack", ProductCategory.SOAP_CLEANING, "pack", 490.0, 11.0, 4.0, "8961006000115"),
+        item("prod_royalzone_l", "رائل زون پیمپر لارج (Large)", "Royal Zone Diaper Large Pack", ProductCategory.SOAP_CLEANING, "pack", 530.0, 11.0, 4.0, "8961006000122"),
+        item("prod_royalzone_xl", "رائل زون پیمپر ایکسٹرا لارج (XL)", "Royal Zone Diaper Extra Large Pack", ProductCategory.SOAP_CLEANING, "pack", 570.0, 11.0, 4.0, "8961006000139"),
+        item("prod_canbebe_m", "کین بیبی پیمپر میڈیم (Medium)", "Canbebe Diaper Medium Pack", ProductCategory.SOAP_CLEANING, "pack", 620.0, 9.0, 3.0, "8961006000146"),
+        item("prod_canbebe_l", "کین بیبی پیمپر لارج (Large)", "Canbebe Diaper Large Pack", ProductCategory.SOAP_CLEANING, "pack", 660.0, 9.0, 3.0, "8961006000153"),
+        item("prod_canbebe_xl", "کین بیبی پیمپر ایکسٹرا لارج (XL)", "Canbebe Diaper Extra Large Pack", ProductCategory.SOAP_CLEANING, "pack", 700.0, 9.0, 3.0, "8961006000160"),
+
+        // 7. Soap, Surf & Personal Care (صابن، سرف اور صفائی)
+        item("prod_surf_excel_500", "سرف ایکسل (500 گرام)", "Surf Excel 500g", ProductCategory.SOAP_CLEANING, "pack", 290.0, 10.0, 5.0, "8961006000016"),
+        item("prod_surf_excel_1kg", "سرف ایکسل (1 کلو)", "Surf Excel 1kg", ProductCategory.SOAP_CLEANING, "pack", 560.0, 9.0, 4.0, "8961006000177"),
+        item("prod_ariel_500", "ایریل سرف (500 گرام)", "Ariel Washing Powder 500g", ProductCategory.SOAP_CLEANING, "pack", 285.0, 10.0, 5.0, "8961006000184"),
+        item("prod_brite_500", "برائٹ ٹوٹل سرف (500 گرام)", "Brite Total 500g", ProductCategory.SOAP_CLEANING, "pack", 265.0, 10.0, 5.0, "8961006000191"),
+        item("prod_lifebuoy", "لائف بوائے صابن", "Lifebuoy Soap Bar", ProductCategory.SOAP_CLEANING, "piece", 115.0, 12.0, 8.0, "8961006000023"),
+        item("prod_lux", "لکس صابن", "Lux Beauty Soap", ProductCategory.SOAP_CLEANING, "piece", 135.0, 11.0, 8.0, "8961006000030"),
+        item("prod_safeguard", "سیف گارڈ صابن", "Safeguard Antibacterial Soap", ProductCategory.SOAP_CLEANING, "piece", 145.0, 10.0, 6.0, "8961006000207"),
+        item("prod_lemon_max", "لیمن میکس برتن صابن", "Lemon Max Dishwash Bar", ProductCategory.SOAP_CLEANING, "piece", 65.0, 15.0, 10.0, "8961006000047"),
+        item("prod_colgate", "کولگیٹ ٹوتھ پیسٹ (75 گرام)", "Colgate Toothpaste 75g", ProductCategory.SOAP_CLEANING, "piece", 185.0, 12.0, 5.0, "8961006000054"),
+
+        // 8. Spices & Condiments (مصالحہ جات)
+        item("prod_salt", "نیشنل آیوڈین نمک (800 گرام)", "National Iodized Salt 800g", ProductCategory.SPICES, "pack", 65.0, 15.0, 8.0, "8961005000019"),
+        item("prod_red_chilli", "لال مرچ پاؤڈر (200 گرام)", "Red Chilli Powder 200g", ProductCategory.SPICES, "pack", 240.0, 12.0, 5.0, "8961005000026"),
+        item("prod_red_chilli_loose", "کھلی لال مرچ پسائی", "Loose Red Chilli Powder", ProductCategory.SPICES, "kg", 980.0, 12.0, 4.0, "8961005000064"),
+        item("prod_turmeric", "ہلدی پاؤڈر (100 گرام)", "Turmeric Powder 100g", ProductCategory.SPICES, "pack", 120.0, 15.0, 5.0, "8961005000033"),
+        item("prod_coriander", "دھنیا پاؤڈر (200 گرام)", "Coriander Powder 200g", ProductCategory.SPICES, "pack", 170.0, 14.0, 5.0, "8961005000071"),
+        item("prod_garam_masala", "گرم مصالحہ ثابت (100 گرام)", "Whole Garam Masala 100g", ProductCategory.SPICES, "pack", 210.0, 14.0, 4.0, "8961005000088"),
+        item("prod_shan_biryani", "شان بریانی مصالحہ", "Shan Biryani Masala", ProductCategory.SPICES, "pack", 125.0, 12.0, 6.0, "8961005000040"),
+        item("prod_shan_qorma", "شان قورمہ مصالحہ", "Shan Qorma Masala", ProductCategory.SPICES, "pack", 125.0, 12.0, 6.0, "8961005000095"),
+        item("prod_black_pepper", "کالی مرچ ثابت (100 گرام)", "Whole Black Pepper 100g", ProductCategory.SPICES, "pack", 260.0, 14.0, 4.0, "8961005000057"),
+
+        // 9. Cold Drinks, NR Bottles, Juices & Cigarettes (بوتلیں، جوس اور سگریٹس)
+        item("prod_pepsi_1l", "پیپسی بوتل (1 لیٹر)", "Pepsi 1L Bottle", ProductCategory.DRINKS_SNACKS, "bottle", 145.0, 10.0, 6.0, "8961007000051"),
+        item("prod_pepsi_15l", "پیپسی بوتل (1.5 لیٹر)", "Pepsi 1.5L Bottle", ProductCategory.DRINKS_SNACKS, "bottle", 190.0, 10.0, 6.0, "8961007000020"),
+        item("prod_pepsi_nr", "پیپسی این آر بوتل (NR / شیشہ)", "Pepsi NR Returnable Bottle", ProductCategory.DRINKS_SNACKS, "bottle", 52.0, 15.0, 12.0, "8961007000068"),
+        item("prod_coke_1l", "کوکا کولا بوتل (1 لیٹر)", "Coca-Cola 1L Bottle", ProductCategory.DRINKS_SNACKS, "bottle", 145.0, 10.0, 6.0, "8961007000075"),
+        item("prod_coke_15l", "کوکا کولا بوتل (1.5 لیٹر)", "Coca-Cola 1.5L Bottle", ProductCategory.DRINKS_SNACKS, "bottle", 190.0, 10.0, 6.0, "8961007000082"),
+        item("prod_coke_nr", "کوکا کولا این آر بوتل (NR)", "Coca-Cola NR Bottle", ProductCategory.DRINKS_SNACKS, "bottle", 52.0, 15.0, 12.0, "8961007000099"),
+        item("prod_sprite_1l", "سپرائٹ بوتل (1 لیٹر)", "Sprite 1L Bottle", ProductCategory.DRINKS_SNACKS, "bottle", 145.0, 10.0, 6.0, "8961007000105"),
+        item("prod_sprite_15l", "سپرائٹ بوتل (1.5 لیٹر)", "Sprite 1.5L Bottle", ProductCategory.DRINKS_SNACKS, "bottle", 190.0, 10.0, 6.0, "8961007000112"),
+        item("prod_7up_1l", "سیون اپ بوتل (1 لیٹر)", "7UP 1L Bottle", ProductCategory.DRINKS_SNACKS, "bottle", 145.0, 10.0, 6.0, "8961007000129"),
+        item("prod_7up_15l", "سیون اپ بوتل (1.5 لیٹر)", "7UP 1.5L Bottle", ProductCategory.DRINKS_SNACKS, "bottle", 190.0, 10.0, 6.0, "8961007000136"),
+        item("prod_7up_nr", "سیون اپ این آر بوتل (NR)", "7UP NR Bottle", ProductCategory.DRINKS_SNACKS, "bottle", 52.0, 15.0, 12.0, "8961007000143"),
+        item("prod_shezan_1l", "شہزان مینگو جوس (1 لیٹر)", "Shezan Mango Juice 1L", ProductCategory.DRINKS_SNACKS, "pack", 215.0, 10.0, 5.0, "8961007000150"),
+        item("prod_shezan_250", "شہزان جوس چھوٹا ڈبہ (250ml)", "Shezan Juice 250ml Pack", ProductCategory.DRINKS_SNACKS, "pack", 55.0, 15.0, 12.0, "8961007000167"),
+        item("prod_fruita_1l", "نیسلے فروٹا وائٹلز جوس (1 لیٹر)", "Nestle Fruita Vitals 1L", ProductCategory.DRINKS_SNACKS, "pack", 265.0, 9.0, 4.0, "8961007000174"),
+        item("prod_local_juice_1l", "لوکل مینگو / فروٹ جوس (1 لیٹر)", "Local Mango/Fruit Juice 1L", ProductCategory.DRINKS_SNACKS, "pack", 140.0, 14.0, 6.0, "8961007000181"),
+        item("prod_rooh_afza", "روح افزا (800 ملی لیٹر)", "Rooh Afza 800ml", ProductCategory.DRINKS_SNACKS, "bottle", 490.0, 8.0, 4.0, "8961007000013"),
+        item("prod_capstan_red", "کیپسٹن سرخ سگریٹ (ڈبی)", "Capstan Red Pack (20s)", ProductCategory.DRINKS_SNACKS, "pack", 220.0, 7.0, 10.0, "8961007000198"),
+        item("prod_capstan_white", "کیپسٹن سفید سگریٹ (ڈبی)", "Capstan White / Light Pack", ProductCategory.DRINKS_SNACKS, "pack", 220.0, 7.0, 10.0, "8961007000204"),
+        item("prod_gold_leaf", "جان پلیئر گولڈ لیف سگریٹ (ڈبی)", "Gold Leaf Cigarette Pack", ProductCategory.DRINKS_SNACKS, "pack", 520.0, 6.0, 6.0, "8961007000211"),
+        item("prod_gold_flake", "گولڈ فلیک سگریٹ (ڈبی)", "Gold Flake Cigarette Pack", ProductCategory.DRINKS_SNACKS, "pack", 160.0, 8.0, 10.0, "8961007000228"),
+        item("prod_morven_gold", "مورون گولڈ سگریٹ (ڈبی)", "Morven Gold Cigarette Pack", ProductCategory.DRINKS_SNACKS, "pack", 215.0, 7.0, 8.0, "8961007000235"),
+        item("prod_red_white", "ریڈ اینڈ وائٹ سگریٹ (ڈبی)", "Red & White Cigarette Pack", ProductCategory.DRINKS_SNACKS, "pack", 175.0, 8.0, 8.0, "8961007000242"),
+
+        // 10. Bakery Snacks, Lay's, Slanty, Kurkure, Papad & Toffees
+        item("prod_cream_roll", "بیکری کریم رول (Cream Roll)", "Bakery Cream Roll", ProductCategory.DRINKS_SNACKS, "piece", 32.0, 15.0, 8.0, "8961007000259"),
+        item("prod_rusk_pack", "بیکری پاپے / رسک پیک", "Bakery Rusk / Papay Pack", ProductCategory.DRINKS_SNACKS, "pack", 110.0, 12.0, 5.0, "8961007000266"),
+        item("prod_sooper", "پیک فریز سوپر بسکٹ", "Peek Freans Sooper Pack", ProductCategory.DRINKS_SNACKS, "pack", 32.0, 15.0, 12.0, "8961007000037"),
+        item("prod_knorr", "کنور نوڈلز چٹ پٹا", "Knorr Chatt Patta Noodles", ProductCategory.DRINKS_SNACKS, "pack", 52.0, 12.0, 10.0, "8961007000044"),
+        item("prod_lays_masala_20", "لیز مصالحہ (20 روپے والا)", "Lay's Masala Rs. 20 Pack", ProductCategory.DRINKS_SNACKS, "pack", 17.0, 15.0, 12.0, "8961007000273"),
+        item("prod_lays_masala_30", "لیز مصالحہ (30 روپے والا)", "Lay's Masala Rs. 30 Pack", ProductCategory.DRINKS_SNACKS, "pack", 25.0, 15.0, 10.0, "8961007000280"),
+        item("prod_lays_masala_50", "لیز مصالحہ (50 روپے والا)", "Lay's Masala Rs. 50 Pack", ProductCategory.DRINKS_SNACKS, "pack", 42.0, 15.0, 8.0, "8961007000297"),
+        item("prod_lays_masala_70", "لیز مصالحہ (70 روپے والا)", "Lay's Masala Rs. 70 Pack", ProductCategory.DRINKS_SNACKS, "pack", 60.0, 14.0, 6.0, "8961007000303"),
+        item("prod_lays_masala_100", "لیز مصالحہ (100 روپے والا)", "Lay's Masala Rs. 100 Pack", ProductCategory.DRINKS_SNACKS, "pack", 85.0, 15.0, 5.0, "8961007000310"),
+        item("prod_lays_yogurt_30", "لیز یوگرٹ اینڈ ہرب (30 روپے والا)", "Lay's Yogurt & Herb Rs. 30", ProductCategory.DRINKS_SNACKS, "pack", 25.0, 15.0, 10.0, "8961007000327"),
+        item("prod_lays_yogurt_50", "لیز یوگرٹ اینڈ ہرب (50 روپے والا)", "Lay's Yogurt & Herb Rs. 50", ProductCategory.DRINKS_SNACKS, "pack", 42.0, 15.0, 8.0, "8961007000334"),
+        item("prod_lays_yogurt_70", "لیز یوگرٹ اینڈ ہرب (70 روپے والا)", "Lay's Yogurt & Herb Rs. 70", ProductCategory.DRINKS_SNACKS, "pack", 60.0, 14.0, 6.0, "8961007000341"),
+        item("prod_lays_yogurt_100", "لیز یوگرٹ اینڈ ہرب (100 روپے والا)", "Lay's Yogurt & Herb Rs. 100", ProductCategory.DRINKS_SNACKS, "pack", 85.0, 15.0, 5.0, "8961007000358"),
+        item("prod_lays_cheese_30", "لیز فرینچ چیز (30 روپے والا)", "Lay's French Cheese Rs. 30", ProductCategory.DRINKS_SNACKS, "pack", 25.0, 15.0, 10.0, "8961007000365"),
+        item("prod_lays_cheese_50", "لیز فرینچ چیز (50 روپے والا)", "Lay's French Cheese Rs. 50", ProductCategory.DRINKS_SNACKS, "pack", 42.0, 15.0, 8.0, "8961007000372"),
+        item("prod_lays_cheese_100", "لیز فرینچ چیز (100 روپے والا)", "Lay's French Cheese Rs. 100", ProductCategory.DRINKS_SNACKS, "pack", 85.0, 15.0, 5.0, "8961007000389"),
+        item("prod_lays_salted_30", "لیز سالٹڈ / نمکین (30 روپے والا)", "Lay's Classic Salted Rs. 30", ProductCategory.DRINKS_SNACKS, "pack", 25.0, 15.0, 10.0, "8961007000396"),
+        item("prod_lays_salted_50", "لیز سالٹڈ / نمکین (50 روپے والا)", "Lay's Classic Salted Rs. 50", ProductCategory.DRINKS_SNACKS, "pack", 42.0, 15.0, 8.0, "8961007000402"),
+        item("prod_lays_paprika_30", "لیز پپریکا (30 روپے والا)", "Lay's Paprika Rs. 30 Pack", ProductCategory.DRINKS_SNACKS, "pack", 25.0, 15.0, 10.0, "8961007000419"),
+        item("prod_lays_paprika_50", "لیز پپریکا (50 روپے والا)", "Lay's Paprika Rs. 50 Pack", ProductCategory.DRINKS_SNACKS, "pack", 42.0, 15.0, 8.0, "8961007000426"),
+        item("prod_lays_paprika_100", "لیز پپریکا (100 روپے والا)", "Lay's Paprika Rs. 100 Pack", ProductCategory.DRINKS_SNACKS, "pack", 85.0, 15.0, 5.0, "8961007000433"),
+        item("prod_slanty_20", "سلنٹی (20 روپے والا پیک)", "Kolson Slanty Rs. 20 Pack", ProductCategory.DRINKS_SNACKS, "pack", 17.0, 15.0, 12.0, "8961007000440"),
+        item("prod_kurkure_20", "کرکرے (20 روپے والا پیک)", "Kurkure Rs. 20 Pack", ProductCategory.DRINKS_SNACKS, "pack", 17.0, 15.0, 12.0, "8961007000457"),
+        item("prod_kurkure_40", "کرکرے (40 روپے والا پیک)", "Kurkure Rs. 40 Pack", ProductCategory.DRINKS_SNACKS, "pack", 34.0, 15.0, 10.0, "8961007000464"),
+        item("prod_kurkure_60", "کرکرے (60 روپے والا پیک)", "Kurkure Rs. 60 Pack", ProductCategory.DRINKS_SNACKS, "pack", 51.0, 15.0, 8.0, "8961007000471"),
+        item("prod_local_papad_sm", "لوکل پاپڑ چھوٹا پیک (10/20 روپے)", "Local Papad Small Pack", ProductCategory.DRINKS_SNACKS, "pack", 8.0, 20.0, 20.0, "8961007000488"),
+        item("prod_local_papad_lg", "لوکل پاپڑ بڑا پیکٹ / تھیلا", "Local Papad Family Pack", ProductCategory.DRINKS_SNACKS, "pack", 40.0, 20.0, 10.0, "8961007000495"),
+        item("prod_toffees_jar", "بچوں کی ٹافیاں / کینڈیز پیک", "Kids Toffees & Candies Pack", ProductCategory.DRINKS_SNACKS, "pack", 120.0, 20.0, 5.0, "8961007000501")
+    )
+
+    fun calculateAutoSellingPrice(costPrice: Double, marginPercent: Double): Double {
+        if (costPrice <= 0.0) return 0.0
+        val raw = costPrice * (1.0 + marginPercent / 100.0)
+        return ((raw / 5.0).roundToInt() * 5.0).coerceAtLeast(costPrice)
+    }
+
+    fun gujratMarketCostLookup(product: Product): Double {
+        val matched = initialProducts.firstOrNull {
+            (product.barcode.isNotBlank() && it.barcode == product.barcode) ||
+                it.docId == product.id ||
+                it.nameUrdu == product.nameUrdu
+        }
+        return matched?.marketReferenceCost?.takeIf { it > 0.0 } ?: product.costPrice
+    }
+}
