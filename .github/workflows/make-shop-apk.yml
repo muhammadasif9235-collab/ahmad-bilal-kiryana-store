@@ -1,435 +1,113 @@
-package com.example
+name: Build Ahmad Bilal Kiryana Store APK
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 
-import android.content.Intent
-import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
-import androidx.credentials.CredentialManager
-import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.lifecycle.viewmodel.initializer
-import androidx.lifecycle.viewmodel.viewModelFactory
-import com.example.auth.AuthScreen
-import com.example.auth.onGoogleSignInClicked
-import com.example.auth.signOutShopAccount
-import com.example.data.*
-import com.example.i18n.AppLanguage
-import com.example.i18n.LocalAppLanguage
-import com.example.i18n.pick
-import com.example.services.*
-import com.example.ui.components.*
-import com.example.ui.screens.*
-import com.example.ui.theme.*
-import com.example.viewmodel.ShopViewModel
-import com.google.firebase.Firebase
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.auth
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-enum class ShopDestination(
-    val urduLabel: String,
-    val englishLabel: String,
-    val icon: ImageVector
-) {
-    HOME("ہوم", "Home", Icons.Default.Dashboard),
-    BILLING("بلنگ", "Bill", Icons.Default.ReceiptLong),
-    RATION_CARD("POS / پی او ایس", "POS", Icons.Default.CreditCard),
-    STOCK("اسٹاک", "Stock", Icons.Default.Inventory2),
-    KHATA("کھاتہ", "Khata", Icons.Default.AccountBalanceWallet),
-    CASH_WHOLESALERS("کیش و سپلائر", "Cash/Supply", Icons.Default.Payments),
-    RATION_FUND("امداد فنڈ", "Charity", Icons.Default.VolunteerActivism),
-    SETTINGS("سیٹنگز", "Settings", Icons.Default.Settings)
-}
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
 
-class MainActivity : ComponentActivity() {
+      - name: Setup Permanent Release Keystore & Signing
+        env:
+          K_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          K_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          PASS="${K_PASS:-Kiryana@786}"
+          ALIAS="${K_ALIAS:-kiryanakey}"
+          KPASS="${KEY_PASS:-Kiryana@786}"
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > kiryana-release.jks
+          else
+            keytool -genkey -v -keystore kiryana-release.jks -storepass "$PASS" -alias "$ALIAS" -keypass "$KPASS" -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Ahmad Bilal Kiryana Store,O=Tanda Gujrat,C=PK"
+          fi
+          cp kiryana-release.jks app/kiryana-release.jks
+          cp kiryana-release.jks my-upload-key.jks
+          cp kiryana-release.jks app/my-upload-key.jks
 
-    private val _incomingNfcCard = MutableStateFlow<ScannedNfcCard?>(null)
-    val incomingNfcCard: StateFlow<ScannedNfcCard?> = _incomingNfcCard.asStateFlow()
+          python3 - << EOF
+          with open("app/build.gradle.kts", "r") as f:
+              content = f.read()
+          patch = '''
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        handleNfcIntent(intent)
-        setContent {
-            AppRoot(
-                incomingNfcFlow = incomingNfcCard,
-                onConsumeIncomingNfc = { _incomingNfcCard.value = null }
-            )
-        }
-    }
+          android {
+              signingConfigs {
+                  maybeCreate("release").apply {
+                      storeFile = rootProject.file("kiryana-release.jks")
+                      storePassword = "$PASS"
+                      keyAlias = "$ALIAS"
+                      keyPassword = "$KPASS"
+                  }
+              }
+              buildTypes {
+                  getByName("release") {
+                      signingConfig = signingConfigs.getByName("release")
+                  }
+              }
+          }
+          '''
+          with open("app/build.gradle.kts", "w") as f:
+              f.write(content + patch)
+          EOF
 
-    override fun onResume() {
-        super.onResume()
-        NfcRationCardReader.enableForegroundDispatch(this) { card ->
-            _incomingNfcCard.value = card
-        }
-    }
+      - name: Fix Icons and Apply Store Logo
+        run: |
+          rm -rf app/src/main/res/mipmap-anydpi*
+          rm -f app/src/main/res/drawable*/ic_launcher*.xml
+          python3 -m pip install -q pillow
+          python3 - << 'EOF'
+          import os, glob
+          from PIL import Image
 
-    override fun onPause() {
-        NfcRationCardReader.disableForegroundDispatch(this)
-        super.onPause()
-    }
+          candidates = (
+              sorted(glob.glob("app_logo.*"))
+              + sorted(glob.glob("public/assets/aistudio/*.*"), key=os.path.getmtime, reverse=True)
+              + sorted(glob.glob("app/src/main/res/drawable*/*logo*.*"))
+          )
+          logo_file = next((f for f in candidates if f.lower().endswith((".png", ".jpg", ".jpeg", ".webp"))), None)
+          if logo_file:
+              print("Applying logo:", logo_file)
+              img = Image.open(logo_file).convert("RGBA")
+              sizes = {'mdpi': 48, 'hdpi': 72, 'xhdpi': 96, 'xxhdpi': 144, 'xxxhdpi': 192}
+              for k, v in sizes.items():
+                  out_dir = f"app/src/main/res/mipmap-{k}"
+                  os.makedirs(out_dir, exist_ok=True)
+                  for name in ("ic_launcher", "ic_launcher_round", "ic_launcher_foreground"):
+                      img.resize((v, v), Image.Resampling.LANCZOS).save(os.path.join(out_dir, f"{name}.png"))
+          EOF
 
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent)
-        handleNfcIntent(intent)
-    }
+      - name: Set up Gradle 9.3.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
 
-    private fun handleNfcIntent(intent: Intent?) {
-        val card = NfcRationCardReader.extractCardFromIntent(intent, this)
-        if (card != null) {
-            _incomingNfcCard.value = card
-        }
-    }
-}
+      - name: Build Signed Public APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'Kiryana@786' }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'kiryanakey' }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'Kiryana@786' }}
+        run: |
+          gradle assembleRelease --no-configuration-cache --stacktrace
+          mkdir -p final_apk
+          RAW_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          BUILD_TOOLS=$(ls -d $ANDROID_HOME/build-tools/* | tail -n 1)
+          $BUILD_TOOLS/zipalign -f -p 4 "$RAW_APK" final_apk/aligned.apk
+          $BUILD_TOOLS/apksigner sign --ks kiryana-release.jks --ks-pass pass:"$KEYSTORE_PASSWORD" --ks-key-alias "$KEY_ALIAS" --key-pass pass:"$KEY_PASSWORD" --out final_apk/Ahmad-Bilal-Kiryana-Store.apk final_apk/aligned.apk
+          rm -f final_apk/aligned.apk
 
-@Composable
-fun AppRoot(
-    incomingNfcFlow: StateFlow<ScannedNfcCard?>,
-    onConsumeIncomingNfc: () -> Unit
-) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val preferences = remember { ShopPreferences(context.applicationContext) }
-
-    var currentUser by remember { mutableStateOf(Firebase.auth.currentUser) }
-    DisposableEffect(Unit) {
-        val listener = FirebaseAuth.AuthStateListener { auth -> currentUser = auth.currentUser }
-        Firebase.auth.addAuthStateListener(listener)
-        onDispose { Firebase.auth.removeAuthStateListener(listener) }
-    }
-
-    val activeScope = currentUser?.uid ?: "local_owner"
-    val loadedSettings by preferences.observeSettings(activeScope).collectAsStateWithLifecycle(initialValue = null)
-    val settings = loadedSettings ?: ShopSettings()
-    val language = settings.language
-
-    KiryanaTheme(language = language) {
-        CompositionLocalProvider(LocalAppLanguage provides language) {
-            if (loadedSettings == null) {
-                Box(modifier = Modifier.fillMaxSize().background(EmeraldPrimary))
-            } else {
-                val isLoggedIn = settings.localOwnerLoggedIn || currentUser != null
-                if (!isLoggedIn) {
-                    AuthScreen(
-                        language = language,
-                        onToggleLanguage = {
-                            scope.launch {
-                                val next = if (language == AppLanguage.URDU) AppLanguage.ENGLISH else AppLanguage.URDU
-                                preferences.setLanguage(next)
-                            }
-                        },
-                        onLocalOwnerLogin = { scope.launch { preferences.setLocalOwnerLoggedIn(true) } },
-                        onGoogleAuthSuccess = {
-                            currentUser = Firebase.auth.currentUser
-                            scope.launch { preferences.setLocalOwnerLoggedIn(true) }
-                        }
-                    )
-                } else {
-                    key(activeScope) {
-                        MainShopShell(
-                            userScope = activeScope,
-                            userEmail = currentUser?.email,
-                            preferences = preferences,
-                            incomingNfcFlow = incomingNfcFlow,
-                            onConsumeIncomingNfc = onConsumeIncomingNfc,
-                            onGoogleUserUpdated = { currentUser = Firebase.auth.currentUser },
-                            onSignedOut = {
-                                currentUser = Firebase.auth.currentUser
-                                scope.launch { preferences.setLocalOwnerLoggedIn(false) }
-                            }
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun MainShopShell(
-    userScope: String,
-    userEmail: String?,
-    preferences: ShopPreferences,
-    incomingNfcFlow: StateFlow<ScannedNfcCard?>,
-    onConsumeIncomingNfc: () -> Unit,
-    onGoogleUserUpdated: () -> Unit,
-    onSignedOut: () -> Unit
-) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val credentialManager = remember(context) { lazy { CredentialManager.create(context) } }
-
-    val viewModel: ShopViewModel = viewModel(
-        key = "shop_vm_$userScope",
-        factory = viewModelFactory {
-            initializer {
-                val app = checkNotNull(this[APPLICATION_KEY])
-                ShopViewModel(
-                    repository = ShopRepository(app),
-                    preferences = preferences,
-                    networkMonitor = NetworkMonitor(app),
-                    bluetoothPrinterManager = BluetoothPrinterManager(app),
-                    userScope = userScope
-                )
-            }
-        }
-    )
-
-    val settings by viewModel.settings.collectAsStateWithLifecycle()
-    val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
-    val productsState by viewModel.productsState.collectAsStateWithLifecycle()
-    val customersState by viewModel.customersState.collectAsStateWithLifecycle()
-    val ordersState by viewModel.ordersState.collectAsStateWithLifecycle()
-    val ledgerState by viewModel.ledgerState.collectAsStateWithLifecycle()
-    val movementsState by viewModel.stockMovementsState.collectAsStateWithLifecycle()
-    val donationsState by viewModel.donationsState.collectAsStateWithLifecycle()
-    val rationItemsState by viewModel.rationItemsState.collectAsStateWithLifecycle()
-    val rationCardBillsState by viewModel.rationCardBillsState.collectAsStateWithLifecycle()
-    val cashBookState by viewModel.cashBookState.collectAsStateWithLifecycle()
-    val wholesalersState by viewModel.wholesalersState.collectAsStateWithLifecycle()
-    val wholesalerTxState by viewModel.wholesalerTransactionsState.collectAsStateWithLifecycle()
-
-    val cartItems by viewModel.cartItems.collectAsStateWithLifecycle()
-    val selectedCustomer by viewModel.selectedCustomer.collectAsStateWithLifecycle()
-    val manualCustomerName by viewModel.manualCustomerName.collectAsStateWithLifecycle()
-    val manualCustomerPhone by viewModel.manualCustomerPhone.collectAsStateWithLifecycle()
-    val activeReceiptOrder by viewModel.activeReceiptOrder.collectAsStateWithLifecycle()
-    val activePaymentReceipt by viewModel.activePaymentReceipt.collectAsStateWithLifecycle()
-    val activeRationCardReceipt by viewModel.activeRationCardReceipt.collectAsStateWithLifecycle()
-    val scannedNfcCard by viewModel.scannedNfcCard.collectAsStateWithLifecycle()
-    val pairedPrinters by viewModel.pairedPrinters.collectAsStateWithLifecycle()
-    val isBusy by viewModel.isBusy.collectAsStateWithLifecycle()
-    val statusBanner by viewModel.statusBanner.collectAsStateWithLifecycle()
-    val analytics by viewModel.analytics.collectAsStateWithLifecycle()
-
-    val language = settings.language
-    val products = (productsState as? UiState.Success)?.data ?: emptyList()
-    val customers = (customersState as? UiState.Success)?.data ?: emptyList()
-    val orders = (ordersState as? UiState.Success)?.data ?: emptyList()
-    val ledgerEntries = (ledgerState as? UiState.Success)?.data ?: emptyList()
-    val stockMovements = (movementsState as? UiState.Success)?.data ?: emptyList()
-    val donations = (donationsState as? UiState.Success)?.data ?: emptyList()
-    val rationItems = (rationItemsState as? UiState.Success)?.data ?: emptyList()
-    val rationCardBills = (rationCardBillsState as? UiState.Success)?.data ?: emptyList()
-    val cashEntries = (cashBookState as? UiState.Success)?.data ?: emptyList()
-    val wholesalers = (wholesalersState as? UiState.Success)?.data ?: emptyList()
-    val wholesalerTxs = (wholesalerTxState as? UiState.Success)?.data ?: emptyList()
-
-    var currentDestination by rememberSaveable { mutableStateOf(ShopDestination.HOME) }
-    var cashWholesalerSubTab by rememberSaveable { mutableIntStateOf(0) }
-    var showBarcodeScanner by remember { mutableStateOf(false) }
-    var showRaastQrDialog by remember { mutableStateOf(false) }
-
-    val incomingNfc by incomingNfcFlow.collectAsStateWithLifecycle()
-    LaunchedEffect(incomingNfc?.scannedAtMs) {
-        val card = incomingNfc ?: return@LaunchedEffect
-        viewModel.onNfcCardScanned(card)
-        currentDestination = ShopDestination.RATION_CARD
-        onConsumeIncomingNfc()
-    }
-
-    val snackbarHostState = remember { SnackbarHostState() }
-    LaunchedEffect(statusBanner) {
-        val msg = statusBanner
-        if (!msg.isNullOrBlank()) {
-            snackbarHostState.showSnackbar(msg)
-            viewModel.clearStatusBanner()
-        }
-    }
-
-    BackHandler(enabled = currentDestination != ShopDestination.HOME) {
-        currentDestination = ShopDestination.HOME
-    }
-
-    val navTabs = listOf(
-        ShopDestination.HOME,
-        ShopDestination.BILLING,
-        ShopDestination.RATION_CARD,
-        ShopDestination.STOCK,
-        ShopDestination.KHATA
-    )
-
-    val isSecondaryScreen = currentDestination in listOf(
-        ShopDestination.SETTINGS,
-        ShopDestination.RATION_FUND,
-        ShopDestination.CASH_WHOLESALERS
-    )
-
-    Scaffold(
-        contentWindowInsets = WindowInsets.safeDrawing,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = EmeraldPrimary,
-                    titleContentColor = Color.White,
-                    navigationIconContentColor = Color.White,
-                    actionIconContentColor = Color.White
-                ),
-                navigationIcon = {
-                    if (isSecondaryScreen) {
-                        IconButton(onClick = { currentDestination = ShopDestination.HOME }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
-                        }
-                    }
-                },
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Box(
-                            modifier = Modifier
-                                .size(38.dp)
-                                .clip(CircleShape)
-                                .border(1.4.dp, GoldShimmer, CircleShape)
-                                .padding(1.5.dp)
-                        ) {
-                            ShopLogoBadge(
-                                resId = R.drawable.img_shop_logo,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize().clip(CircleShape),
-                                maxWidthPx = 192
-                            )
-                        }
-                        Column {
-                            Text(
-                                text = language.pick(settings.shopNameUrdu, settings.shopNameEnglish),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color.White,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = if (!userEmail.isNullOrBlank() && isOnline) {
-                                    language.pick("کلاؤڈ محفوظ • ${userScope.take(6)}", "Cloud Isolated • Synced")
-                                } else {
-                                    language.pick("آف لائن فعال • فون میں محفوظ", "Offline Ready • Local DB")
-                                },
-                                style = MaterialTheme.typography.labelSmall,
-                                color = GoldShimmer,
-                                maxLines = 1
-                            )
-                        }
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { showRaastQrDialog = true }) {
-                        Icon(Icons.Default.QrCode2, contentDescription = "QR سکین و پیمنٹ", tint = GoldShimmer)
-                    }
-                    Surface(
-                        color = SaffronSecondary,
-                        shape = RoundedCornerShape(50.dp),
-                        modifier = Modifier.clip(RoundedCornerShape(50.dp)).clickable { viewModel.toggleLanguage() }
-                    ) {
-                        Text(
-                            text = if (language == AppLanguage.URDU) "EN" else "اردو",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                        )
-                    }
-                    IconButton(onClick = {
-                        currentDestination = if (currentDestination == ShopDestination.SETTINGS) ShopDestination.HOME else ShopDestination.SETTINGS
-                    }) {
-                        Icon(Icons.Default.Settings, contentDescription = null, tint = Color.White)
-                    }
-                }
-            )
-        },
-        bottomBar = {
-            if (!isSecondaryScreen) {
-                NavigationBar(windowInsets = WindowInsets.navigationBars) {
-                    navTabs.forEach { dest ->
-                        NavigationBarItem(
-                            selected = currentDestination == dest,
-                            onClick = { currentDestination = dest },
-                            icon = {
-                                if (dest == ShopDestination.BILLING && cartItems.isNotEmpty()) {
-                                    BadgedBox(badge = { Badge { Text("${cartItems.size}") } }) {
-                                        Icon(dest.icon, contentDescription = null)
-                                    }
-                                } else {
-                                    Icon(dest.icon, contentDescription = null)
-                                }
-                            },
-                            label = { Text(language.pick(dest.urduLabel, dest.englishLabel), maxLines = 1) }
-                        )
-                    }
-                }
-            }
-        }
-    ) { innerPadding ->
-        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            if (isBusy) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-
-            // Quick Access Bar for Daily Cash In/Out, Wholesalers Ledger, and RAAST QR
-            if (currentDestination == ShopDestination.HOME) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilledTonalButton(
-                        onClick = { cashWholesalerSubTab = 0; currentDestination = ShopDestination.CASH_WHOLESALERS },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(language.pick("روزانہ آمدن و اخراجات", "Daily Cash In/Out"), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    FilledTonalButton(
-                        onClick = { cashWholesalerSubTab = 1; currentDestination = ShopDestination.CASH_WHOLESALERS },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(language.pick("ہول سیلرز کھاتہ", "Wholesalers"), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    Button(
-                        onClick = { showRaastQrDialog = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = SaffronSecondary)
-                    ) {
-                        Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.size(4.dp))
-                        Text("QR", maxLines = 1)
-                    }
-                }
-            }
-
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                when (currentDestination) {
-                    ShopDestinatio
+      - name: Upload Public APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ahmad-Bilal-Kiryana-Store-Public-APK
+          path: final_apk/Ahmad-Bilal-Kiryana-Store.apk
