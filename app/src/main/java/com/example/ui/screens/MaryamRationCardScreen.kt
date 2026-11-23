@@ -170,25 +170,29 @@ fun MaryamRationCardScreen(
     var editingCartPriceItem by remember { mutableStateOf<RationCartItem?>(null) }
     var showProgramInfoDialog by remember { mutableStateOf(false) }
 
-    // Automatically populate fields when a real POS / Ration Card is tapped via NFC!
+        // Automatically populate fields when a real POS / Ration Card is tapped via NFC!
     LaunchedEffect(scannedNfcCard?.scannedAtMs) {
         val card = scannedNfcCard ?: return@LaunchedEffect
         cardUid = card.uidHex
         scannedViaNfc = true
-        if (card.ndefText.isNotBlank() && cardNumber.isBlank()) {
-            cardNumber = card.ndefText.take(60)
-        } else if (card.suggestedCardNumber.isNotBlank() && cardNumber.isBlank()) {
-            cardNumber = card.suggestedCardNumber.take(60)
-        }
-        // Auto-fill returning beneficiary details if this NFC UID was previously served
+
         val prevBill = rationBills.firstOrNull {
             it.cardUid.equals(card.uidHex, ignoreCase = true)
         }
+
+        // Always update cardNumber with the newly scanned card's masked PAN (XXXX **** **** XXXX)
+        cardNumber = when {
+            card.maskedPan.isNotBlank() -> card.maskedPan
+            card.ndefText.isNotBlank() -> card.ndefText.take(60)
+            prevBill != null && prevBill.cardNumber.isNotBlank() -> prevBill.cardNumber
+            card.suggestedCardNumber.isNotBlank() -> card.suggestedCardNumber.take(60)
+            else -> ""
+        }
+
         if (prevBill != null) {
             if (beneficiaryName.isBlank()) beneficiaryName = prevBill.beneficiaryName
             if (cnic.isBlank()) cnic = prevBill.cnic
             if (phone.isBlank()) phone = prevBill.phone
-            if (cardNumber.isBlank()) cardNumber = prevBill.cardNumber
         }
         activeTab = RationCardTab.BILL
     }
