@@ -614,24 +614,53 @@ class ShopViewModel(
         }
     }
 
-    fun syncGujratMarketRates() {
+        fun syncGujratMarketRates() {
         val products = (productsState.value as? UiState.Success)?.data ?: emptyList()
+        val currentSettings = settings.value
+        val deviceLocale = java.util.Locale.getDefault()
+        val countryCode = deviceLocale.country.ifBlank { "PK" }
+
+        val addressEn = currentSettings.shopAddressEnglish.trim()
+        val addressUr = currentSettings.shopAddressUrdu.trim()
+        val combinedHint = "$addressEn $addressUr"
+
+        val displayRegionUr = when {
+            addressUr.isNotBlank() -> addressUr
+            addressEn.isNotBlank() -> addressEn
+            countryCode.equals("PK", ignoreCase = true) -> "مقامی پاکستان منڈی"
+            else -> deviceLocale.getDisplayCountry(java.util.Locale.ENGLISH).ifBlank { countryCode }
+        }
+        val displayRegionEn = when {
+            addressEn.isNotBlank() -> addressEn
+            addressUr.isNotBlank() -> addressUr
+            countryCode.equals("PK", ignoreCase = true) -> "Local Pakistan Market"
+            else -> deviceLocale.getDisplayCountry(java.util.Locale.ENGLISH).ifBlank { countryCode }
+        }
+
         viewModelScope.launch {
             _isBusy.value = true
-            val result = repository.applyGujratMarketRates(products, settings.value.defaultMarginPercent)
+            val result = repository.applyGujratMarketRates(
+                products = products,
+                fallbackMarginPercent = currentSettings.defaultMarginPercent,
+                locationHint = combinedHint,
+                countryCode = countryCode
+            )
             _isBusy.value = false
             result.onSuccess { count ->
                 preferences.setLastRateSyncTime(System.currentTimeMillis())
                 showMessage(
-                    "ضلع گجرات مارکیٹ کے مطابق $count اشیاء کی قیمتیں خودکار اپڈیٹ ہو گئیں",
-                    "Auto-updated $count item prices to Gujrat market rates"
+                    "$displayRegionUr کی مقامی مارکیٹ کے مطابق $count اشیاء کی قیمتیں اپڈیٹ ہو گئیں",
+                    "Auto-updated $count item prices for $displayRegionEn market"
                 )
             }.onFailure { err ->
-                showMessage("قیمتیں اپڈیٹ نہ ہو سکیں: ${err.localizedMessage}", "Update failed: ${err.localizedMessage}")
+                showMessage(
+                    "قیمتیں اپڈیٹ نہ ہو سکیں: ${err.localizedMessage}",
+                    "Update failed: ${err.localizedMessage}"
+                )
             }
         }
-    }
-
+        }
+        
     fun recordStockMovement(
         product: Product,
         type: StockMovementType,
