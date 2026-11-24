@@ -730,6 +730,7 @@ private fun MainShopShell(
                                 },
                                 onCancelPendingOrder = { viewModel.cancelPendingOrder(it) },
                                 onEditOrder = { editingOrder = it },
+                                onDeleteOrder = { viewModel.deleteOrder(it.id) },
                                 onOpenLowStockReport = { showLowStockReportDialog = true }
                             )
 
