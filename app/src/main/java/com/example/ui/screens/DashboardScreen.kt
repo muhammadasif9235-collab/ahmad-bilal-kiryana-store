@@ -35,7 +35,6 @@ import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Nfc
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PointOfSale
-import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Refresh
@@ -736,7 +735,7 @@ fun DashboardScreen(
                                 "کل: ${formatPkr(analytics.totalSalesAllTime, AppLanguage.URDU)}",
                                 "All-time: ${formatPkr(analytics.totalSalesAllTime, AppLanguage.ENGLISH)}"
                             ),
-                            icon = Icons.Default.PointOSale,
+                            icon = Icons.Default.PointOfSale,
                             accentColor = EmeraldPrimary,
                             modifier = Modifier.weight(1f)
                         )
