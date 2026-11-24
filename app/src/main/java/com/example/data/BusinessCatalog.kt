@@ -135,25 +135,25 @@ data class BusinessPresetItem(
     val sellingPrice: Double,
     val initialStock: Double,
     val lowStockThreshold: Double,
-    val category: ProductCategory = ProductCategory.OTHER
+    val categoryName: String = "OTHER"
 )
 
 object BusinessCatalog {
 
     fun presetsFor(type: BusinessType): List<BusinessPresetItem> = when (type) {
         BusinessType.KIRYANA -> listOf(
-            BusinessPresetItem("آٹا (20 کلو تھیلا)", "Flour 20kg Bag", "bag", 1750.0, 1850.0, 25.0, 5.0, ProductCategory.ATTA_RICE),
-            BusinessPresetItem("چینی دانے دار", "White Sugar", "kg", 138.0, 148.0, 100.0, 15.0, ProductCategory.SUGAR_GHEE),
-            BusinessPresetItem("بناسپتی گھی (1 کلو)", "Banaspati Ghee 1kg", "pack", 495.0, 525.0, 40.0, 8.0, ProductCategory.SUGAR_GHEE),
-            BusinessPresetItem("کوکنگ آئل (1 لیٹر)", "Cooking Oil 1L", "pack", 510.0, 540.0, 40.0, 8.0, ProductCategory.SUGAR_GHEE),
-            BusinessPresetItem("سپر کرنل باسمتی چاول", "Super Kernel Basmati Rice", "kg", 270.0, 300.0, 60.0, 10.0, ProductCategory.ATTA_RICE),
-            BusinessPresetItem("دال چنا", "Chana Dal", "kg", 240.0, 270.0, 40.0, 8.0, ProductCategory.PULSES),
-            BusinessPresetItem("دال مسور", "Masoor Dal", "kg", 260.0, 290.0, 35.0, 6.0, ProductCategory.PULSES),
-            BusinessPresetItem("چائے کی پتی (200 گرام)", "Tea Pack 200g", "pack", 310.0, 340.0, 30.0, 6.0, ProductCategory.BEVERAGES),
-            BusinessPresetItem("کپڑے دھونے والا سرف (500 گرام)", "Washing Powder 500g", "pack", 175.0, 195.0, 35.0, 6.0, ProductCategory.SOAP_CLEANING),
-            BusinessPresetItem("نہانے والا صابن", "Bath Soap", "piece", 95.0, 110.0, 48.0, 10.0, ProductCategory.SOAP_CLEANING),
-            BusinessPresetItem("آئیوڈین نمک (800 گرام)", "Iodized Salt 800g", "pack", 45.0, 55.0, 50.0, 10.0, ProductCategory.SPICES),
-            BusinessPresetItem("لال مرچ پاؤڈر (200 گرام)", "Red Chilli Powder 200g", "pack", 190.0, 220.0, 25.0, 5.0, ProductCategory.SPICES)
+            BusinessPresetItem("آٹا (20 کلو تھیلا)", "Flour 20kg Bag", "bag", 1750.0, 1850.0, 25.0, 5.0),
+            BusinessPresetItem("چینی دانے دار", "White Sugar", "kg", 138.0, 148.0, 100.0, 15.0),
+            BusinessPresetItem("بناسپتی گھی (1 کلو)", "Banaspati Ghee 1kg", "pack", 495.0, 525.0, 40.0, 8.0),
+            BusinessPresetItem("کوکنگ آئل (1 لیٹر)", "Cooking Oil 1L", "pack", 510.0, 540.0, 40.0, 8.0),
+            BusinessPresetItem("سپر کرنل باسمتی چاول", "Super Kernel Basmati Rice", "kg", 270.0, 300.0, 60.0, 10.0),
+            BusinessPresetItem("دال چنا", "Chana Dal", "kg", 240.0, 270.0, 40.0, 8.0),
+            BusinessPresetItem("دال مسور", "Masoor Dal", "kg", 260.0, 290.0, 35.0, 6.0),
+            BusinessPresetItem("چائے کی پتی (200 گرام)", "Tea Pack 200g", "pack", 310.0, 340.0, 30.0, 6.0),
+            BusinessPresetItem("کپڑے دھونے والا سرف (500 گرام)", "Washing Powder 500g", "pack", 175.0, 195.0, 35.0, 6.0),
+            BusinessPresetItem("نہانے والا صابن", "Bath Soap", "piece", 95.0, 110.0, 48.0, 10.0),
+            BusinessPresetItem("آئیوڈین نمک (800 گرام)", "Iodized Salt 800g", "pack", 45.0, 55.0, 50.0, 10.0),
+            BusinessPresetItem("لال مرچ پاؤڈر (200 گرام)", "Red Chilli Powder 200g", "pack", 190.0, 220.0, 25.0, 5.0)
         )
         BusinessType.PANSAR -> listOf(
             BusinessPresetItem("خالص دیسی شہد (500 گرام)", "Pure Desi Honey 500g", "pack", 850.0, 1050.0, 15.0, 3.0),
