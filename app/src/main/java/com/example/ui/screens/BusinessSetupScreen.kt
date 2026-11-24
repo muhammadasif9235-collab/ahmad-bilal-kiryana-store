@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import com.example.data.BusinessCatalog
 import com.example.data.BusinessType
 import com.example.i18n.AppLanguage
+import com.example.i18n.pick
 
 @Composable
 fun BusinessSetupScreen(
@@ -86,7 +87,6 @@ fun BusinessSetupScreen(
 
     val emeraldDeep = Color(0xFF064E3B)
     val emeraldMid = Color(0xFF065F46)
-    val goldAccent = Color(0xFFD4AF37)
 
     Column(
         modifier = Modifier
