@@ -1,6 +1,7 @@
 package com.example.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
@@ -11,7 +12,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.shape.RoundedCornerShape
 import com.example.i18n.AppLanguage
 
 private val KiryanaLightColors = lightColorScheme(
@@ -26,7 +26,7 @@ private val KiryanaLightColors = lightColorScheme(
     tertiary = TerracottaTertiary,
     onTertiary = Color.White,
     tertiaryContainer = TerracottaContainer,
-    onTertiaryContainer = Color(0xFF3E1204),
+    onTertiaryContainer = Color(0xFF1E1B4B),
     background = WarmParchmentBg,
     onBackground = InkDark,
     surface = WarmSurface,
@@ -42,15 +42,15 @@ private val KiryanaLightColors = lightColorScheme(
 
 private val KiryanaDarkColors = darkColorScheme(
     primary = EmeraldLightDark,
-    onPrimary = Color(0xFF042614),
-    primaryContainer = Color(0xFF123E29),
+    onPrimary = Color(0xFF042F2E),
+    primaryContainer = Color(0xFF115E59),
     onPrimaryContainer = EmeraldContainer,
     secondary = SaffronLightDark,
-    onSecondary = Color(0xFF3A1D00),
-    secondaryContainer = Color(0xFF523308),
+    onSecondary = Color(0xFF1E3A8A),
+    secondaryContainer = Color(0xFF1E40AF),
     onSecondaryContainer = SaffronContainer,
-    tertiary = Color(0xFFFFB599),
-    onTertiary = Color(0xFF471605),
+    tertiary = Color(0xFFA5B4FC),
+    onTertiary = Color(0xFF1E1B4B),
     background = DarkForestBg,
     onBackground = InkLightDark,
     surface = DarkForestSurface,
@@ -65,10 +65,11 @@ private val KiryanaDarkColors = darkColorScheme(
 )
 
 private val KiryanaShapes = Shapes(
-    small = RoundedCornerShape(10.dp),
+    extraSmall = RoundedCornerShape(8.dp),
+    small = RoundedCornerShape(12.dp),
     medium = RoundedCornerShape(16.dp),
-    large = RoundedCornerShape(22.dp),
-    extraLarge = RoundedCornerShape(28.dp)
+    large = RoundedCornerShape(20.dp),
+    extraLarge = RoundedCornerShape(26.dp)
 )
 
 @Composable
