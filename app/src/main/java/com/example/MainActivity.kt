@@ -771,7 +771,7 @@ private fun MainShopShell(
                                 language = language,
                                 products = products,
                                 movements = stockMovements,
-                                analytics = analytics,
+                                    analytics = analytics,
                                 defaultMarginPercent = settings.defaultMarginPercent,
                                 onSaveProduct = { id, ur, en, cat, unit, cost, sell, margin, auto, stock, low, code ->
                                     viewModel.saveProduct(id, ur, en, cat, unit, cost, sell, margin, auto, stock, low, code)
@@ -800,9 +800,10 @@ private fun MainShopShell(
                                         entryDateMs = dateMs
                                     )
                                 },
-                                onDeleteEntry = { id ->
-                                    viewModel.deleteDailyCashEntry(id)
-                                }
+                                    onDeleteEntry = { id ->
+        viewModel.deleteDailyCashEntry(id)
+    },
+    totalKhataUdhar = analytics.totalUdharReceivable
                             )
 
                             ShopDestination.KHATA -> KhataScreen(
