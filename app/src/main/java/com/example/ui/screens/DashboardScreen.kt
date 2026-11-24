@@ -87,6 +87,13 @@ import com.example.ui.theme.SaffronSecondary
 import com.example.ui.theme.UdharCrimson
 import com.example.ui.theme.WarningAmber
 import com.example.viewmodel.ShopAnalytics
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 
 @Composable
 fun DashboardScreen(
@@ -107,12 +114,53 @@ fun DashboardScreen(
     onOpenRoznamcha: () -> Unit = {},
     onOpenCustomerOrder: () -> Unit = {},
     onEditOrder: (Order) -> Unit = {},
+    onDeleteOrder: (Order) -> Unit = {},
     onOpenLowStockReport: () -> Unit = {}
 ) {
+    var orderToDelete by remember { mutableStateOf<Order?>(null) }
+    val pendingDelete = orderToDelete
+    if (pendingDelete != null) {
+        AlertDialog(
+            onDismissRequest = { orderToDelete = null },
+            title = {
+                Text(
+                    text = language.pick("بل مستقل ڈیلیٹ کریں؟", "Delete Bill Permanently?"),
+                    fontWeight = FontWeight.Bold,
+                    color = UdharCrimson
+                )
+            },
+            text = {
+                Text(
+                    text = language.pick(
+                        "کیا آپ واقعی بل نمبر ${pendingDelete.billNumber} (${pendingDelete.customerName}) کو مستقل طور پر ڈیلیٹ کرنا چاہتے ہیں؟",
+                        "Are you sure you want to permanently delete Bill #${pendingDelete.billNumber} (${pendingDelete.customerName})?"
+                    )
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onDeleteOrder(pendingDelete)
+                        orderToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = UdharCrimson)
+                ) {
+                    Text(language.pick("جی ہاں، ڈیلیٹ کریں", "Yes, Delete"), color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { orderToDelete = null }) {
+                    Text(language.pick("منسوخ", "Cancel"))
+                }
+            }
+        )
+    }
+
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.TopCenter
     ) {
+        
         LazyColumn(
             modifier = Modifier
                 .widthIn(max = 740.dp)
@@ -895,7 +943,8 @@ fun DashboardScreen(
                         }
                     }
                 }
-            } else {
+            
+              } else {
                 items(recentOrders.take(5).size) { idx ->
                     val order = recentOrders[idx]
                     Card(
@@ -958,6 +1007,17 @@ fun DashboardScreen(
                                         imageVector = Icons.Default.Edit,
                                         contentDescription = language.pick("بل ایڈٹ کریں", "Edit Bill"),
                                         tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { orderToDelete = order },
+                                    modifier = Modifier.testTag("dashboard_delete_order_${order.id}")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = language.pick("بل ڈیلیٹ کریں", "Delete Bill"),
+                                        tint = UdharCrimson,
                                         modifier = Modifier.size(18.dp)
                                     )
                                 }
