@@ -21,17 +21,17 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudDone
-import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Gavel
-import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PersonOutline
 import androidx.compose.material.icons.filled.Policy
-import androidx.compose.material.icons.filled.Print
-import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -40,9 +40,12 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -55,16 +58,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -77,7 +78,6 @@ import com.example.ui.components.LegalDocumentTab
 import com.example.ui.components.LegalDocumentsDialog
 import com.example.ui.components.ShopLogoBadge
 import com.example.ui.theme.EmeraldPrimary
-import com.example.ui.theme.EmeraldPrimaryDark
 import com.example.ui.theme.GoldShimmer
 import com.example.ui.theme.SaffronSecondary
 
@@ -86,15 +86,24 @@ fun AuthScreen(
     language: AppLanguage,
     onToggleLanguage: () -> Unit,
     onLocalOwnerLogin: () -> Unit,
-    onGoogleAuthSuccess: () -> Unit
+    onGoogleAuthSuccess: () -> Unit,
+    onGuestLogin: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val credentialManager = remember(context) { lazy { CredentialManager.create(context) } }
 
+    var isSignUpMode by remember {
+        mutableStateOf(ShopSecurityVault.getRegisteredEmail(context).isBlank())
+    }
+    var ownerNameInput by remember { mutableStateOf(ShopSecurityVault.getRegisteredName(context)) }
+    var emailInput by remember { mutableStateOf(ShopSecurityVault.getRegisteredEmail(context)) }
+    var passwordInput by remember { mutableStateOf("") }
+    var stayLoggedIn by remember { mutableStateOf(ShopSecurityVault.isStayLoggedIn(context)) }
+
     var isGoogleLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    var acceptedLegalTerms by remember { mutableStateOf(false) }
+    var acceptedLegalTerms by remember { mutableStateOf(true) }
     var activeLegalDialogTab by remember { mutableStateOf<LegalDocumentTab?>(null) }
 
     Box(
@@ -110,11 +119,10 @@ fun AuthScreen(
                 .widthIn(max = 560.dp)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 16.dp),
+                .padding(horizontal = 20.dp, vertical = 14.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Top Language Toggle Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
@@ -124,25 +132,21 @@ fun AuthScreen(
                     shape = RoundedCornerShape(50.dp),
                     modifier = Modifier.testTag("auth_language_toggle")
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Language,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    Icon(Icons.Default.Language, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.size(6.dp))
                     Text(if (language == AppLanguage.URDU) "English (LTR)" else "اردو (RTL)")
                 }
             }
 
-            // Royal Emerald & Antique Gold Hero Marquee with Official Store Crest
+            // Hero Header Card
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(26.dp))
+                    .clip(RoundedCornerShape(24.dp))
                     .border(
-                        width = 1.6.dp,
+                        width = 1.5.dp,
                         brush = Brush.linearGradient(listOf(GoldShimmer, SaffronSecondary, GoldShimmer)),
-                        shape = RoundedCornerShape(26.dp)
+                        shape = RoundedCornerShape(24.dp)
                     )
             ) {
                 AsyncBannerImage(
@@ -156,342 +160,53 @@ fun AuthScreen(
                         .matchParentSize()
                         .background(
                             Brush.verticalGradient(
-                                colors = listOf(
-                                    Color(0xB8042D1F),
-                                    Color(0xD9063927),
-                                    Color(0xF2042519)
-                                )
+                                listOf(Color(0xC8042D1F), Color(0xEA063927), Color(0xF5042519))
                             )
                         )
-                        .drawBehind {
-                            val ringColor = Color(0x33FDE68A)
-                            drawCircle(
-                                color = ringColor,
-                                radius = size.minDimension * 0.62f,
-                                center = Offset(size.width * 0.10f, size.height * 0.14f),
-                                style = Stroke(width = 2.5f)
-                            )
-                            drawCircle(
-                                color = ringColor,
-                                radius = size.minDimension * 0.44f,
-                                center = Offset(size.width * 0.92f, size.height * 0.86f),
-                                style = Stroke(width = 2f)
-                            )
-                        }
                 )
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 22.dp),
+                        .padding(horizontal = 18.dp, vertical = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Official Store Circular Emblem
                     Box(
                         modifier = Modifier
-                            .size(116.dp)
+                            .size(84.dp)
                             .clip(CircleShape)
-                            .border(
-                                width = 2.5.dp,
-                                brush = Brush.linearGradient(listOf(GoldShimmer, SaffronSecondary, GoldShimmer)),
-                                shape = CircleShape
-                            )
-                            .padding(3.dp)
+                            .border(2.dp, GoldShimmer, CircleShape)
+                            .padding(2.dp)
                     ) {
                         ShopLogoBadge(
                             resId = R.drawable.img_shop_logo,
-                            contentDescription = language.pick(
-                                "احمد بلال کریانہ سٹور ٹانڈہ لوگو",
-                                "Ahmad Bilal Kiryana Store, Tanda Logo"
-                            ),
+                            contentDescription = "Store Logo",
                             modifier = Modifier
                                 .fillMaxSize()
                                 .clip(CircleShape)
                         )
                     }
-                    Spacer(Modifier.height(12.dp))
-                    Surface(
-                        color = SaffronSecondary,
-                        shape = RoundedCornerShape(50.dp)
-                    ) {
-                        Text(
-                            text = language.pick("ٹانڈہ • ضلع گجرات، پنجاب", "Tanda • District Gujrat, Punjab"),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
-                        )
-                    }
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(8.dp))
                     Text(
                         text = language.pick("احمد بلال کریانہ سٹور ٹانڈہ", "Ahmad Bilal Kiryana Store, Tanda"),
-                        style = MaterialTheme.typography.headlineMedium.copy(
-                            fontSize = if (language == AppLanguage.URDU) 27.sp else 23.sp,
-                            lineHeight = if (language == AppLanguage.URDU) 40.sp else 30.sp,
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontSize = if (language == AppLanguage.URDU) 22.sp else 19.sp,
                             fontWeight = FontWeight.ExtraBold
                         ),
                         color = Color.White,
                         textAlign = TextAlign.Center
                     )
-                    Spacer(Modifier.height(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .width(88.dp)
-                            .height(3.dp)
-                            .clip(RoundedCornerShape(50.dp))
-                            .background(Brush.horizontalGradient(listOf(Color.Transparent, GoldShimmer, Color.Transparent)))
-                    )
-                    Spacer(Modifier.height(8.dp))
                     Text(
                         text = language.pick(
-                            "معیاری کریانہ، مریم نواز راشن کارڈ اور ڈیجیٹل کھاتہ",
-                            "Quality Kiryana, Maryam Nawaz Ration Card & Digital Khata"
+                            "پروفیشنل POS • ڈیجیٹل کھاتہ • روزنامچہ • فنگر پرنٹ سیکیورٹی",
+                            "Smart POS • Digital Khata • Cashbook • Biometric Security"
                         ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = GoldShimmer.copy(alpha = 0.95f),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = GoldShimmer,
                         textAlign = TextAlign.Center
                     )
                 }
             }
-
-            // Legal Acceptance Checkbox + Interactive Privacy Policy & Terms Links (Account Setup Wizard)
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                border = BorderStroke(
-                    1.2.dp,
-                    if (acceptedLegalTerms) EmeraldPrimary.copy(alpha = 0.55f)
-                    else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-                ),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                acceptedLegalTerms = !acceptedLegalTerms
-                                if (acceptedLegalTerms) errorMessage = null
-                            },
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Checkbox(
-                            checked = acceptedLegalTerms,
-                            onCheckedChange = {
-                                acceptedLegalTerms = it
-                                if (it) errorMessage = null
-                            },
-                            modifier = Modifier.testTag("auth_legal_accept_checkbox")
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = language.pick(
-                                    "میں شرائط و ضوابط اور پرائیویسی پالیسی سے اتفاق کرتا ہوں",
-                                    "I agree to the Terms & Conditions and Privacy Policy"
-                                ),
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = language.pick(
-                                    "نجی POS / کھاتہ ایپ (غیر سرکاری) • PECA 2016 اور SBP RAAST اصول",
-                                    "Independent private POS app (Non-Government) • PECA 2016 & SBP RAAST"
-                                ),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        TextButton(
-                            onClick = { activeLegalDialogTab = LegalDocumentTab.PRIVACY_POLICY },
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("auth_privacy_policy_link")
-                        ) {
-                            Icon(Icons.Default.Policy, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.size(4.dp))
-                            Text(
-                                text = language.pick("پرائیویسی پالیسی", "Privacy Policy"),
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        TextButton(
-                            onClick = { activeLegalDialogTab = LegalDocumentTab.TERMS_AND_CONDITIONS },
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("auth_terms_conditions_link")
-                        ) {
-                            Icon(Icons.Default.Gavel, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.size(4.dp))
-                            Text(
-                                text = language.pick("شرائط و ضوابط", "Terms & Conditions"),
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-            }
-
-            // PRIMARY CTA: One-Tap Local Shop Owner Login (Works 100% on Standalone APKs)
-            Button(
-                onClick = {
-                    if (!acceptedLegalTerms) {
-                        errorMessage = language.pick(
-                            "براہِ کرم آگے بڑھنے سے پہلے «شرائط و ضوابط اور پرائیویسی پالیسی» کے باکس پر نشان لگائیں۔",
-                            "Please check the box agreeing to the Terms & Conditions and Privacy Policy to continue."
-                        )
-                    } else {
-                        onLocalOwnerLogin()
-                    }
-                },
-                shape = RoundedCornerShape(18.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (acceptedLegalTerms) EmeraldPrimary else EmeraldPrimary.copy(alpha = 0.55f),
-                    contentColor = Color.White
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(60.dp)
-                    .testTag("local_owner_login_button")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Storefront,
-                    contentDescription = null,
-                    tint = GoldShimmer,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    text = language.pick(
-                        "دکان کھولیں / مالک لاگ اِن (براہِ راست)",
-                        "Continue to Store / Shop Owner Login"
-                    ),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.ExtraBold
-                )
-            }
-
-            // Friendly local-storage reassurance
-            Surface(
-                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f),
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PhoneAndroid,
-                        contentDescription = null,
-                        tint = EmeraldPrimary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Text(
-                        text = language.pick(
-                            "گوگل لاگ اِن کے بغیر فوراً استعمال کریں — آپ کا تمام اسٹاک، بل اور ادھار کھاتہ فون میں محفوظ رہے گا۔",
-                            "Open instantly without Google Sign-In — all store items, bills, and Udhar Khata are saved directly on your phone."
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-            }
-
-            if (errorMessage != null) {
-                Surface(
-                    color = MaterialTheme.colorScheme.errorContainer,
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = errorMessage!!,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(12.dp)
-                    )
-                }
-            }
-
-            // SECONDARY OPTIONAL CTA: Google Sign-In for Cloud Backup
-            OutlinedButton(
-                onClick = {
-                    if (!acceptedLegalTerms) {
-                        errorMessage = language.pick(
-                            "براہِ کرم آگے بڑھنے سے پہلے «شرائط و ضوابط اور پرائیویسی پالیسی» سے اتفاق کریں۔",
-                            "Please agree to the Terms & Conditions and Privacy Policy first."
-                        )
-                        return@OutlinedButton
-                    }
-                    errorMessage = null
-                    isGoogleLoading = true
-                    onGoogleSignInClicked(
-                        context = context,
-                        credentialManager = credentialManager.value,
-                        onAuthSuccess = {
-                            isGoogleLoading = false
-                            onGoogleAuthSuccess()
-                        },
-                        onAuthError = { _ ->
-                            isGoogleLoading = false
-                            errorMessage = language.pick(
-                                "اس APK پر گوگل لاگ اِن دستیاب نہیں — براہِ کرم اوپر «دکان کھولیں / مالک لاگ اِن» بٹن استعمال کریں۔ تمام ڈیٹا فون میں محفوظ رہے گا۔",
-                                "Google Sign-In is unavailable on this standalone APK. Please use 'Continue to Store / Shop Owner Login' above — all data saves locally on your phone."
-                            )
-                        },
-                        scope = scope,
-                        onAuthCancelled = {
-                            isGoogleLoading = false
-                        }
-                    )
-                },
-                enabled = !isGoogleLoading,
-                shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(1.2.dp, EmeraldPrimary.copy(alpha = 0.55f)),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp)
-                    .testTag("google_sign_in_button")
-            ) {
-                if (isGoogleLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        color = EmeraldPrimary,
-                        strokeWidth = 2.5.dp
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.CloudDone,
-                        contentDescription = null,
-                        tint = EmeraldPrimary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = language.pick(
-                            "گوگل اکاؤنٹ سے لاگ اِن (اختیاری کلاؤڈ بیک اپ)",
-                            "Sign in with Google (Optional Cloud Backup)"
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = EmeraldPrimary
-                    )
-                }
-            }
-
-            // Feature Highlights Card
+                        // Sign Up / Login Account Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(22.dp),
@@ -499,53 +214,299 @@ fun AuthScreen(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(
-                    modifier = Modifier.padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text(
-                        text = language.pick(
-                            "دکان کا مکمل اور جدید ڈیجیٹل نظام",
-                            "Complete Modern Kiryana & Ration POS"
-                        ),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    FeatureBullet(
-                        icon = Icons.Default.ReceiptLong,
-                        text = language.pick(
-                            "اردو/انگلش بلنگ، آرڈرز اور خودکار رسید پرنٹنگ",
-                            "Urdu RTL & English billing, orders & auto receipts"
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = isSignUpMode,
+                            onClick = {
+                                isSignUpMode = true
+                                errorMessage = null
+                            },
+                            label = {
+                                Text(
+                                    text = language.pick("نیا اکاؤنٹ (Sign Up)", "Create Account"),
+                                    fontWeight = FontWeight.Bold
+                                )
+                            },
+                            modifier = Modifier.weight(1f)
                         )
-                    )
-                    FeatureBullet(
-                        icon = Icons.Default.CreditCard,
-                        text = language.pick(
-                            "مریم نواز راشن کارڈ NFC اسکین اور 3,000 روپے سبسڈی بل",
-                            "Maryam Nawaz Ration Card NFC scan & Rs. 3,000 subsidy billing"
+                        FilterChip(
+                            selected = !isSignUpMode,
+                            onClick = {
+                                isSignUpMode = false
+                                errorMessage = null
+                            },
+                            label = {
+                                Text(
+                                    text = language.pick("لاگ اِن (Login)", "Sign In"),
+                                    fontWeight = FontWeight.Bold
+                                )
+                            },
+                            modifier = Modifier.weight(1f)
                         )
-                    )
-                    FeatureBullet(
-                        icon = Icons.Default.Inventory2,
-                        text = language.pick(
-                            "گجرات مارکیٹ ریٹس، اسٹاک ان/آؤٹ اور منافع ریکارڈ",
-                            "Gujrat market rates, Stock In/Out & profit analytics"
+                    }
+
+                    if (isSignUpMode) {
+                        OutlinedTextField(
+                            value = ownerNameInput,
+                            onValueChange = { ownerNameInput = it },
+                            label = { Text(language.pick("دکاندار کا نام*", "Shop Owner Name*")) },
+                            leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
                         )
+                    }
+
+                    OutlinedTextField(
+                        value = emailInput,
+                        onValueChange = { emailInput = it },
+                        label = { Text(language.pick("ای میل یا موبائل آئی ڈی*", "Email or Mobile ID*")) },
+                        leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
                     )
-                    FeatureBullet(
-                        icon = Icons.Default.Print,
-                        text = language.pick(
-                            "ادھار کھاتہ، بارکوڈ اسکینر اور بلوٹوتھ تھرمل پرنٹر",
-                            "Udhar Khata ledger, barcode scanner & Bluetooth printer"
+
+                    OutlinedTextField(
+                        value = passwordInput,
+                        onValueChange = { passwordInput = it },
+                        label = { Text(language.pick("پاس ورڈ (کم از کم 4 ہندسے)*", "Password (min 4 chars)*")) },
+                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // "Stay Logged In" Checkbox
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { stayLoggedIn = !stayLoggedIn },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = stayLoggedIn,
+                            onCheckedChange = { stayLoggedIn = it }
                         )
-                    )
-                    FeatureBullet(
-                        icon = Icons.Default.PhoneAndroid,
-                        text = language.pick(
-                            "مکمل آف لائن فون اسٹوریج + اختیاری گوگل کلاؤڈ بیک اپ",
-                            "100% offline phone storage + optional Google Cloud backup"
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = language.pick(
+                                    "مجھے لاگ اِن رکھیں (Stay Logged In)",
+                                    "Remember Me (Stay Logged In)"
+                                ),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = language.pick(
+                                    "ٹک نہ کرنے پر ہر بار دوبارہ لاگ اِن ہونا پڑے گا",
+                                    "Uncheck to require login every time the app opens"
+                                ),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    // Terms Agreement Checkbox
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { acceptedLegalTerms = !acceptedLegalTerms },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = acceptedLegalTerms,
+                            onCheckedChange = { acceptedLegalTerms = it },
+                            modifier = Modifier.testTag("auth_legal_accept_checkbox")
                         )
-                    )
+                        Text(
+                            text = language.pick(
+                                "میں شرائط و ضوابط اور پرائیویسی پالیسی سے اتفاق کرتا ہوں",
+                                "I agree to Terms & Conditions and Privacy Policy"
+                            ),
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    if (errorMessage != null) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = errorMessage!!,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(10.dp)
+                            )
+                        }
+                    }
+
+                    // Submit Sign Up / Login Button
+                    Button(
+                        onClick = {
+                            if (!acceptedLegalTerms) {
+                                errorMessage = language.pick(
+                                    "براہِ کرم شرائط و ضوابط سے اتفاق کریں۔",
+                                    "Please accept Terms & Conditions first."
+                                )
+                                return@Button
+                            }
+                            val email = emailInput.trim()
+                            val pass = passwordInput.trim()
+                            if (email.isBlank() || pass.length < 4) {
+                                errorMessage = language.pick(
+                                    "براہِ کرم درست ای میل/آئی ڈی اور کم از کم 4 ہندسوں کا پاس ورڈ لکھیں۔",
+                                    "Please enter valid Email/ID and at least 4-character password."
+                                )
+                                return@Button
+                            }
+                            if (isSignUpMode) {
+                                val name = ownerNameInput.trim().ifBlank { "Shop Owner" }
+                                ShopSecurityVault.saveRegisteredAccount(context, name, email, pass)
+                                ShopSecurityVault.setStayLoggedIn(context, stayLoggedIn)
+                                ShopSecurityVault.setGuestMode(context, false)
+                                onLocalOwnerLogin()
+                            } else {
+                                if (ShopSecurityVault.verifyLocalAccount(context, email, pass)) {
+                                    ShopSecurityVault.setStayLoggedIn(context, stayLoggedIn)
+                                    ShopSecurityVault.setGuestMode(context, false)
+                                    onLocalOwnerLogin()
+                                } else {
+                                    errorMessage = language.pick(
+                                        "غلط ای میل یا پاس ورڈ! اگر نیا اکاؤنٹ بنانا ہے تو اوپر «نیا اکاؤنٹ (Sign Up)» منتخب کریں۔",
+                                        "Invalid Email or Password! Tap 'Create Account' above if you haven't signed up yet."
+                                    )
+                                }
+                            }
+                        },
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(54.dp)
+                            .testTag("local_owner_login_button")
+                    ) {
+                        Icon(Icons.Default.Storefront, contentDescription = null, tint = GoldShimmer)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = if (isSignUpMode) {
+                                language.pick("اکاؤنٹ بنائیں اور دکان کھولیں", "Sign Up & Open Store")
+                            } else {
+                                language.pick("لاگ اِن کریں اور دکان کھولیں", "Login & Open Store")
+                            },
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.White
+                        )
+                    }
+
+                    HorizontalDivider()
+
+                    // Google Sign-In Button
+                    OutlinedButton(
+                        onClick = {
+                            if (!acceptedLegalTerms) {
+                                errorMessage = language.pick(
+                                    "براہِ کرم شرائط و ضوابط سے اتفاق کریں۔",
+                                    "Please accept Terms & Conditions first."
+                                )
+                                return@OutlinedButton
+                            }
+                            errorMessage = null
+                            isGoogleLoading = true
+                            onGoogleSignInClicked(
+                                context = context,
+                                credentialManager = credentialManager.value,
+                                onAuthSuccess = {
+                                    isGoogleLoading = false
+                                    ShopSecurityVault.setStayLoggedIn(context, stayLoggedIn)
+                                    ShopSecurityVault.setGuestMode(context, false)
+                                    onGoogleAuthSuccess()
+                                },
+                                onAuthError = { _ ->
+                                    isGoogleLoading = false
+                                    errorMessage = language.pick(
+                                        "اس ڈیوائس پر گوگل لاگ اِن دستیاب نہیں — براہِ کرم اوپر ای میل/پاس ورڈ سے سائن اپ یا لاگ اِن کریں۔",
+                                        "Google Sign-In unavailable on this device — please use Email/Password Sign Up above."
+                                    )
+                                },
+                                scope = scope,
+                                onAuthCancelled = { isGoogleLoading = false }
+                            )
+                        },
+                        enabled = !isGoogleLoading,
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.2.dp, EmeraldPrimary.copy(alpha = 0.6f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp)
+                            .testTag("google_sign_in_button")
+                    ) {
+                        if (isGoogleLoading) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.5.dp)
+                        } else {
+                            Icon(Icons.Default.CloudDone, contentDescription = null, tint = EmeraldPrimary)
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = language.pick(
+                                    "گوگل اکاؤنٹ سے سائن اپ / لاگ اِن (Google)",
+                                    "Sign Up / Login with Google"
+                                ),
+                                fontWeight = FontWeight.Bold,
+                                color = EmeraldPrimary
+                            )
+                        }
+                    }
+
+                    // Guest Mode Button (Limited Features Only)
+                    FilledTonalButton(
+                        onClick = {
+                            ShopSecurityVault.setGuestMode(context, true)
+                            ShopSecurityVault.setStayLoggedIn(context, false)
+                            onGuestLogin()
+                        },
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .testTag("guest_mode_login_button")
+                    ) {
+                        Icon(Icons.Default.PersonOutline, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = language.pick(
+                                "گیسٹ کے طور پر داخل ہوں (محدود فیچرز)",
+                                "Continue as Guest (Limited Features)"
+                            ),
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        TextButton(onClick = { activeLegalDialogTab = LegalDocumentTab.PRIVACY_POLICY }) {
+                            Icon(Icons.Default.Policy, contentDescription = null, modifier = Modifier.size(15.dp))
+                            Spacer(Modifier.size(4.dp))
+                            Text(language.pick("پرائیویسی پالیسی", "Privacy Policy"), style = MaterialTheme.typography.labelSmall)
+                        }
+                        TextButton(onClick = { activeLegalDialogTab = LegalDocumentTab.TERMS_AND_CONDITIONS }) {
+                            Icon(Icons.Default.Gavel, contentDescription = null, modifier = Modifier.size(15.dp))
+                            Spacer(Modifier.size(4.dp))
+                            Text(language.pick("شرائط و ضوابط", "Terms & Rules"), style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
                 }
             }
         }
@@ -557,37 +518,6 @@ fun AuthScreen(
             initialTab = legalTab,
             language = language,
             onDismiss = { activeLegalDialogTab = null }
-        )
-    }
-}
-
-@Composable
-private fun FeatureBullet(icon: ImageVector, text: String) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(CircleShape)
-                .background(
-                    Brush.linearGradient(listOf(EmeraldPrimaryDark, EmeraldPrimary))
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = GoldShimmer,
-                modifier = Modifier.size(18.dp)
-            )
-        }
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface
         )
     }
 }
