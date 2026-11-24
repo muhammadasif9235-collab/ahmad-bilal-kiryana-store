@@ -12,21 +12,20 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MenuBook
@@ -34,7 +33,6 @@ import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -49,7 +47,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -62,9 +59,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.data.DailyCashEntry
 import com.example.data.DailyCashType
 import com.example.data.DailyPaymentSource
@@ -73,6 +71,8 @@ import com.example.i18n.AppLanguage
 import com.example.i18n.formatPkr
 import com.example.i18n.pick
 import com.example.services.ReceiptPrintHelper
+import com.example.ui.components.LiveCalculatorAmountField
+import com.example.ui.components.LiveCalculatorEngine
 import com.example.ui.theme.EmeraldBright
 import com.example.ui.theme.EmeraldPrimary
 import com.example.ui.theme.EmeraldPrimaryDark
@@ -92,10 +92,6 @@ private enum class RoznamchaPeriod(val urduLabel: String, val englishLabel: Stri
     ALL("تمام تاریخیں", "All History")
 }
 
-/**
- * Keeps the dedicated Daily Roznamcha / Manual Cashbook completely separate from
- * auto-synced itemized POS & Billing receipts.
- */
 fun isManualRoznamchaEntry(entry: DailyCashEntry): Boolean {
     val title = entry.categoryOrTitle.trim()
     if (title.startsWith("بل نقد وصولی #") || title.startsWith("POS کارڈ بل #")) {
@@ -154,7 +150,6 @@ fun DailyRoznamchaScreen(
     val dateFormatter = remember { SimpleDateFormat("dd/MM/yyyy", Locale.US) }
     val timeFormatter = remember { SimpleDateFormat("hh:mm a", Locale.US) }
 
-    // Always calculate Today's live manual metrics for the top hero summary
     val todayEntries = remember(manualEntries, startOfTodayMs) {
         manualEntries.filter { it.entryDateMs >= startOfTodayMs }
     }
@@ -166,7 +161,6 @@ fun DailyRoznamchaScreen(
     }
     val todayNetBalance = todayCashIn - todayCashOut
 
-    // Filtered entries by active period + date/note search
     val filteredEntries = remember(manualEntries, selectedPeriod, searchQuery) {
         val byPeriod = when (selectedPeriod) {
             RoznamchaPeriod.TODAY -> manualEntries.filter { it.entryDateMs >= startOfTodayMs }
@@ -199,14 +193,12 @@ fun DailyRoznamchaScreen(
     }
     val periodNet = periodIn - periodOut
 
-    // Group entries day-by-day for clean date-wise history
     val groupedByDate = remember(filteredEntries) {
         filteredEntries.groupBy { dateFormatter.format(Date(it.entryDateMs)) }
     }
 
     val periodLabel = language.pick(selectedPeriod.urduLabel, selectedPeriod.englishLabel)
-
-    Box(
+        Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.TopCenter
     ) {
@@ -217,7 +209,6 @@ fun DailyRoznamchaScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // 1. Hero Daily Summary Banner (Today's Manual Cash In / Out / Net Balance)
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -267,7 +258,6 @@ fun DailyRoznamchaScreen(
                             }
                         }
 
-                        // Today's 3-column KPI strip
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -295,7 +285,6 @@ fun DailyRoznamchaScreen(
                 }
             }
 
-            // 2. Two Big Prominent Buttons: "+ کیش اِن" & "- کیش آؤٹ"
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -383,7 +372,6 @@ fun DailyRoznamchaScreen(
                 }
             }
 
-            // 3. One-Tap WhatsApp Text & PDF Statement Sharing
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -438,7 +426,6 @@ fun DailyRoznamchaScreen(
                 }
             }
 
-            // 4. Period Filter Chips + Date / Note Search
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(
@@ -478,7 +465,6 @@ fun DailyRoznamchaScreen(
                 }
             }
 
-            // 5. Selected Period Subtotal Bar (when viewing non-Today filters)
             if (selectedPeriod != RoznamchaPeriod.TODAY || searchQuery.isNotBlank()) {
                 item {
                     Surface(
@@ -515,7 +501,6 @@ fun DailyRoznamchaScreen(
                 }
             }
 
-            // 6. Date-Wise Grouped Roznamcha Entries
             if (groupedByDate.isEmpty()) {
                 item {
                     Card(
@@ -699,7 +684,6 @@ fun DailyRoznamchaScreen(
         }
     }
 
-    // Add / Edit Roznamcha Entry Dialog
     val activeType = dialogEntryType
     if (activeType != null) {
         RoznamchaEntryDialog(
@@ -733,9 +717,7 @@ fun DailyRoznamchaScreen(
             }
         )
     }
-}
-
-@Composable
+}@Composable
 private fun RoznamchaHeroMetric(
     label: String,
     value: String,
@@ -790,7 +772,7 @@ private fun RoznamchaEntryDialog(
     var paymentSource by remember(existingEntry?.id) {
         mutableStateOf(existingEntry?.paymentSourceEnum() ?: DailyPaymentSource.CASH)
     }
-    var amountStr by remember(existingEntry?.id) {
+    var amountExpr by remember(existingEntry?.id) {
         mutableStateOf(
             existingEntry?.let {
                 if (it.amount % 1.0 == 0.0) it.amount.toLong().toString() else it.amount.toString()
@@ -817,24 +799,59 @@ private fun RoznamchaEntryDialog(
     }
 
     val isCashIn = entryType == DailyCashType.CASH_IN
+    val accent = if (isCashIn) ProfitGreen else UdharCrimson
 
-    AlertDialog(
+    fun submitEntry() {
+        val amt = LiveCalculatorEngine.evaluate(amountExpr)
+        if (amt > 0.0) {
+            val finalTitle = titleInput.trim().ifBlank {
+                if (isCashIn) language.pick("دستی سیل / آمدن", "Manual Cash In")
+                else language.pick("اخراجات / خریداری", "Manual Cash Out")
+            }
+            onSave(entryType, paymentSource, finalTitle, amt, noteInput.trim(), selectedDateMs)
+        }
+    }
+
+    Dialog(
         onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = if (existingEntry != null) {
-                    language.pick("روزنامچہ انٹری ایڈٹ کریں", "Edit Roznamcha Entry")
-                } else if (isCashIn) {
-                    language.pick("+ کیش اِن (دستی سیل / آمدن)", "+ Cash In (Manual Sale / Income)")
-                } else {
-                    language.pick("- کیش آؤٹ (اخراجات / مال خریداری)", "- Cash Out (Expense / Purchase)")
-                },
-                color = if (isCashIn) ProfitGreen else UdharCrimson,
-                fontWeight = FontWeight.Bold
-            )
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            shape = RoundedCornerShape(22.dp),
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (existingEntry != null) {
+                            language.pick("روزنامچہ انٹری ایڈٹ کریں", "Edit Roznamcha Entry")
+                        } else if (isCashIn) {
+                            language.pick("+ کیش اِن (دستی سیل)", "+ Cash In (Manual Sale)")
+                        } else {
+                            language.pick("- کیش آؤٹ (اخراجات)", "- Cash Out (Expense)")
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                        color = accent,
+                        fontWeight = FontWeight.Bold
+                    )
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = null)
+                    }
+                }
+
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = isCashIn,
@@ -850,21 +867,19 @@ private fun RoznamchaEntryDialog(
                     )
                 }
 
-                OutlinedTextField(
-                    value = amountStr,
-                    onValueChange = { amountStr = it.filter { c -> c.isDigit() || c == '.' } },
-                    label = { Text(language.pick("رقم (روپے PKR)*", "Amount (PKR)*")) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("roznamcha_amount_input")
+                // DigiKhata-Style Live Calculator Amount Field
+                LiveCalculatorAmountField(
+                    expression = amountExpr,
+                    onExpressionChange = { amountExpr = it },
+                    language = language,
+                    accentColor = accent,
+                    onDone = { submitEntry() }
                 )
 
                 OutlinedTextField(
                     value = titleInput,
                     onValueChange = { titleInput = it },
-                    label = { Text(language.pick("عنوان / مد (مثلاً دستی سیل، بجلی بل، چینی خریداری)*", "Title / Description*")) },
+                    label = { Text(language.pick("عنوان / مد (مثلاً دستی سیل، بجلی بل)*", "Title / Category*")) },
                     singleLine = true,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -879,11 +894,6 @@ private fun RoznamchaEntryDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                Text(
-                    text = language.pick("ادائیگی کا ذریعہ:", "Payment Mode:"),
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     FilterChip(
                         selected = paymentSource == DailyPaymentSource.CASH,
@@ -905,7 +915,6 @@ private fun RoznamchaEntryDialog(
                     )
                 }
 
-                // Quick Date Preset (Today / Yesterday / Custom dd/MM/yyyy)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -959,33 +968,26 @@ private fun RoznamchaEntryDialog(
                         Text(language.pick("یہ انٹری ڈیلیٹ کریں", "Delete This Entry"))
                     }
                 }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val amt = amountStr.toDoubleOrNull() ?: 0.0
-                    if (amt > 0.0) {
-                        val finalTitle = titleInput.trim().ifBlank {
-                            if (isCashIn) language.pick("دستی سیل / آمدن", "Manual Cash In")
-                            else language.pick("اخراجات / خریداری", "Manual Cash Out")
-                        }
-                        onSave(entryType, paymentSource, finalTitle, amt, noteInput.trim(), selectedDateMs)
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
+                        Text(language.pick("منسوخ", "Cancel"))
                     }
-                },
-                enabled = (amountStr.toDoubleOrNull() ?: 0.0) > 0.0,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isCashIn) ProfitGreen else UdharCrimson
-                ),
-                modifier = Modifier.testTag("roznamcha_save_entry_button")
-            ) {
-                Text(language.pick("محفوظ کریں", "Save"))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(language.pick("منسوخ", "Cancel"))
+                    Button(
+                        onClick = { submitEntry() },
+                        enabled = LiveCalculatorEngine.evaluate(amountExpr) > 0.0,
+                        colors = ButtonDefaults.buttonColors(containerColor = accent),
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("roznamcha_save_entry_button")
+                    ) {
+                        Text(language.pick("محفوظ کریں", "Save"))
+                    }
+                }
             }
         }
-    )
+    }
 }
