@@ -16,9 +16,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
@@ -27,6 +29,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Search
@@ -55,6 +58,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -70,8 +74,25 @@ import com.example.i18n.AppLanguage
 import com.example.i18n.formatPkr
 import com.example.i18n.pick
 import com.example.services.ReceiptFormatter
+import com.example.services.ReceiptPrintHelper
+import com.example.ui.components.LiveCalculatorAmountField
+import com.example.ui.components.LiveCalculatorEngine
 import com.example.ui.theme.ProfitGreen
 import com.example.ui.theme.UdharCrimson
+import com.example.ui.theme.WarningAmber
+
+private fun buildUdharReminderMessage(customer: Customer, language: AppLanguage): String {
+    val balText = formatPkr(customer.balance, language)
+    return if (language == AppLanguage.URDU) {
+        "السلام علیکم ${customer.name}!\n" +
+            "یاد دہانی: کھاتے میں آپ کے ذمے بقایا ادھار رقم $balText واجب الادا ہے۔\n" +
+            "براہِ کرم اپنی سہولت کے مطابق ادائیگی کر دیں۔ جزاک اللہ!"
+    } else {
+        "Assalam-o-Alaikum ${customer.name}!\n" +
+            "Friendly Reminder: Your pending Khata balance is $balText.\n" +
+            "Kindly arrange payment at your earliest convenience. Thank you!"
+    }
+}
 
 @Composable
 fun KhataScreen(
@@ -87,6 +108,7 @@ fun KhataScreen(
     onDeleteTransaction: (LedgerEntry) -> Unit = {},
     onDeleteCustomer: (String) -> Unit = {}
 ) {
+    val context = LocalContext.current
     var searchQuery by remember { mutableStateOf("") }
     var showAddCustomerDialog by remember { mutableStateOf(false) }
     var selectedCustomerId by remember { mutableStateOf<String?>(null) }
@@ -264,22 +286,43 @@ fun KhataScreen(
                                     }
                                 }
 
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text(
-                                        text = formatPkr(cust.balance, language),
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (cust.balance > 0) UdharCrimson else ProfitGreen
-                                    )
-                                    Text(
-                                        text = if (cust.balance > 0) {
-                                            language.pick("ادھار باقی", "Due")
-                                        } else {
-                                            language.pick("حساب صاف", "Clear")
-                                        },
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (cust.balance > 0) UdharCrimson else ProfitGreen
-                                    )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    if (cust.balance > 0) {
+                                        IconButton(
+                                            onClick = {
+                                                val msg = buildUdharReminderMessage(cust, language)
+                                                ReceiptPrintHelper.sendViaWhatsApp(context, cust.phone, msg)
+                                            },
+                                            modifier = Modifier.size(34.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.NotificationsActive,
+                                                contentDescription = language.pick("واٹس ایپ ادھار یاد دہانی", "WhatsApp Reminder"),
+                                                tint = WarningAmber,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        Text(
+                                            text = formatPkr(cust.balance, language),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (cust.balance > 0) UdharCrimson else ProfitGreen
+                                        )
+                                        Text(
+                                            text = if (cust.balance > 0) {
+                                                language.pick("ادھار باقی", "Due")
+                                            } else {
+                                                language.pick("حساب صاف", "Clear")
+                                            },
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (cust.balance > 0) UdharCrimson else ProfitGreen
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -336,7 +379,6 @@ fun KhataScreen(
         )
     }
 }
-
 @Composable
 private fun AddCustomerDialog(
     language: AppLanguage,
@@ -346,13 +388,40 @@ private fun AddCustomerDialog(
     var name by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
-    var openingStr by remember { mutableStateOf("0") }
+    var openingExpr by remember { mutableStateOf("") }
 
-    AlertDialog(
+    Dialog(
         onDismissRequest = onDismiss,
-        title = { Text(language.pick("نیا کسٹمر ادھار کھاتہ", "New Customer Udhar Account")) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            shape = RoundedCornerShape(22.dp),
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = language.pick("نیا کسٹمر ادھار کھاتہ", "New Customer Udhar Account"),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = null)
+                    }
+                }
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
@@ -371,34 +440,39 @@ private fun AddCustomerDialog(
                 OutlinedTextField(
                     value = address,
                     onValueChange = { address = it },
-                    label = { Text(language.pick("پتہ / محلہ (گجرات)", "Address / Mohalla (Gujrat)")) },
+                    label = { Text(language.pick("پتہ / محلہ", "Address / Mohalla")) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-                OutlinedTextField(
-                    value = openingStr,
-                    onValueChange = { openingStr = it.filter { c -> c.isDigit() || c == '.' } },
-                    label = { Text(language.pick("سابقہ بقایا ادھار (روپے)", "Opening Udhar Balance (PKR)")) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                LiveCalculatorAmountField(
+                    expression = openingExpr,
+                    onExpressionChange = { openingExpr = it },
+                    language = language,
+                    label = language.pick("سابقہ بقایا ادھار (روپے)", "Opening Udhar Balance (PKR)"),
+                    onDone = {
+                        if (name.isNotBlank()) {
+                            onConfirm(name, phone, address, LiveCalculatorEngine.evaluate(openingExpr))
+                        }
+                    }
                 )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onConfirm(name, phone, address, openingStr.toDoubleOrNull() ?: 0.0) },
-                enabled = name.isNotBlank()
-            ) {
-                Text(language.pick("محفوظ کریں", "Save"))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(language.pick("منسوخ", "Cancel"))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
+                        Text(language.pick("منسوخ", "Cancel"))
+                    }
+                    Button(
+                        onClick = { onConfirm(name, phone, address, LiveCalculatorEngine.evaluate(openingExpr)) },
+                        enabled = name.isNotBlank(),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(language.pick("محفوظ کریں", "Save"))
+                    }
+                }
             }
         }
-    )
+    }
 }
 
 @Composable
@@ -415,6 +489,7 @@ private fun CustomerLedgerDetailDialog(
     onDeleteCustomer: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
     var pendingEntryType by remember { mutableStateOf<LedgerEntryType?>(null) }
     var editingLedgerEntry by remember { mutableStateOf<LedgerEntry?>(null) }
     var deletingEntryConfirm by remember { mutableStateOf<LedgerEntry?>(null) }
@@ -460,6 +535,20 @@ private fun CustomerLedgerDetailDialog(
                         }
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (customer.balance > 0) {
+                            IconButton(
+                                onClick = {
+                                    val msg = buildUdharReminderMessage(customer, language)
+                                    ReceiptPrintHelper.sendViaWhatsApp(context, customer.phone, msg)
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.NotificationsActive,
+                                    contentDescription = language.pick("واٹس ایپ ادھار یاد دہانی", "WhatsApp Reminder"),
+                                    tint = WarningAmber
+                                )
+                            }
+                        }
                         IconButton(onClick = { confirmDeleteCustomer = true }) {
                             Icon(
                                 imageVector = Icons.Default.DeleteForever,
@@ -473,7 +562,6 @@ private fun CustomerLedgerDetailDialog(
                     }
                 }
 
-                // Current Balance Strip
                 Surface(
                     color = if (customer.balance > 0) UdharCrimson.copy(alpha = 0.1f) else ProfitGreen.copy(alpha = 0.12f),
                     shape = RoundedCornerShape(14.dp),
@@ -499,7 +587,6 @@ private fun CustomerLedgerDetailDialog(
                     }
                 }
 
-                // Receive Payment / Give Udhar Buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -524,6 +611,21 @@ private fun CustomerLedgerDetailDialog(
                         Icon(Icons.Default.ArrowUpward, contentDescription = null, tint = UdharCrimson, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.size(4.dp))
                         Text(language.pick("ادھار دیں", "Add Udhar"), color = UdharCrimson)
+                    }
+                }
+
+                if (customer.balance > 0) {
+                    OutlinedButton(
+                        onClick = {
+                            val msg = buildUdharReminderMessage(customer, language)
+                            ReceiptPrintHelper.sendViaWhatsApp(context, customer.phone, msg)
+                        },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = WarningAmber),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.NotificationsActive, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.size(6.dp))
+                        Text(language.pick("واٹس ایپ پر ادھار یاد دہانی بھیجیں", "Send WhatsApp Udhar Reminder"))
                     }
                 }
 
@@ -630,7 +732,7 @@ private fun CustomerLedgerDetailDialog(
                         }
                     }
                 }
-                                // Bottom Delete Full Customer Khata Button
+
                 OutlinedButton(
                     onClick = { confirmDeleteCustomer = true },
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = UdharCrimson),
@@ -643,8 +745,7 @@ private fun CustomerLedgerDetailDialog(
             }
         }
     }
-
-    if (confirmDeleteCustomer) {
+        if (confirmDeleteCustomer) {
         AlertDialog(
             onDismissRequest = { confirmDeleteCustomer = false },
             title = { Text(language.pick("کھاتہ مستقل ڈیلیٹ کریں؟", "Delete Customer Khata?"), color = UdharCrimson) },
@@ -707,75 +808,146 @@ private fun CustomerLedgerDetailDialog(
         )
     }
 
+    // DigiKhata-Style Live Calculator Dialog for Receive Payment / Give Udhar
     if (pendingEntryType != null) {
-        var amountStr by remember { mutableStateOf("") }
+        var amountExpr by remember { mutableStateOf("") }
         var note by remember { mutableStateOf("") }
         val isCredit = pendingEntryType == LedgerEntryType.CREDIT
-        AlertDialog(
+        val accent = if (isCredit) ProfitGreen else UdharCrimson
+
+        Dialog(
             onDismissRequest = { pendingEntryType = null },
-            title = {
-                Text(
-                    if (isCredit) language.pick("نقد وصولی درج کریں", "Record Cash Payment")
-                    else language.pick("ادھار رقم درج کریں", "Record Udhar Debit")
-                )
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = amountStr,
-                        onValueChange = { amountStr = it.filter { c -> c.isDigit() || c == '.' } },
-                        label = { Text(language.pick("رقم (روپے)*", "Amount (PKR)*")) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                shape = RoundedCornerShape(22.dp),
+                color = MaterialTheme.colorScheme.surface
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (isCredit) language.pick("نقد وصولی درج کریں", "Record Cash Payment")
+                            else language.pick("ادھار رقم درج کریں", "Record Udhar Debit"),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = accent
+                        )
+                        IconButton(onClick = { pendingEntryType = null }) {
+                            Icon(Icons.Default.Close, contentDescription = null)
+                        }
+                    }
+
                     OutlinedTextField(
                         value = note,
                         onValueChange = { note = it },
-                        label = { Text(language.pick("تفصیل (اختیاری)", "Note (optional)")) },
+                        label = { Text(language.pick("تفصیل / آئٹمز نوٹ (اختیاری)", "Details / Note (optional)")) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val amt = amountStr.toDoubleOrNull() ?: 0.0
-                        if (amt > 0) {
-                            onRecordTransaction(pendingEntryType!!, amt, note)
-                            pendingEntryType = null
+
+                    LiveCalculatorAmountField(
+                        expression = amountExpr,
+                        onExpressionChange = { amountExpr = it },
+                        language = language,
+                        accentColor = accent,
+                        onDone = {
+                            val amt = LiveCalculatorEngine.evaluate(amountExpr)
+                            if (amt > 0.0) {
+                                onRecordTransaction(pendingEntryType!!, amt, note)
+                                pendingEntryType = null
+                            }
                         }
-                    },
-                    enabled = (amountStr.toDoubleOrNull() ?: 0.0) > 0.0
-                ) {
-                    Text(language.pick("محفوظ کریں", "Save"))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingEntryType = null }) {
-                    Text(language.pick("منسوخ", "Cancel"))
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { pendingEntryType = null },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(language.pick("منسوخ", "Cancel"))
+                        }
+                        Button(
+                            onClick = {
+                                val amt = LiveCalculatorEngine.evaluate(amountExpr)
+                                if (amt > 0.0) {
+                                    onRecordTransaction(pendingEntryType!!, amt, note)
+                                    pendingEntryType = null
+                                }
+                            },
+                            enabled = LiveCalculatorEngine.evaluate(amountExpr) > 0.0,
+                            colors = ButtonDefaults.buttonColors(containerColor = accent),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(language.pick("محفوظ کریں", "Save"))
+                        }
+                    }
                 }
             }
-        )
+        }
     }
 
+    // DigiKhata-Style Live Calculator Dialog for Editing Existing Khata Entry
     val editTarget = editingLedgerEntry
     if (editTarget != null) {
         var editType by remember(editTarget.id) { mutableStateOf(editTarget.entryTypeEnum()) }
-        var editAmountStr by remember(editTarget.id) {
+        var editAmountExpr by remember(editTarget.id) {
             mutableStateOf(
                 if (editTarget.amount % 1.0 == 0.0) editTarget.amount.toLong().toString()
                 else editTarget.amount.toString()
             )
         }
         var editNote by remember(editTarget.id) { mutableStateOf(editTarget.note) }
+        val editAccent = if (editType == LedgerEntryType.CREDIT) ProfitGreen else UdharCrimson
 
-        AlertDialog(
+        Dialog(
             onDismissRequest = { editingLedgerEntry = null },
-            title = { Text(language.pick("کھاتہ انٹری ایڈٹ / رقم تبدیل کریں", "Edit Khata Entry")) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                shape = RoundedCornerShape(22.dp),
+                color = MaterialTheme.colorScheme.surface
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = language.pick("کھاتہ انٹری ایڈٹ کریں", "Edit Khata Entry"),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        IconButton(onClick = { editingLedgerEntry = null }) {
+                            Icon(Icons.Default.Close, contentDescription = null)
+                        }
+                    }
+
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilterChip(
                             selected = editType == LedgerEntryType.DEBIT,
@@ -790,14 +962,7 @@ private fun CustomerLedgerDetailDialog(
                             modifier = Modifier.weight(1f)
                         )
                     }
-                    OutlinedTextField(
-                        value = editAmountStr,
-                        onValueChange = { editAmountStr = it.filter { c -> c.isDigit() || c == '.' } },
-                        label = { Text(language.pick("رقم (روپے)*", "Amount (PKR)*")) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+
                     OutlinedTextField(
                         value = editNote,
                         onValueChange = { editNote = it },
@@ -805,40 +970,54 @@ private fun CustomerLedgerDetailDialog(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    OutlinedButton(
-                        onClick = {
-                            onDeleteTransaction(editTarget)
-                            editingLedgerEntry = null
-                        },
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = UdharCrimson),
-                        modifier = Modifier.fillMaxWidth()
+
+                    LiveCalculatorAmountField(
+                        expression = editAmountExpr,
+                        onExpressionChange = { editAmountExpr = it },
+                        language = language,
+                        accentColor = editAccent,
+                        onDone = {
+                            val amt = LiveCalculatorEngine.evaluate(editAmountExpr)
+                            if (amt > 0.0) {
+                                onUpdateTransaction(editTarget, editType, amt, editNote)
+                                editingLedgerEntry = null
+                            }
+                        }
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.size(4.dp))
-                        Text(language.pick("انٹری ڈیلیٹ کریں", "Delete Entry"))
+                        OutlinedButton(
+                            onClick = {
+                                onDeleteTransaction(editTarget)
+                                editingLedgerEntry = null
+                            },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = UdharCrimson),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.size(4.dp))
+                            Text(language.pick("ڈیلیٹ", "Delete"))
+                        }
+                        Button(
+                            onClick = {
+                                val amt = LiveCalculatorEngine.evaluate(editAmountExpr)
+                                if (amt > 0.0) {
+                                    onUpdateTransaction(editTarget, editType, amt, editNote)
+                                    editingLedgerEntry = null
+                                }
+                            },
+                            enabled = LiveCalculatorEngine.evaluate(editAmountExpr) > 0.0,
+                            colors = ButtonDefaults.buttonColors(containerColor = editAccent),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(language.pick("اپڈیٹ کریں", "Update"))
+                        }
                     }
                 }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val amt = editAmountStr.toDoubleOrNull() ?: 0.0
-                        if (amt > 0.0) {
-                            onUpdateTransaction(editTarget, editType, amt, editNote)
-                            editingLedgerEntry = null
-                        }
-                    },
-                    enabled = (editAmountStr.toDoubleOrNull() ?: 0.0) > 0.0
-                ) {
-                    Text(language.pick("اپڈیٹ کریں", "Update"))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { editingLedgerEntry = null }) {
-                    Text(language.pick("منسوخ", "Cancel"))
-                }
             }
-        )
+        }
     }
 }
-
