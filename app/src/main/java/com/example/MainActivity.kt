@@ -1,5 +1,6 @@
 package com.example
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.BackHandler
@@ -90,9 +91,12 @@ import com.example.auth.FingerprintAppLockScreen
 import com.example.auth.ShopSecurityVault
 import com.example.auth.onGoogleSignInClicked
 import com.example.auth.signOutShopAccount
+import com.example.data.BusinessCatalog
+import com.example.data.BusinessType
 import com.example.data.DailyCashType
 import com.example.data.DailyPaymentSource
 import com.example.data.Order
+import com.example.data.ProductCategory
 import com.example.data.ShopPreferences
 import com.example.data.ShopRepository
 import com.example.data.ShopSettings
@@ -114,6 +118,7 @@ import com.example.ui.components.PaymentReceiptDialog
 import com.example.ui.components.RationCardReceiptDialog
 import com.example.ui.components.ShopLogoBadge
 import com.example.ui.screens.BillingScreen
+import com.example.ui.screens.BusinessSetupScreen
 import com.example.ui.screens.CustomerOrderScreen
 import com.example.ui.screens.DailyRoznamchaScreen
 import com.example.ui.screens.DashboardScreen
@@ -177,7 +182,6 @@ class MainActivity : FragmentActivity() {
                 _incomingNfcCard.value = card
             }
         } catch (_: Throwable) {
-            // Gracefully continue in manual mode on devices without NFC
         }
     }
 
@@ -185,7 +189,6 @@ class MainActivity : FragmentActivity() {
         try {
             NfcRationCardReader.disableNfcReading(this)
         } catch (_: Throwable) {
-            // Ignore on devices without NFC
         }
         super.onPause()
     }
@@ -207,6 +210,11 @@ class MainActivity : FragmentActivity() {
         }
     }
 }
+
+private const val BUSINESS_PREFS = "ahmad_bilal_business_setup"
+private const val KEY_BUSINESS_DONE = "business_setup_completed_v1"
+private const val KEY_BUSINESS_CODE = "selected_business_code"
+
 @Composable
 fun AppRoot(
     incomingNfcFlow: StateFlow<ScannedNfcCard?>,
@@ -365,6 +373,76 @@ private fun MainShopShell(
     val rationCardBills = (rationCardBillsState as? UiState.Success)?.data ?: emptyList()
     val dailyCashEntries = (dailyCashEntriesState as? UiState.Success)?.data ?: emptyList()
 
+    val bizPrefs = remember { context.applicationContext.getSharedPreferences(BUSINESS_PREFS, Context.MODE_PRIVATE) }
+    val hasExistingCustomShop = remember(settings.storeNameUrdu) {
+        settings.storeNameUrdu.contains("احمد بلال") || bizPrefs.getBoolean(KEY_BUSINESS_DONE, false)
+    }
+    var showBusinessSetup by rememberSaveable { mutableStateOf(!hasExistingCustomShop) }
+    var currentBusinessType by remember {
+        mutableStateOf(BusinessType.fromCode(bizPrefs.getString(KEY_BUSINESS_CODE, BusinessType.KIRYANA.code)))
+    }
+
+    if (showBusinessSetup) {
+        BusinessSetupScreen(
+            language = language,
+            initialBusinessType = currentBusinessType,
+            initialShopNameUrdu = settings.storeNameUrdu,
+            initialShopNameEnglish = settings.storeNameEnglish,
+            initialCityUrdu = settings.shopAddressUrdu,
+            isBusy = isBusy,
+            onCompleteSetup = { selectedType, shopUr, shopEn, cityUr, loadPresets ->
+                currentBusinessType = selectedType
+                bizPrefs.edit()
+                    .putBoolean(KEY_BUSINESS_DONE, true)
+                    .putString(KEY_BUSINESS_CODE, selectedType.code)
+                    .apply()
+
+                viewModel.saveStoreProfile(
+                    storeNameUrdu = shopUr,
+                    storeNameEnglish = shopEn,
+                    addressUrdu = cityUr,
+                    addressEnglish = cityUr,
+                    phone = settings.shopPhone,
+                    bankName = settings.bankName,
+                    accountTitle = settings.hblAccountTitle,
+                    accountNumber = settings.hblAccountNumber,
+                    iban = settings.hblIban,
+                    branchName = settings.hblBranchName
+                )
+
+                if (loadPresets) {
+                    val existingNames = products.map { it.nameUrdu.trim() }.toSet()
+                    BusinessCatalog.presetsFor(selectedType).forEach { preset ->
+                        if (preset.nameUrdu.trim() !in existingNames) {
+                            viewModel.saveProduct(
+                                existingId = null,
+                                nameUrdu = preset.nameUrdu,
+                                nameEnglish = preset.nameEnglish,
+                                category = ProductCategory.OTHER,
+                                unit = preset.unit,
+                                costPrice = preset.costPrice,
+                                sellingPrice = preset.sellingPrice,
+                                marginPercent = settings.defaultMarginPercent,
+                                autoPriceEnabled = false,
+                                stockQty = preset.initialStock,
+                                lowStockThreshold = preset.lowStockThreshold,
+                                barcode = ""
+                            )
+                        }
+                    }
+                }
+                showBusinessSetup = false
+                viewModel.postMessage(
+                    language.pick(
+                        "${selectedType.titleUrdu} کی دکان اور سامان کی لسٹ تیار ہو گئی!",
+                        "${selectedType.titleEnglish} store & items loaded!"
+                    )
+                )
+            }
+        )
+        return
+    }
+
     val todayManualCashNet = remember(dailyCashEntries) {
         val startOfTodayMs = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 0)
@@ -404,7 +482,7 @@ private fun MainShopShell(
             currentDestination = ShopDestination.HOME
         }
     }
-        // Route real NFC card taps straight to the POS / پی او ایس Card screen
+
     val incomingNfc by incomingNfcFlow.collectAsStateWithLifecycle()
     LaunchedEffect(incomingNfc?.scannedAtMs) {
         val card = incomingNfc ?: return@LaunchedEffect
@@ -480,10 +558,7 @@ private fun MainShopShell(
                             ) {
                                 ShopLogoBadge(
                                     resId = R.drawable.img_shop_logo,
-                                    contentDescription = language.pick(
-                                        "احمد بلال کریانہ سٹور لوگو",
-                                        "Ahmad Bilal Kiryana Store Logo"
-                                    ),
+                                    contentDescription = settings.storeNameEnglish,
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .clip(CircleShape),
@@ -492,10 +567,7 @@ private fun MainShopShell(
                             }
                             Column {
                                 Text(
-                                    text = language.pick(
-                                        settings.storeNameUrdu,
-                                        settings.storeNameEnglish
-                                    ),
+                                    text = language.pick(settings.storeNameUrdu, settings.storeNameEnglish),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color.White,
@@ -679,7 +751,8 @@ private fun MainShopShell(
                             )
                         }
                     }
-                                        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                         when (currentDestination) {
                             ShopDestination.HOME -> DashboardScreen(
                                 language = language,
@@ -771,7 +844,7 @@ private fun MainShopShell(
                                 language = language,
                                 products = products,
                                 movements = stockMovements,
-                                    analytics = analytics,
+                                analytics = analytics,
                                 defaultMarginPercent = settings.defaultMarginPercent,
                                 onSaveProduct = { id, ur, en, cat, unit, cost, sell, margin, auto, stock, low, code ->
                                     viewModel.saveProduct(id, ur, en, cat, unit, cost, sell, margin, auto, stock, low, code)
@@ -800,10 +873,10 @@ private fun MainShopShell(
                                         entryDateMs = dateMs
                                     )
                                 },
-                                    onDeleteEntry = { id ->
-        viewModel.deleteDailyCashEntry(id)
-    },
-    totalKhataUdhar = analytics.totalUdharReceivable
+                                onDeleteEntry = { id ->
+                                    viewModel.deleteDailyCashEntry(id)
+                                },
+                                totalKhataUdhar = analytics.totalUdharReceivable
                             )
 
                             ShopDestination.KHATA -> KhataScreen(
@@ -920,6 +993,7 @@ private fun MainShopShell(
                                 onUpdateShopLocation = { lat, lng, addr ->
                                     viewModel.updateShopGpsLocation(lat, lng, addr)
                                 },
+                                onOpenBusinessSetup = { showBusinessSetup = true },
                                 onSignOut = {
                                     if (Firebase.auth.currentUser != null) {
                                         signOutShopAccount(
