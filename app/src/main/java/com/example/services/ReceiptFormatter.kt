@@ -1,8 +1,11 @@
 package com.example.services
 
+import com.example.data.DailyCashEntry
+import com.example.data.DailyCashType
 import com.example.data.LedgerEntry
 import com.example.data.LedgerEntryType
 import com.example.data.Order
+import com.example.data.Product
 import com.example.data.RationCardBill
 import com.example.i18n.AppLanguage
 import com.example.i18n.formatPkr
@@ -25,13 +28,21 @@ object ReceiptFormatter {
         return SimpleDateFormat("dd/MM/yyyy hh:mm a", Locale.US).format(Date(epochMillis))
     }
 
-    fun buildShareText(order: Order, language: AppLanguage, shopPhone: String): String {
+    fun buildShareText(
+        order: Order,
+        language: AppLanguage,
+        shopPhone: String = "",
+        shopNameUrdu: String = SHOP_NAME_URDU,
+        shopNameEnglish: String = SHOP_NAME_ENGLISH,
+        shopAddressUrdu: String = SHOP_CITY_URDU,
+        shopAddressEnglish: String = SHOP_CITY_ENGLISH
+    ): String {
         val dateStr = formatDateTime(order.createdAt?.toDate()?.time ?: System.currentTimeMillis())
         val sb = StringBuilder()
         if (language == AppLanguage.URDU) {
             sb.appendLine("============================")
-            sb.appendLine("    $SHOP_NAME_URDU")
-            sb.appendLine("    $SHOP_CITY_URDU")
+            sb.appendLine("    $shopNameUrdu")
+            sb.appendLine("    $shopAddressUrdu")
             if (shopPhone.isNotBlank()) sb.appendLine("    فون: $shopPhone")
             sb.appendLine("============================")
             sb.appendLine("بل نمبر: ${order.billNumber}")
@@ -56,8 +67,8 @@ object ReceiptFormatter {
             sb.appendLine("خریداری کا شکریہ! دوبارہ تشریف لائیں")
         } else {
             sb.appendLine("============================")
-            sb.appendLine("  $SHOP_NAME_ENGLISH")
-            sb.appendLine("  $SHOP_CITY_ENGLISH")
+            sb.appendLine("  $shopNameEnglish")
+            sb.appendLine("  $shopAddressEnglish")
             if (shopPhone.isNotBlank()) sb.appendLine("  Phone: $shopPhone")
             sb.appendLine("============================")
             sb.appendLine("Bill #: ${order.billNumber}")
@@ -87,7 +98,15 @@ object ReceiptFormatter {
     /**
      * Royal Emerald & Gold Cash Memo HTML (True RTL Urdu: Sr# | Qty | Item | Rate | Amount)
      */
-    fun buildPrintableHtml(order: Order, language: AppLanguage, shopPhone: String): String {
+    fun buildPrintableHtml(
+        order: Order,
+        language: AppLanguage,
+        shopPhone: String = "",
+        shopNameUrdu: String = SHOP_NAME_URDU,
+        shopNameEnglish: String = SHOP_NAME_ENGLISH,
+        shopAddressUrdu: String = SHOP_CITY_URDU,
+        shopAddressEnglish: String = SHOP_CITY_ENGLISH
+    ): String {
         val isUrdu = language == AppLanguage.URDU
         val dir = if (isUrdu) "rtl" else "ltr"
         val dateStr = formatDateTime(order.createdAt?.toDate()?.time ?: System.currentTimeMillis())
@@ -123,7 +142,7 @@ object ReceiptFormatter {
         val cleanCust = order.customerName.trim()
         val isWalkIn = cleanCust.isBlank() || cleanCust == "نقد کسٹمر" || cleanCust.equals("Walk-in Customer", ignoreCase = true)
         val buyerDisplay = if (isWalkIn) {
-            if (isUrdu) "____________________________" else "____________________________"
+            "____________________________"
         } else {
             val payTag = if (order.remainingUdhar > 0) (if (isUrdu) " (ادھار)" else " (Credit)") else ""
             escapeHtml("$cleanCust$payTag")
@@ -165,11 +184,11 @@ object ReceiptFormatter {
             <div class="memo-box">
                 <div class="hero">
                     <div class="hero-top">
-                        <p class="shop-ur">$SHOP_NAME_URDU</p>
-                        <p class="shop-en">$SHOP_NAME_ENGLISH</p>
+                        <p class="shop-ur">${escapeHtml(shopNameUrdu)}</p>
+                        <p class="shop-en">${escapeHtml(shopNameEnglish)}</p>
                     </div>
                 </div>
-                <div class="sub-bar">$SHOP_CITY_URDU ${if (shopPhone.isNotBlank()) " • $shopPhone" else ""}</div>
+                <div class="sub-bar">${escapeHtml(if (isUrdu) shopAddressUrdu else shopAddressEnglish)} ${if (shopPhone.isNotBlank()) " • ${escapeHtml(shopPhone)}" else ""}</div>
                 <div class="meta-row">
                     <div><strong>${if (isUrdu) "نمبر" else "Bill #"}:</strong> ${escapeHtml(order.billNumber)}</div>
                     <div class="memo-pill">${if (isUrdu) "کیش میمو" else "CASH MEMO"}</div>
@@ -204,7 +223,12 @@ object ReceiptFormatter {
             </html>
         """.trimIndent()
     }
-        fun buildEscPosBytes(order: Order, shopPhone: String): ByteArray {
+        fun buildEscPosBytes(
+        order: Order,
+        shopPhone: String = "",
+        shopNameEnglish: String = SHOP_NAME_ENGLISH,
+        shopAddressEnglish: String = SHOP_CITY_ENGLISH
+    ): ByteArray {
         val out = ByteArrayOutputStream()
         fun cmd(vararg bytes: Int) { bytes.forEach { out.write(it) } }
         fun line(text: String) { out.write("$text\n".toByteArray(Charsets.UTF_8)) }
@@ -212,8 +236,8 @@ object ReceiptFormatter {
         cmd(0x1B, 0x40)
         cmd(0x1B, 0x61, 0x01)
         cmd(0x1B, 0x45, 0x01)
-        line("AHMAD BILAL KIRYANA STORE")
-        line("TANDA, DISTRICT GUJRAT")
+        line(shopNameEnglish.uppercase(Locale.US))
+        line(shopAddressEnglish.uppercase(Locale.US))
         cmd(0x1B, 0x45, 0x00)
         if (shopPhone.isNotBlank()) line("Tel: $shopPhone")
         line("--------------------------------")
@@ -249,24 +273,40 @@ object ReceiptFormatter {
         return out.toByteArray()
     }
 
-    fun buildPaymentShareText(entry: LedgerEntry, language: AppLanguage): String {
+    fun buildPaymentShareText(
+        entry: LedgerEntry,
+        language: AppLanguage,
+        shopPhone: String = "",
+        shopNameUrdu: String = SHOP_NAME_URDU,
+        shopNameEnglish: String = SHOP_NAME_ENGLISH,
+        shopAddressUrdu: String = SHOP_CITY_URDU,
+        shopAddressEnglish: String = SHOP_CITY_ENGLISH
+    ): String {
         val dateStr = formatDateTime(entry.createdAt?.toDate()?.time ?: System.currentTimeMillis())
         val isCredit = entry.entryTypeEnum() == LedgerEntryType.CREDIT
         return if (language == AppLanguage.URDU) {
             val typeText = if (isCredit) "وصولی رسید (نقد)" else "ادھار اندراج"
-            "$SHOP_NAME_URDU ($SHOP_CITY_URDU)\n$typeText\nکسٹمر: ${entry.customerName}\nرقم: ${formatPkr(entry.amount, AppLanguage.URDU)}\nبقایا ادھار: ${formatPkr(entry.balanceAfter, AppLanguage.URDU)}\nتاریخ: $dateStr"
+            "$shopNameUrdu ($shopAddressUrdu)\n$typeText\nکسٹمر: ${entry.customerName}\nرقم: ${formatPkr(entry.amount, AppLanguage.URDU)}\nبقایا ادھار: ${formatPkr(entry.balanceAfter, AppLanguage.URDU)}\nتاریخ: $dateStr"
         } else {
             val typeText = if (isCredit) "Payment Receipt (Cash)" else "Udhar Debit Entry"
-            "$SHOP_NAME_ENGLISH ($SHOP_CITY_ENGLISH)\n$typeText\nCustomer: ${entry.customerName}\nAmount: ${formatPkr(entry.amount, AppLanguage.ENGLISH)}\nRemaining Balance: ${formatPkr(entry.balanceAfter, AppLanguage.ENGLISH)}\nDate: $dateStr"
+            "$shopNameEnglish ($shopAddressEnglish)\n$typeText\nCustomer: ${entry.customerName}\nAmount: ${formatPkr(entry.amount, AppLanguage.ENGLISH)}\nRemaining Balance: ${formatPkr(entry.balanceAfter, AppLanguage.ENGLISH)}\nDate: $dateStr"
         }
     }
 
-    fun buildRationCardShareText(bill: RationCardBill, language: AppLanguage, shopPhone: String): String {
+    fun buildRationCardShareText(
+        bill: RationCardBill,
+        language: AppLanguage,
+        shopPhone: String = "",
+        shopNameUrdu: String = SHOP_NAME_URDU,
+        shopNameEnglish: String = SHOP_NAME_ENGLISH,
+        shopAddressUrdu: String = SHOP_CITY_URDU,
+        shopAddressEnglish: String = SHOP_CITY_ENGLISH
+    ): String {
         val dateStr = formatDateTime(bill.createdAt?.toDate()?.time ?: System.currentTimeMillis())
         val sb = StringBuilder()
         if (language == AppLanguage.URDU) {
             sb.appendLine("============================")
-            sb.appendLine("  $SHOP_NAME_URDU")
+            sb.appendLine("  $shopNameUrdu")
             sb.appendLine("  مریم نواز راشن کارڈ رسید")
             if (shopPhone.isNotBlank()) sb.appendLine("  فون: $shopPhone")
             sb.appendLine("============================")
@@ -284,7 +324,7 @@ object ReceiptFormatter {
             sb.appendLine("============================")
         } else {
             sb.appendLine("============================")
-            sb.appendLine("  $SHOP_NAME_ENGLISH")
+            sb.appendLine("  $shopNameEnglish")
             sb.appendLine("  Maryam Nawaz Ration Card Receipt")
             sb.appendLine("============================")
             sb.appendLine("Receipt #: ${bill.billNumber}")
@@ -298,7 +338,15 @@ object ReceiptFormatter {
         return sb.toString()
     }
 
-    fun buildRationCardPrintableHtml(bill: RationCardBill, language: AppLanguage, shopPhone: String): String {
+    fun buildRationCardPrintableHtml(
+        bill: RationCardBill,
+        language: AppLanguage,
+        shopPhone: String = "",
+        shopNameUrdu: String = SHOP_NAME_URDU,
+        shopNameEnglish: String = SHOP_NAME_ENGLISH,
+        shopAddressUrdu: String = SHOP_CITY_URDU,
+        shopAddressEnglish: String = SHOP_CITY_ENGLISH
+    ): String {
         val isUrdu = language == AppLanguage.URDU
         val dir = if (isUrdu) "rtl" else "ltr"
         val dateStr = formatDateTime(bill.createdAt?.toDate()?.time ?: System.currentTimeMillis())
@@ -322,7 +370,7 @@ object ReceiptFormatter {
             <body style="font-family:sans-serif;margin:14px;">
                 <div style="border:2px solid #064E3B;border-radius:14px;overflow:hidden;max-width:650px;margin:auto;">
                     <div style="background:#065F46;color:#FDE68A;padding:12px 16px;text-align:center;border-bottom:3px solid #D4AF37;">
-                        <h2 style="margin:0;">$SHOP_NAME_URDU</h2>
+                        <h2 style="margin:0;">${escapeHtml(if (isUrdu) shopNameUrdu else shopNameEnglish)}</h2>
                         <div style="font-size:12px;color:#fff;margin-top:4px;">${if (isUrdu) "مریم نواز راشن کارڈ رسید" else "Maryam Nawaz Ration Card Receipt"}</div>
                     </div>
                     <div style="padding:10px 14px;font-size:13px;background:#ECFDF5;">
@@ -351,7 +399,12 @@ object ReceiptFormatter {
         """.trimIndent()
     }
 
-    fun buildRationCardEscPosBytes(bill: RationCardBill, shopPhone: String): ByteArray {
+    fun buildRationCardEscPosBytes(
+        bill: RationCardBill,
+        shopPhone: String = "",
+        shopNameEnglish: String = SHOP_NAME_ENGLISH,
+        shopAddressEnglish: String = SHOP_CITY_ENGLISH
+    ): ByteArray {
         val out = ByteArrayOutputStream()
         fun cmd(vararg bytes: Int) { bytes.forEach { out.write(it) } }
         fun line(text: String) { out.write("$text\n".toByteArray(Charsets.UTF_8)) }
@@ -359,8 +412,8 @@ object ReceiptFormatter {
         cmd(0x1B, 0x40)
         cmd(0x1B, 0x61, 0x01)
         cmd(0x1B, 0x45, 0x01)
-        line("AHMAD BILAL KIRYANA STORE")
-        line("TANDA, DISTRICT GUJRAT")
+        line(shopNameEnglish.uppercase(Locale.US))
+        line(shopAddressEnglish.uppercase(Locale.US))
         cmd(0x1B, 0x45, 0x00)
         line("MARYAM NAWAZ RATION CARD")
         if (shopPhone.isNotBlank()) line("Tel: $shopPhone")
@@ -385,6 +438,83 @@ object ReceiptFormatter {
         line("\n\n\n")
         cmd(0x1D, 0x56, 0x41, 0x03)
         return out.toByteArray()
+    }
+
+    fun buildRoznamchaStatementShareText(
+        periodLabel: String,
+        entries: List<DailyCashEntry>,
+        totalIn: Double,
+        totalOut: Double,
+        netBalance: Double,
+        language: AppLanguage,
+        shopNameUrdu: String = SHOP_NAME_URDU,
+        shopNameEnglish: String = SHOP_NAME_ENGLISH,
+        shopPhone: String = ""
+    ): String {
+        val sb = StringBuilder()
+        val fmt = SimpleDateFormat("dd/MM/yyyy", Locale.US)
+        if (language == AppLanguage.URDU) {
+            sb.appendLine("============================")
+            sb.appendLine("  $shopNameUrdu")
+            sb.appendLine("  روزنامچہ اسٹیٹمنٹ ($periodLabel)")
+            if (shopPhone.isNotBlank()) sb.appendLine("  فون: $shopPhone")
+            sb.appendLine("============================")
+            entries.forEachIndexed { idx, e ->
+                val sign = if (e.entryTypeEnum() == DailyCashType.CASH_IN) "+" else "-"
+                sb.appendLine("${idx + 1}. [${fmt.format(Date(e.entryDateMs))}] ${e.categoryOrTitle}: $sign${formatPkr(e.amount, AppLanguage.URDU)}")
+            }
+            sb.appendLine("----------------------------")
+            sb.appendLine("کل کیش اِن: +${formatPkr(totalIn, AppLanguage.URDU)}")
+            sb.appendLine("کل کیش آؤٹ: -${formatPkr(totalOut, AppLanguage.URDU)}")
+            sb.appendLine("خالص بچت: ${formatPkr(netBalance, AppLanguage.URDU)}")
+            sb.appendLine("============================")
+        } else {
+            sb.appendLine("============================")
+            sb.appendLine("  $shopNameEnglish")
+            sb.appendLine("  Roznamcha Statement ($periodLabel)")
+            sb.appendLine("============================")
+            entries.forEachIndexed { idx, e ->
+                val sign = if (e.entryTypeEnum() == DailyCashType.CASH_IN) "+" else "-"
+                sb.appendLine("${idx + 1}. [${fmt.format(Date(e.entryDateMs))}] ${e.categoryOrTitle}: $sign${formatPkr(e.amount, AppLanguage.ENGLISH)}")
+            }
+            sb.appendLine("----------------------------")
+            sb.appendLine("Total Cash In: +${formatPkr(totalIn, AppLanguage.ENGLISH)}")
+            sb.appendLine("Total Cash Out: -${formatPkr(totalOut, AppLanguage.ENGLISH)}")
+            sb.appendLine("Net Balance: ${formatPkr(netBalance, AppLanguage.ENGLISH)}")
+            sb.appendLine("============================")
+        }
+        return sb.toString()
+    }
+
+    fun buildLowStockReportShareText(
+        lowStockProducts: List<Product>,
+        language: AppLanguage,
+        shopNameUrdu: String = SHOP_NAME_URDU,
+        shopNameEnglish: String = SHOP_NAME_ENGLISH,
+        shopPhone: String = ""
+    ): String {
+        val sb = StringBuilder()
+        if (language == AppLanguage.URDU) {
+            sb.appendLine("============================")
+            sb.appendLine("  $shopNameUrdu")
+            sb.appendLine("  کم اسٹاک / خریداری لسٹ")
+            if (shopPhone.isNotBlank()) sb.appendLine("  فون: $shopPhone")
+            sb.appendLine("============================")
+            lowStockProducts.forEachIndexed { idx, p ->
+                sb.appendLine("${idx + 1}. ${p.nameUrdu.ifBlank { p.nameEnglish }} — بقایا: ${formatQty(p.stockQuantity)} ${unitLabel(p.unit, AppLanguage.URDU)}")
+            }
+            sb.appendLine("============================")
+        } else {
+            sb.appendLine("============================")
+            sb.appendLine("  $shopNameEnglish")
+            sb.appendLine("  Low Stock Purchase List")
+            sb.appendLine("============================")
+            lowStockProducts.forEachIndexed { idx, p ->
+                sb.appendLine("${idx + 1}. ${p.nameEnglish.ifBlank { p.nameUrdu }} — Left: ${formatQty(p.stockQuantity)} ${unitLabel(p.unit, AppLanguage.ENGLISH)}")
+            }
+            sb.appendLine("============================")
+        }
+        return sb.toString()
     }
 
     private fun escapeHtml(input: String): String =
