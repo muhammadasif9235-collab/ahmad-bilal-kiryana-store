@@ -26,9 +26,6 @@ import com.example.data.Order
 import com.example.data.Product
 import com.example.data.RationCardBill
 import com.example.data.ShopSettings
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import com.example.i18n.AppLanguage
 import com.example.i18n.formatPkr
 import com.example.i18n.formatQty
@@ -36,16 +33,15 @@ import com.example.i18n.label
 import com.example.i18n.unitLabel
 import java.io.File
 import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 object ReceiptPrintHelper {
 
     private const val PDF_PAGE_WIDTH = 340
     private const val PDF_MARGIN = 18
 
-    /**
-     * Renders an authentic RTL Urdu / LTR English receipt via WebView into Android's native
-     * PrintManager (supports Wi-Fi printers, USB printers, and Save as PDF).
-     */
     fun printOrderWithSystemPrint(
         context: Context,
         order: Order,
@@ -57,10 +53,10 @@ object ReceiptPrintHelper {
             order = order,
             language = language,
             shopPhone = settings?.shopPhone?.ifBlank { shopPhone } ?: shopPhone,
-            shopNameUrdu = settings?.storeNameUrdu ?: ReceiptFormatter.SHOP_NAME_URDU,
-            shopNameEnglish = settings?.storeNameEnglish ?: ReceiptFormatter.SHOP_NAME_ENGLISH,
-            shopAddressUrdu = settings?.shopAddressUrdu ?: ReceiptFormatter.SHOP_CITY_URDU,
-            shopAddressEnglish = settings?.shopAddressEnglish ?: ReceiptFormatter.SHOP_CITY_ENGLISH
+            shopNameUrdu = settings?.storeNameUrdu?.ifBlank { "کریانہ اینڈ جنرل سٹور" } ?: "کریانہ اینڈ جنرل سٹور",
+            shopNameEnglish = settings?.storeNameEnglish?.ifBlank { "Kiryana & General Store" } ?: "Kiryana & General Store",
+            shopAddressUrdu = settings?.shopAddressUrdu.orEmpty(),
+            shopAddressEnglish = settings?.shopAddressEnglish.orEmpty()
         )
         printHtmlDocument(context, html, "Bill_${order.billNumber}")
     }
@@ -75,10 +71,10 @@ object ReceiptPrintHelper {
             entry = entry,
             language = language,
             shopPhone = settings?.shopPhone.orEmpty(),
-            shopNameUrdu = settings?.storeNameUrdu ?: ReceiptFormatter.SHOP_NAME_URDU,
-            shopNameEnglish = settings?.storeNameEnglish ?: ReceiptFormatter.SHOP_NAME_ENGLISH,
-            shopAddressUrdu = settings?.shopAddressUrdu ?: ReceiptFormatter.SHOP_CITY_URDU,
-            shopAddressEnglish = settings?.shopAddressEnglish ?: ReceiptFormatter.SHOP_CITY_ENGLISH
+            shopNameUrdu = settings?.storeNameUrdu?.ifBlank { "کریانہ اینڈ جنرل سٹور" } ?: "کریانہ اینڈ جنرل سٹور",
+            shopNameEnglish = settings?.storeNameEnglish?.ifBlank { "Kiryana & General Store" } ?: "Kiryana & General Store",
+            shopAddressUrdu = settings?.shopAddressUrdu.orEmpty(),
+            shopAddressEnglish = settings?.shopAddressEnglish.orEmpty()
         )
         printHtmlDocument(context, html, "Khata_${entry.id.take(10)}")
     }
@@ -94,10 +90,10 @@ object ReceiptPrintHelper {
             bill = bill,
             language = language,
             shopPhone = settings?.shopPhone?.ifBlank { shopPhone } ?: shopPhone,
-            shopNameUrdu = settings?.storeNameUrdu ?: ReceiptFormatter.SHOP_NAME_URDU,
-            shopNameEnglish = settings?.storeNameEnglish ?: ReceiptFormatter.SHOP_NAME_ENGLISH,
-            shopAddressUrdu = settings?.shopAddressUrdu ?: ReceiptFormatter.SHOP_CITY_URDU,
-            shopAddressEnglish = settings?.shopAddressEnglish ?: ReceiptFormatter.SHOP_CITY_ENGLISH
+            shopNameUrdu = settings?.storeNameUrdu?.ifBlank { "کریانہ اینڈ جنرل سٹور" } ?: "کریانہ اینڈ جنرل سٹور",
+            shopNameEnglish = settings?.storeNameEnglish?.ifBlank { "Kiryana & General Store" } ?: "Kiryana & General Store",
+            shopAddressUrdu = settings?.shopAddressUrdu.orEmpty(),
+            shopAddressEnglish = settings?.shopAddressEnglish.orEmpty()
         )
         printHtmlDocument(context, html, "POS_Receipt_${bill.billNumber}")
     }
@@ -406,17 +402,12 @@ object ReceiptPrintHelper {
                 context.startActivity(viewIntent)
                 return
             } catch (_: Exception) {
-                // No PDF viewer installed -> fall back to Android native Print / Save as PDF
+                // Fall back to Android native Print / Save as PDF
             }
         }
         printLowStockReportWithSystemPrint(context, lowStockProducts, language, settings)
     }
-
-    /**
-     * Generates a clean, multi-page A4 Low Stock Replenishment Report PDF using Android PdfDocument.
-     * Sorted by urgency (Out of Stock first, then lowest stock-to-threshold ratio).
-     */
-    fun generateLowStockReportPdf(
+        fun generateLowStockReportPdf(
         context: Context,
         lowStockProducts: List<Product>,
         language: AppLanguage,
@@ -424,8 +415,8 @@ object ReceiptPrintHelper {
     ): File? {
         return try {
             val isUrdu = language == AppLanguage.URDU
-            val pageWidth = 595 // A4 width in PostScript points
-            val pageHeight = 842 // A4 height in PostScript points
+            val pageWidth = 595
+            val pageHeight = 842
             val margin = 28f
             val contentWidth = pageWidth - (margin * 2f)
 
@@ -493,7 +484,6 @@ object ReceiptPrintHelper {
             }
             val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
 
-            // Column X coordinates & widths (sum = contentWidth = 539pt)
             val colWidths = floatArrayOf(26f, 188f, 68f, 65f, 68f, 58f, 66f)
             val colStarts = FloatArray(colWidths.size)
             var accX = margin
@@ -569,7 +559,6 @@ object ReceiptPrintHelper {
                 drawStaticText(canvas, footerText, cellSubPaint, margin, footerY, contentWidth.toInt(), Layout.Alignment.ALIGN_CENTER)
             }
 
-            // 1. Top Emerald Header Banner (Page 1)
             val bannerTop = margin
             val bannerHeight = 82f
             fillPaint.color = emeraldColor
@@ -588,7 +577,6 @@ object ReceiptPrintHelper {
                 y += drawStaticText(canvas, subLine, subWhitePaint, margin + 12f, y, (contentWidth - 24f).toInt(), Layout.Alignment.ALIGN_CENTER) + 5f
             }
 
-            // Crimson Alert Badge inside header
             val badgeText = if (isUrdu) {
                 "کم اسٹاک ری اسٹاک رپورٹ — LOW STOCK REPLENISHMENT REPORT ($generatedStr)"
             } else {
@@ -602,26 +590,13 @@ object ReceiptPrintHelper {
 
             y = bannerTop + bannerHeight + 12f
 
-            // 2. Summary KPI Strip (3 cards)
             val kpiGap = 10f
             val kpiW = (contentWidth - (kpiGap * 2f)) / 3f
             val kpiH = 48f
             val kpiCards = listOf(
-                Triple(
-                    if (isUrdu) "کم اسٹاک اشیاء" else "Low Stock Products",
-                    "${sorted.size}",
-                    amberColor
-                ),
-                Triple(
-                    if (isUrdu) "مکمل ختم اشیاء" else "Out of Stock (Critical)",
-                    "$outCount",
-                    crimsonColor
-                ),
-                Triple(
-                    if (isUrdu) "اندازاً خریداری لاگت" else "Est. Replenish Cost",
-                    formatPkr(totalEstCost, language),
-                    emeraldColor
-                )
+                Triple(if (isUrdu) "کم اسٹاک اشیاء" else "Low Stock Products", "${sorted.size}", amberColor),
+                Triple(if (isUrdu) "مکمل ختم اشیاء" else "Out of Stock (Critical)", "$outCount", crimsonColor),
+                Triple(if (isUrdu) "اندازاً خریداری لاگت" else "Est. Replenish Cost", formatPkr(totalEstCost, language), emeraldColor)
             )
             kpiCards.forEachIndexed { idx, (label, value, accent) ->
                 val kx = margin + idx * (kpiW + kpiGap)
@@ -634,7 +609,6 @@ object ReceiptPrintHelper {
             }
             y += kpiH + 14f
 
-            // 3. Replenishment Table
             y = drawTableHeader(y)
 
             val maxBodyY = pageHeight - margin - 52f
@@ -667,7 +641,6 @@ object ReceiptPrintHelper {
                         y = drawTableHeader(y)
                     }
 
-                    // Row background tint
                     fillPaint.color = when {
                         prod.isOutOfStock() -> Color.rgb(254, 226, 226)
                         idx % 2 == 0 -> Color.rgb(255, 251, 235)
@@ -681,33 +654,25 @@ object ReceiptPrintHelper {
                     }
                     val reorderPaint = TextPaint(cellBoldPaint).apply { color = emeraldColor }
 
-                    // Col 0: Index
                     drawStaticText(canvas, "${idx + 1}", cellRegularPaint, colStarts[0] + 2f, y + 6f, (colWidths[0] - 4f).toInt(), Layout.Alignment.ALIGN_CENTER)
-                    // Col 1: Product Name
                     drawStaticText(canvas, primaryName.take(36), cellBoldPaint, colStarts[1] + 4f, y + 4f, (colWidths[1] - 8f).toInt(), Layout.Alignment.ALIGN_NORMAL)
                     if (secondaryName.isNotBlank()) {
                         drawStaticText(canvas, secondaryName.take(36), cellSubPaint, colStarts[1] + 4f, y + 17f, (colWidths[1] - 8f).toInt(), Layout.Alignment.ALIGN_NORMAL)
                     }
-                    // Col 2: In Stock + Status
                     val stockTxt = "${formatQty(prod.stockQty)} $unitTxt"
                     drawStaticText(canvas, stockTxt, stockPaint, colStarts[2] + 2f, y + 4f, (colWidths[2] - 4f).toInt(), Layout.Alignment.ALIGN_CENTER)
                     val badgeStatus = if (prod.isOutOfStock()) (if (isUrdu) "ختم" else "OUT") else (if (isUrdu) "کم" else "LOW")
                     drawStaticText(canvas, badgeStatus, stockPaint, colStarts[2] + 2f, y + 16f, (colWidths[2] - 4f).toInt(), Layout.Alignment.ALIGN_CENTER)
 
-                    // Col 3: Min Threshold
                     drawStaticText(canvas, "${formatQty(prod.lowStockThreshold)} $unitTxt", cellRegularPaint, colStarts[3] + 2f, y + 6f, (colWidths[3] - 4f).toInt(), Layout.Alignment.ALIGN_CENTER)
-                    // Col 4: Suggested Reorder Qty
                     drawStaticText(canvas, "+${formatQty(prod.suggestedRestockQty())} $unitTxt", reorderPaint, colStarts[4] + 2f, y + 6f, (colWidths[4] - 4f).toInt(), Layout.Alignment.ALIGN_CENTER)
-                    // Col 5: Unit Cost
                     drawStaticText(canvas, "Rs.${prod.costPrice.toLong()}", cellRegularPaint, colStarts[5] + 2f, y + 6f, (colWidths[5] - 6f).toInt(), Layout.Alignment.ALIGN_OPPOSITE)
-                    // Col 6: Est Cost
                     drawStaticText(canvas, "Rs.${prod.estimatedRestockCost().toLong()}", cellBoldPaint, colStarts[6] + 2f, y + 6f, (colWidths[6] - 6f).toInt(), Layout.Alignment.ALIGN_OPPOSITE)
 
                     y += rowHeight
                 }
             }
 
-            // 4. Grand Total Replenishment Box
             if (y + 44f > pageHeight - margin - 20f) {
                 drawPageFooter(pageNumber)
                 document.finishPage(page)
@@ -801,10 +766,7 @@ object ReceiptPrintHelper {
         val dateFmt = SimpleDateFormat("dd/MM/yyyy", Locale.US)
 
         val lines = mutableListOf<PdfReceiptLine>()
-        lines += PdfReceiptLine(
-            if (isUrdu) "مدت: $periodLabel" else "Period: $periodLabel",
-            bold = true
-        )
+        lines += PdfReceiptLine(if (isUrdu) "مدت: $periodLabel" else "Period: $periodLabel", bold = true)
         lines += PdfReceiptLine(if (isUrdu) "تاریخ: $generatedStr" else "Generated: $generatedStr")
         lines += PdfReceiptLine.divider()
         lines += PdfReceiptLine(
@@ -845,11 +807,8 @@ object ReceiptPrintHelper {
                     bold = false,
                     accentColor = if (isIn) Color.rgb(15, 81, 50) else Color.rgb(185, 28, 28)
                 )
-                if (entry.note.isNotBlank()) {
-                    lines += PdfReceiptLine(
-                        text = "   ${entry.note}",
-                        accentColor = Color.rgb(90, 90, 90)
-                    )
+             if (entry.note.isNotBlank()) {
+                    lines += PdfReceiptLine(text = "   ${entry.note}", accentColor = Color.rgb(90, 90, 90))
                 }
             }
         }
@@ -867,79 +826,352 @@ object ReceiptPrintHelper {
             footer = if (isUrdu) "شکریہ — $title" else "Thank you — $title"
         )
     }
-
-    fun generateOrderReceiptPdf(
+        fun generateOrderReceiptPdf(
         context: Context,
         order: Order,
         language: AppLanguage,
         settings: ShopSettings
     ): File? {
-        val isUrdu = language == AppLanguage.URDU
-        val title = if (isUrdu) settings.storeNameUrdu else settings.storeNameEnglish
-        val address = if (isUrdu) settings.shopAddressUrdu else settings.shopAddressEnglish
-        val dateStr = ReceiptFormatter.formatDateTime(order.createdAt?.toDate()?.time ?: System.currentTimeMillis())
+        return try {
+            val isUrdu = language == AppLanguage.URDU
+            val shopNameUr = settings.storeNameUrdu.ifBlank { "کریانہ اینڈ جنرل سٹور" }
+            val shopNameEn = settings.storeNameEnglish.ifBlank { "Kiryana & General Store" }
+            val shopAddr = if (isUrdu) settings.shopAddressUrdu else settings.shopAddressEnglish
+            val dateStr = ReceiptFormatter.formatDateTime(order.createdAt?.toDate()?.time ?: System.currentTimeMillis())
 
-        val lines = mutableListOf<PdfReceiptLine>()
-        lines += PdfReceiptLine(
-            if (isUrdu) "بل نمبر: ${order.billNumber}" else "Bill #: ${order.billNumber}",
-            bold = true
-        )
-        lines += PdfReceiptLine(if (isUrdu) "تاریخ: $dateStr" else "Date: $dateStr")
-        lines += PdfReceiptLine(if (isUrdu) "کسٹمر: ${order.customerName}" else "Customer: ${order.customerName}")
-        lines += PdfReceiptLine(
-            if (isUrdu) "ادائیگی: ${order.paymentMethodEnum().label(AppLanguage.URDU)}"
-            else "Payment: ${order.paymentMethodEnum().label(AppLanguage.ENGLISH)}"
-        )
-        lines += PdfReceiptLine.divider()
-        order.items.forEachIndexed { idx, item ->
-            val name = if (isUrdu) item.nameUrdu else item.nameEnglish
-            val qty = "${formatQty(item.quantity)} ${unitLabel(item.unit, language)}"
-            lines += PdfReceiptLine(
-                "${idx + 1}. $name  ($qty x ${item.unitPrice.toLong()})  =  ${formatPkr(item.lineTotal, language)}"
-            )
-        }
-        lines += PdfReceiptLine.divider()
-        if (order.discount > 0.0) {
-            lines += PdfReceiptLine(
-                if (isUrdu) "کل رقم: ${formatPkr(order.subtotal, language)}"
-                else "Subtotal: ${formatPkr(order.subtotal, language)}"
-            )
-            lines += PdfReceiptLine(
-                if (isUrdu) "رعایت: -${formatPkr(order.discount, language)}"
-                else "Discount: -${formatPkr(order.discount, language)}"
-            )
-        }
-        lines += PdfReceiptLine(
-            if (isUrdu) "واجب الادا کل: ${formatPkr(order.totalAmount, language)}"
-            else "GRAND TOTAL: ${formatPkr(order.totalAmount, language)}",
-            bold = true,
-            accentColor = Color.rgb(15, 81, 50)
-        )
-        lines += PdfReceiptLine(
-            if (isUrdu) "وصول شدہ: ${formatPkr(order.paidAmount, language)}"
-            else "Paid: ${formatPkr(order.paidAmount, language)}"
-        )
-        if (order.remainingUdhar > 0.0) {
-            lines += PdfReceiptLine(
-                if (isUrdu) "بقایا ادھار: ${formatPkr(order.remainingUdhar, language)}"
-                else "Remaining Udhar: ${formatPkr(order.remainingUdhar, language)}",
-                bold = true,
-                accentColor = Color.rgb(198, 30, 30)
-            )
-        }
+            // Traditional Pakistani A5 Cash Memo Pad Design
+            val pageWidth = 420
+            val margin = 20f
+            val contentWidth = pageWidth - (margin * 2f)
 
-        val safeName = order.billNumber.replace(Regex("[^A-Za-z0-9_-]"), "_")
-        return renderReceiptPdf(
-            context = context,
-            fileName = "Bill_${safeName}.pdf",
-            shopTitle = title,
-            shopSubtitle = address,
-            shopPhone = settings.shopPhone,
-            badgeText = if (isUrdu) "سیلز بل رسید" else "SALES BILL RECEIPT",
-            badgeColor = Color.rgb(15, 81, 50),
-            lines = lines,
-            footer = if (isUrdu) "خریداری کا شکریہ! $title" else "Thank you for shopping at $title"
-        )
+            val minRows = 14
+            val totalRows = maxOf(order.items.size, minRows)
+            val rowHeight = 20f
+            val headerHeight = 76f
+            val metaHeight = 52f
+            val tableHeaderHeight = 24f
+            val footerTotalsHeight = 76f
+            val pageHeight = (margin * 2f + headerHeight + metaHeight + tableHeaderHeight + (totalRows * rowHeight) + footerTotalsHeight + 16f)
+                .toInt()
+                .coerceAtLeast(595)
+
+            val document = PdfDocument()
+            val page = document.startPage(PdfDocument.PageInfo.Builder(pageWidth, pageHeight, 1).create())
+            val canvas = page.canvas
+            canvas.drawColor(Color.WHITE)
+
+            val emeraldDark = Color.rgb(6, 78, 59)
+            val goldAmber = Color.rgb(245, 158, 11)
+            val goldLight = Color.rgb(254, 243, 199)
+            val memoBlue = Color.rgb(30, 64, 175)
+            val crimsonRed = Color.rgb(185, 28, 28)
+            val ruleBlue = Color.rgb(147, 197, 253)
+            val darkInk = Color.rgb(24, 24, 27)
+
+            val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+            val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = 1f
+                color = emeraldDark
+            }
+            val rulePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = 0.85f
+                color = ruleBlue
+            }
+
+            fun drawAlignedText(
+                text: String,
+                paint: TextPaint,
+                x: Float,
+                y: Float,
+                w: Float,
+                align: Layout.Alignment
+            ) {
+                val safeW = w.toInt().coerceAtLeast(10)
+                val layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, safeW)
+                    .setAlignment(align)
+                    .setLineSpacing(0f, 1.0f)
+                    .setIncludePad(false)
+                    .build()
+                canvas.save()
+                canvas.translate(x, y)
+                layout.draw(canvas)
+                canvas.restore()
+            }
+
+            // 1. Outer Cash Memo Border
+            canvas.drawRoundRect(margin, margin, pageWidth - margin, pageHeight - margin, 8f, 8f, strokePaint)
+
+            // 2. Top Shop Banner (Dynamic Shop Name from User's Settings)
+            val bannerTop = margin
+            val bannerBottom = bannerTop + headerHeight
+            fillPaint.color = goldLight
+            canvas.drawRect(margin + 1f, bannerTop + 1f, pageWidth - margin - 1f, bannerBottom - 18f, fillPaint)
+
+            fillPaint.color = goldAmber
+            canvas.drawRect(margin + 1f, bannerBottom - 18f, pageWidth - margin - 1f, bannerBottom, fillPaint)
+
+            val enHeaderPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = memoBlue
+                textSize = 13.5f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+            val urHeaderPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = crimsonRed
+                textSize = 16.5f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+            val addrPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = darkInk
+                textSize = 9.5f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+
+            drawAlignedText(shopNameEn, enHeaderPaint, margin + 8f, bannerTop + 10f, (contentWidth * 0.48f), Layout.Alignment.ALIGN_NORMAL)
+            drawAlignedText(shopNameUr, urHeaderPaint, margin + (contentWidth * 0.46f), bannerTop + 8f, (contentWidth * 0.52f) - 8f, Layout.Alignment.ALIGN_OPPOSITE)
+
+            val addressAndPhone = buildString {
+                if (shopAddr.isNotBlank()) append(shopAddr)
+                if (settings.shopPhone.isNotBlank()) {
+                    if (isNotEmpty()) append("  •  ")
+                    append(settings.shopPhone)
+                }
+            }
+            if (addressAndPhone.isNotBlank()) {
+                drawAlignedText(addressAndPhone, addrPaint, margin + 6f, bannerBottom - 14f, contentWidth - 12f, Layout.Alignment.ALIGN_CENTER)
+            }
+
+            // 3. Meta Section: Bill #, Cash Memo Badge, Date, Customer Name
+            var y = bannerBottom + 8f
+            val metaLabelPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = memoBlue
+                textSize = 10.5f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+            val metaValPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = darkInk
+                textSize = 10.5f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+            val badgePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+                textSize = 10.5f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+
+            val pillW = 104f
+            val pillX = margin + (contentWidth - pillW) / 2f
+            fillPaint.color = emeraldDark
+            canvas.drawRoundRect(pillX, y - 2f, pillX + pillW, y + 16f, 6f, 6f, fillPaint)
+            drawAlignedText(if (isUrdu) "کیش میمو" else "CASH MEMO", badgePaint, pillX, y + 1f, pillW, Layout.Alignment.ALIGN_CENTER)
+
+            val leftMeta = if (isUrdu) "تاریخ: $dateStr" else "No: ${order.billNumber}"
+            val rightMeta = if (isUrdu) "نمبر: ${order.billNumber}" else "Date: $dateStr"
+            drawAlignedText(leftMeta, metaValPaint, margin + 8f, y + 1f, pillX - margin - 12f, Layout.Alignment.ALIGN_NORMAL)
+            drawAlignedText(rightMeta, metaValPaint, pillX + pillW + 4f, y + 1f, (pageWidth - margin) - (pillX + pillW) - 12f, Layout.Alignment.ALIGN_OPPOSITE)
+
+            y += 24f
+            val custLineText = if (isUrdu) {
+                "نام خریدار:   ${order.customerName}   (${order.paymentMethodEnum().label(AppLanguage.URDU)})"
+            } else {
+                "Customer Name:   ${order.customerName}   (${order.paymentMethodEnum().label(AppLanguage.ENGLISH)})"
+            }
+            drawAlignedText(
+                custLineText,
+                metaLabelPaint,
+                margin + 10f,
+                y,
+                contentWidth - 20f,
+                if (isUrdu) Layout.Alignment.ALIGN_OPPOSITE else Layout.Alignment.ALIGN_NORMAL
+            )
+            y += 15f
+            canvas.drawLine(margin + 8f, y, pageWidth - margin - 8f, y, rulePaint)
+            y += 6f
+
+            // 4. Ruled Cash Memo Table (Urdu RTL vs English LTR)
+            val tableLeft = margin + 6f
+            val tableRight = pageWidth - margin - 6f
+            val tableWidth = tableRight - tableLeft
+
+            val wQty = 54f
+            val wRate = 58f
+            val wAmount = 74f
+            val wDesc = tableWidth - wQty - wRate - wAmount
+
+            val xCol0: Float
+            val xCol1: Float
+            val xCol2: Float
+            val xCol3: Float
+            if (isUrdu) {
+                xCol0 = tableLeft
+                xCol1 = xCol0 + wAmount
+                xCol2 = xCol1 + wRate
+                xCol3 = xCol2 + wDesc
+            } else {
+                xCol0 = tableLeft
+                xCol1 = xCol0 + wQty
+                xCol2 = xCol1 + wDesc
+                xCol3 = xCol2 + wRate
+            }
+
+            fillPaint.color = goldAmber
+            canvas.drawRoundRect(tableLeft, y, tableRight, y + tableHeaderHeight, 6f, 6f, fillPaint)
+            strokePaint.color = emeraldDark
+            canvas.drawRoundRect(tableLeft, y, tableRight, y + tableHeaderHeight, 6f, 6f, strokePaint)
+
+            val tblHdrPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = darkInk
+                textSize = 10.5f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+
+            if (isUrdu) {
+                drawAlignedText("روپے", tblHdrPaint, xCol0, y + 6f, wAmount, Layout.Alignment.ALIGN_CENTER)
+                drawAlignedText("نرخ", tblHdrPaint, xCol1, y + 6f, wRate, Layout.Alignment.ALIGN_CENTER)
+                drawAlignedText("تفصیل اشیاء", tblHdrPaint, xCol2, y + 6f, wDesc, Layout.Alignment.ALIGN_CENTER)
+                drawAlignedText("تعداد", tblHdrPaint, xCol3, y + 6f, wQty, Layout.Alignment.ALIGN_CENTER)
+            } else {
+                drawAlignedText("Qty", tblHdrPaint, xCol0, y + 6f, wQty, Layout.Alignment.ALIGN_CENTER)
+                drawAlignedText("Description", tblHdrPaint, xCol1, y + 6f, wDesc, Layout.Alignment.ALIGN_CENTER)
+                drawAlignedText("Rate", tblHdrPaint, xCol2, y + 6f, wRate, Layout.Alignment.ALIGN_CENTER)
+                drawAlignedText("Amount", tblHdrPaint, xCol3, y + 6f, wAmount, Layout.Alignment.ALIGN_CENTER)
+            }
+
+            canvas.drawLine(xCol1, y, xCol1, y + tableHeaderHeight, strokePaint)
+            canvas.drawLine(xCol2, y, xCol2, y + tableHeaderHeight, strokePaint)
+            canvas.drawLine(xCol3, y, xCol3, y + tableHeaderHeight, strokePaint)
+
+            y += tableHeaderHeight
+            val rowsTopY = y
+
+            val cellTextPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = darkInk
+                textSize = 10f
+            }
+            val cellBoldPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = darkInk
+                textSize = 10f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+
+            for (r in 0 until totalRows) {
+                val rowTop = rowsTopY + (r * rowHeight)
+                val rowBottom = rowTop + rowHeight
+                if (r % 2 == 1) {
+                    fillPaint.color = Color.rgb(248, 250, 252)
+                    canvas.drawRect(tableLeft, rowTop, tableRight, rowBottom, fillPaint)
+                }
+                canvas.drawLine(tableLeft, rowBottom, tableRight, rowBottom, rulePaint)
+
+                if (r < order.items.size) {
+                    val item = order.items[r]
+                    val itemName = if (isUrdu) item.nameUrdu else item.nameEnglish
+                    val qtyText = "${formatQty(item.quantity)} ${unitLabel(item.unit, language)}"
+                    val rateText = "${item.unitPrice.toLong()}"
+                    val amtText = "${item.lineTotal.toLong()}/-"
+
+                    if (isUrdu) {
+                        drawAlignedText(amtText, cellBoldPaint, xCol0 + 4f, rowTop + 4f, wAmount - 8f, Layout.Alignment.ALIGN_CENTER)
+                        drawAlignedText(rateText, cellTextPaint, xCol1 + 2f, rowTop + 4f, wRate - 4f, Layout.Alignment.ALIGN_CENTER)
+                        drawAlignedText(itemName, cellBoldPaint, xCol2 + 4f, rowTop + 4f, wDesc - 10f, Layout.Alignment.ALIGN_OPPOSITE)
+                        drawAlignedText(qtyText, cellTextPaint, xCol3 + 2f, rowTop + 4f, wQty - 4f, Layout.Alignment.ALIGN_CENTER)
+                    } else {
+                        drawAlignedText(qtyText, cellTextPaint, xCol0 + 2f, rowTop + 4f, wQty - 4f, Layout.Alignment.ALIGN_CENTER)
+                        drawAlignedText(itemName, cellBoldPaint, xCol1 + 6f, rowTop + 4f, wDesc - 10f, Layout.Alignment.ALIGN_NORMAL)
+                        drawAlignedText(rateText, cellTextPaint, xCol2 + 2f, rowTop + 4f, wRate - 4f, Layout.Alignment.ALIGN_CENTER)
+                        drawAlignedText(amtText, cellBoldPaint, xCol3 + 4f, rowTop + 4f, wAmount - 8f, Layout.Alignment.ALIGN_CENTER)
+                    }
+                }
+            }
+
+            val rowsBottomY = rowsTopY + (totalRows * rowHeight)
+            canvas.drawRect(tableLeft, rowsTopY, tableRight, rowsBottomY, strokePaint)
+            canvas.drawLine(xCol1, rowsTopY, xCol1, rowsBottomY, rulePaint)
+            canvas.drawLine(xCol2, rowsTopY, xCol2, rowsBottomY, rulePaint)
+            canvas.drawLine(xCol3, rowsTopY, xCol3, rowsBottomY, rulePaint)
+
+            // 5. Bottom Meezan / Total Box + "بھول چوک لین دین"
+            y = rowsBottomY + 6f
+            val totalBoxW = wAmount + wRate + 36f
+            val totalBoxX = if (isUrdu) tableLeft else (tableRight - totalBoxW)
+            val noteX = if (isUrdu) (totalBoxX + totalBoxW + 8f) else tableLeft
+            val noteW = tableWidth - totalBoxW - 8f
+
+            fillPaint.color = goldLight
+            canvas.drawRoundRect(totalBoxX, y, totalBoxX + totalBoxW, y + 60f, 6f, 6f, fillPaint)
+            strokePaint.color = emeraldDark
+            canvas.drawRoundRect(totalBoxX, y, totalBoxX + totalBoxW, y + 60f, 6f, 6f, strokePaint)
+
+            val totalBoldPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = emeraldDark
+                textSize = 11.5f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+            val subTotalPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = darkInk
+                textSize = 9.5f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+            val udharPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = crimsonRed
+                textSize = 10f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+
+            val meezanStr = if (isUrdu) "میزان:  ${formatPkr(order.totalAmount, language)}" else "TOTAL:  ${formatPkr(order.totalAmount, language)}"
+            val paidStr = if (isUrdu) "وصول شدہ:  ${formatPkr(order.paidAmount, language)}" else "Paid:  ${formatPkr(order.paidAmount, language)}"
+            drawAlignedText(meezanStr, totalBoldPaint, totalBoxX + 6f, y + 6f, totalBoxW - 12f, Layout.Alignment.ALIGN_CENTER)
+            drawAlignedText(paidStr, subTotalPaint, totalBoxX + 6f, y + 24f, totalBoxW - 12f, Layout.Alignment.ALIGN_CENTER)
+
+            if (order.remainingUdhar > 0.0) {
+                val remStr = if (isUrdu) "بقایا ادھار:  ${formatPkr(order.remainingUdhar, language)}" else "Balance Due:  ${formatPkr(order.remainingUdhar, language)}"
+                drawAlignedText(remStr, udharPaint, totalBoxX + 6f, y + 40f, totalBoxW - 12f, Layout.Alignment.ALIGN_CENTER)
+            } else if (order.discount > 0.0) {
+                val discStr = if (isUrdu) "رعایت:  -${formatPkr(order.discount, language)}" else "Discount:  -${formatPkr(order.discount, language)}"
+                drawAlignedText(discStr, subTotalPaint, totalBoxX + 6f, y + 40f, totalBoxW - 12f, Layout.Alignment.ALIGN_CENTER)
+            }
+
+            val bhoolChookPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = crimsonRed
+                textSize = 11f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+            val thanksPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = emeraldDark
+                textSize = 9.5f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+            drawAlignedText(
+                if (isUrdu) "بھول چوک لین دین" else "Errors & Omissions Excepted",
+                bhoolChookPaint,
+                noteX,
+                y + 10f,
+                noteW,
+                if (isUrdu) Layout.Alignment.ALIGN_OPPOSITE else Layout.Alignment.ALIGN_NORMAL
+            )
+            drawAlignedText(
+                if (isUrdu) "خریداری کا شکریہ! دوبارہ تشریف لائیں" else "Thank you for shopping! Visit again",
+                thanksPaint,
+                noteX,
+                y + 32f,
+                noteW,
+                if (isUrdu) Layout.Alignment.ALIGN_OPPOSITE else Layout.Alignment.ALIGN_NORMAL
+            )
+
+            document.finishPage(page)
+
+            val safeName = order.billNumber.replace(Regex("[^A-Za-z0-9_-]"), "_")
+            val receiptsDir = File(context.cacheDir, "receipts").apply { mkdirs() }
+            val pdfFile = File(receiptsDir, "CashMemo_${safeName}.pdf")
+            FileOutputStream(pdfFile).use { fos ->
+                document.writeTo(fos)
+            }
+            document.close()
+            pdfFile
+        } catch (_: Throwable) {
+            null
+        }
     }
 
     fun generateKhataReceiptPdf(
@@ -1011,10 +1243,7 @@ object ReceiptPrintHelper {
         val netLimit = if (bill.netSubsidyLimit > 0.0) bill.netSubsidyLimit else (bill.subsidyLimit - bill.feeDeduction).coerceAtLeast(0.0)
 
         val lines = mutableListOf<PdfReceiptLine>()
-        lines += PdfReceiptLine(
-            if (isUrdu) "رسید نمبر: ${bill.billNumber} (${bill.monthKey})" else "Receipt #: ${bill.billNumber} (${bill.monthKey})",
-            bold = true
-        )
+        lines += PdfReceiptLine(if (isUrdu) "رسید نمبر: ${bill.billNumber} (${bill.monthKey})" else "Receipt #: ${bill.billNumber} (${bill.monthKey})", bold = true)
         lines += PdfReceiptLine(if (isUrdu) "تاریخ: $dateStr" else "Date: $dateStr")
         lines += PdfReceiptLine(if (isUrdu) "صارف: ${bill.beneficiaryName}" else "Customer: ${bill.beneficiaryName}")
         if (bill.phone.isNotBlank()) lines += PdfReceiptLine(if (isUrdu) "موبائل: ${bill.phone}" else "Phone: ${bill.phone}")
@@ -1025,46 +1254,18 @@ object ReceiptPrintHelper {
         bill.items.forEachIndexed { idx, item ->
             val name = if (isUrdu) item.nameUrdu else item.nameEnglish
             val qty = "${formatQty(item.quantity)} ${unitLabel(item.unit, language)}"
-            lines += PdfReceiptLine(
-                "${idx + 1}. $name  ($qty x ${item.unitPrice.toLong()})  =  ${formatPkr(item.lineTotal, language)}"
-            )
+            lines += PdfReceiptLine("${idx + 1}. $name  ($qty x ${item.unitPrice.toLong()})  =  ${formatPkr(item.lineTotal, language)}")
         }
         lines += PdfReceiptLine.divider()
-        lines += PdfReceiptLine(
-            if (isUrdu) "کل کارڈ کوٹہ: ${formatPkr(bill.subsidyLimit, language)}"
-            else "Total Card Quota: ${formatPkr(bill.subsidyLimit, language)}"
-        )
-        lines += PdfReceiptLine(
-            if (isUrdu) "سروس فیس کٹوتی: -${formatPkr(bill.feeDeduction, language)}"
-            else "Service Fee Deduction: -${formatPkr(bill.feeDeduction, language)}"
-        )
-        lines += PdfReceiptLine(
-            if (isUrdu) "خالص قابلِ استعمال راشن: ${formatPkr(netLimit, language)}"
-            else "Net Ration Value: ${formatPkr(netLimit, language)}",
-            bold = true
-        )
-        lines += PdfReceiptLine(
-            if (isUrdu) "کل POS بل: ${formatPkr(bill.totalAmount, language)}"
-            else "TOTAL POS BILL: ${formatPkr(bill.totalAmount, language)}",
-            bold = true,
-            accentColor = Color.rgb(8, 76, 54)
-        )
-        lines += PdfReceiptLine(
-            if (isUrdu) "کارڈ سے کٹوتی: ${formatPkr(bill.subsidyUsed, language)}"
-            else "POS Card Used: ${formatPkr(bill.subsidyUsed, language)}"
-        )
+        lines += PdfReceiptLine(if (isUrdu) "کل کارڈ کوٹہ: ${formatPkr(bill.subsidyLimit, language)}" else "Total Card Quota: ${formatPkr(bill.subsidyLimit, language)}")
+        lines += PdfReceiptLine(if (isUrdu) "سروس فیس کٹوتی: -${formatPkr(bill.feeDeduction, language)}" else "Service Fee Deduction: -${formatPkr(bill.feeDeduction, language)}")
+        lines += PdfReceiptLine(if (isUrdu) "خالص قابلِ استعمال راشن: ${formatPkr(netLimit, language)}" else "Net Ration Value: ${formatPkr(netLimit, language)}", bold = true)
+        lines += PdfReceiptLine(if (isUrdu) "کل POS بل: ${formatPkr(bill.totalAmount, language)}" else "TOTAL POS BILL: ${formatPkr(bill.totalAmount, language)}", bold = true, accentColor = Color.rgb(8, 76, 54))
+        lines += PdfReceiptLine(if (isUrdu) "کارڈ سے کٹوتی: ${formatPkr(bill.subsidyUsed, language)}" else "POS Card Used: ${formatPkr(bill.subsidyUsed, language)}")
         if (bill.cashTopUp > 0.0) {
-            lines += PdfReceiptLine(
-                if (isUrdu) "اضافی نقد ادائیگی: ${formatPkr(bill.cashTopUp, language)}"
-                else "Extra Cash Paid: ${formatPkr(bill.cashTopUp, language)}",
-                bold = true,
-                accentColor = Color.rgb(180, 100, 12)
-            )
+            lines += PdfReceiptLine(if (isUrdu) "اضافی نقد ادائیگی: ${formatPkr(bill.cashTopUp, language)}" else "Extra Cash Paid: ${formatPkr(bill.cashTopUp, language)}", bold = true, accentColor = Color.rgb(180, 100, 12))
         }
-        lines += PdfReceiptLine(
-            if (isUrdu) "بقایا خالص بیلنس: ${formatPkr(bill.remainingSubsidy, language)}"
-            else "Remaining Net Balance: ${formatPkr(bill.remainingSubsidy, language)}"
-        )
+        lines += PdfReceiptLine(if (isUrdu) "بقایا خالص بیلنس: ${formatPkr(bill.remainingSubsidy, language)}" else "Remaining Net Balance: ${formatPkr(bill.remainingSubsidy, language)}")
 
         val safeName = bill.billNumber.replace(Regex("[^A-Za-z0-9_-]"), "_")
         return renderReceiptPdf(
@@ -1148,12 +1349,8 @@ object ReceiptPrintHelper {
             val footerLayout = makeLayout(footer, subPaint, Layout.Alignment.ALIGN_CENTER)
 
             val bodyLayouts = lines.map { line ->
-                if (line.isDivider) {
-                    null
-                } else {
-                    val paint = TextPaint(if (line.bold) bodyBold else bodyRegular).apply {
-                        color = line.accentColor
-                    }
+                if (line.isDivider) null else {
+                    val paint = TextPaint(if (line.bold) bodyBold else bodyRegular).apply { color = line.accentColor }
                     makeLayout(line.text, paint, Layout.Alignment.ALIGN_NORMAL)
                 }
             }
@@ -1161,7 +1358,7 @@ object ReceiptPrintHelper {
             var totalHeight = PDF_MARGIN + titleLayout.height + 6
             if (subLayout != null) totalHeight += subLayout.height + 3
             if (phoneLayout != null) totalHeight += phoneLayout.height + 3
-            totalHeight += badgeLayout.height + 20 // pill + spacing
+            totalHeight += badgeLayout.height + 20
             bodyLayouts.forEach { layout ->
                 totalHeight += if (layout == null) 14 else (layout.height + 6)
             }
@@ -1173,12 +1370,8 @@ object ReceiptPrintHelper {
             val page = document.startPage(pageInfo)
             val canvas = page.canvas
 
-            // White background
             canvas.drawColor(Color.WHITE)
-
             var y = PDF_MARGIN.toFloat()
-
-            // Header title
             canvas.save()
             canvas.translate(PDF_MARGIN.toFloat(), y)
             titleLayout.draw(canvas)
@@ -1201,7 +1394,6 @@ object ReceiptPrintHelper {
                 y += phoneLayout.height + 4f
             }
 
-            // Badge pill
             val pillTop = y + 2f
             val pillBottom = pillTop + badgeLayout.height + 10f
             val badgeBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = badgeColor }
@@ -1220,7 +1412,6 @@ object ReceiptPrintHelper {
             canvas.restore()
             y = pillBottom + 12f
 
-            // Body lines
             bodyLayouts.forEach { layout ->
                 if (layout == null) {
                     val midY = y + 6f
@@ -1235,7 +1426,6 @@ object ReceiptPrintHelper {
                 }
             }
 
-            // Footer
             y += 6f
             canvas.drawLine(PDF_MARGIN.toFloat(), y, (PDF_PAGE_WIDTH - PDF_MARGIN).toFloat(), y, dividerPaint)
             y += 8f
@@ -1322,10 +1512,6 @@ object ReceiptPrintHelper {
         }
     }
 
-    /**
-     * Converts Pakistani phone numbers (e.g. 0300-1234567, +92 300 1234567, 3001234567)
-     * into WhatsApp international digits without '+' (923001234567).
-     */
     fun formatPakistaniWhatsAppNumber(rawPhone: String): String {
         val digits = rawPhone.filter { it.isDigit() }
         if (digits.isBlank()) return ""
@@ -1338,9 +1524,6 @@ object ReceiptPrintHelper {
         }
     }
 
-    /**
-     * Formats Pakistani phone numbers for native SIM SMS (03XXXXXXXXX or international digits).
-     */
     fun formatPakistaniSmsNumber(rawPhone: String): String {
         val digits = rawPhone.filter { it.isDigit() }
         if (digits.isBlank()) return ""
@@ -1352,10 +1535,6 @@ object ReceiptPrintHelper {
         }
     }
 
-    /**
-     * Opens WhatsApp directly with pre-filled receipt text via https://wa.me/ link
-     * (works with both WhatsApp and WhatsApp Business). Falls back gracefully to system share.
-     */
     fun sendViaWhatsApp(context: Context, phone: String, message: String) {
         val waNumber = formatPakistaniWhatsAppNumber(phone)
         if (waNumber.isNotBlank()) {
@@ -1370,7 +1549,7 @@ object ReceiptPrintHelper {
             } catch (_: Exception) {
                 // Fall through to direct WhatsApp text intent
             }
-        }
+              }
         val whatsappPackage = findInstalledWhatsAppPackage(context)
         if (whatsappPackage != null) {
             try {
@@ -1389,10 +1568,6 @@ object ReceiptPrintHelper {
         shareText(context, message, "WhatsApp Receipt")
     }
 
-    /**
-     * Opens Android's native SIM SMS messaging app pre-filled with the customer's phone number
-     * and full receipt body using smsto: URI (zero SMS permission required).
-     */
     fun sendViaSimSms(context: Context, phone: String, message: String) {
         val smsNumber = formatPakistaniSmsNumber(phone)
         val uri = Uri.parse("smsto:$smsNumber")
