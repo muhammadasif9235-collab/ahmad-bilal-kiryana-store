@@ -16,8 +16,8 @@ android {
     applicationId = "com.aistudio.kiryana.abksgp"
     minSdk = 24
     targetSdk = 36
-    versionCode = 5.1
-versionName = "5.1"
+    versionCode = 6
+versionName = "6.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
