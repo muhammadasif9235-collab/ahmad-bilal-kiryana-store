@@ -1392,7 +1392,263 @@ object ReceiptPrintHelper {
             null
         }
     }
-    
+        fun generateKhataReceiptPdf(
+        context: Context,
+        entry: LedgerEntry,
+        language: AppLanguage,
+        settings: ShopSettings
+    ): File? {
+        val isUrdu = language == AppLanguage.URDU
+        val isCredit = entry.entryTypeEnum() == LedgerEntryType.CREDIT
+        val title = if (isUrdu) settings.storeNameUrdu else settings.storeNameEnglish
+        val address = if (isUrdu) settings.shopAddressUrdu else settings.shopAddressEnglish
+        val dateStr = ReceiptFormatter.formatDateTime(entry.createdAt?.toDate()?.time ?: System.currentTimeMillis())
+        val accent = if (isCredit) Color.rgb(15, 81, 50) else Color.rgb(198, 30, 30)
+
+        val lines = mutableListOf<PdfReceiptLine>()
+        lines += PdfReceiptLine(if (isUrdu) "کسٹمر: ${entry.customerName}" else "Customer: ${entry.customerName}", bold = true)
+        lines += PdfReceiptLine(if (isUrdu) "تاریخ: $dateStr" else "Date: $dateStr")
+        lines += PdfReceiptLine(
+            if (isCredit) {
+                if (isUrdu) "قسم: نقد وصولی (+)" else "Type: Cash Payment Received"
+            } else {
+                if (isUrdu) "قسم: ادھار اندراج" else "Type: Udhar Credit Entry"
+            }
+        )
+        if (entry.note.isNotBlank()) {
+            lines += PdfReceiptLine(if (isUrdu) "تفصیل: ${entry.note}" else "Note: ${entry.note}")
+        }
+        lines += PdfReceiptLine.divider()
+        lines += PdfReceiptLine(
+            if (isUrdu) "رقم: ${formatPkr(entry.amount, language)}" else "AMOUNT: ${formatPkr(entry.amount, language)}",
+            bold = true,
+            accentColor = accent
+        )
+        lines += PdfReceiptLine(
+            if (isUrdu) "نیا بقایا ادھار: ${formatPkr(entry.balanceAfter, language)}"
+            else "Updated Balance: ${formatPkr(entry.balanceAfter, language)}",
+            bold = true
+        )
+
+        val safeId = entry.id.take(12).replace(Regex("[^A-Za-z0-9_-]"), "_").ifBlank { System.currentTimeMillis().toString() }
+        return renderReceiptPdf(
+            context = context,
+            fileName = "Khata_${safeId}.pdf",
+            shopTitle = title,
+            shopSubtitle = address,
+            shopPhone = settings.shopPhone,
+            badgeText = if (isCredit) {
+                if (isUrdu) "کھاتہ وصولی رسید" else "KHATA PAYMENT RECEIPT"
+            } else {
+                if (isUrdu) "ادھار کھاتہ رسید" else "KHATA UDHAR SLIP"
+            },
+            badgeColor = accent,
+            lines = lines,
+            footer = if (isUrdu) "شکریہ — $title" else "Thank you — $title"
+        )
+    }
+
+    fun generateRationCardReceiptPdf(
+        context: Context,
+        bill: RationCardBill,
+        language: AppLanguage,
+        settings: ShopSettings
+    ): File? {
+        val isUrdu = language == AppLanguage.URDU
+        val title = if (isUrdu) settings.storeNameUrdu else settings.storeNameEnglish
+        val address = if (isUrdu) settings.shopAddressUrdu else settings.shopAddressEnglish
+        val dateStr = ReceiptFormatter.formatDateTime(bill.createdAt?.toDate()?.time ?: System.currentTimeMillis())
+        val netLimit = if (bill.netSubsidyLimit > 0.0) bill.netSubsidyLimit else (bill.subsidyLimit - bill.feeDeduction).coerceAtLeast(0.0)
+
+        val lines = mutableListOf<PdfReceiptLine>()
+        lines += PdfReceiptLine(if (isUrdu) "رسید نمبر: ${bill.billNumber} (${bill.monthKey})" else "Receipt #: ${bill.billNumber} (${bill.monthKey})", bold = true)
+        lines += PdfReceiptLine(if (isUrdu) "تاریخ: $dateStr" else "Date: $dateStr")
+        lines += PdfReceiptLine(if (isUrdu) "صارف: ${bill.beneficiaryName}" else "Customer: ${bill.beneficiaryName}")
+        if (bill.phone.isNotBlank()) lines += PdfReceiptLine(if (isUrdu) "موبائل: ${bill.phone}" else "Phone: ${bill.phone}")
+        if (bill.cnic.isNotBlank()) lines += PdfReceiptLine("CNIC: ${bill.cnic}")
+        if (bill.cardNumber.isNotBlank()) lines += PdfReceiptLine(if (isUrdu) "کارڈ نمبر: ${bill.cardNumber}" else "Card #: ${bill.cardNumber}")
+        if (bill.cardUid.isNotBlank()) lines += PdfReceiptLine("NFC UID: ${bill.cardUid}")
+        lines += PdfReceiptLine.divider()
+        bill.items.forEachIndexed { idx, item ->
+            val name = if (isUrdu) item.nameUrdu else item.nameEnglish
+            val qty = "${formatQty(item.quantity)} ${unitLabel(item.unit, language)}"
+            lines += PdfReceiptLine("${idx + 1}. $name  ($qty x ${item.unitPrice.toLong()})  =  ${formatPkr(item.lineTotal, language)}")
+        }
+        lines += PdfReceiptLine.divider()
+        lines += PdfReceiptLine(if (isUrdu) "کل کارڈ کوٹہ: ${formatPkr(bill.subsidyLimit, language)}" else "Total Card Quota: ${formatPkr(bill.subsidyLimit, language)}")
+        lines += PdfReceiptLine(if (isUrdu) "سروس فیس کٹوتی: -${formatPkr(bill.feeDeduction, language)}" else "Service Fee Deduction: -${formatPkr(bill.feeDeduction, language)}")
+        lines += PdfReceiptLine(if (isUrdu) "خالص قابلِ استعمال راشن: ${formatPkr(netLimit, language)}" else "Net Ration Value: ${formatPkr(netLimit, language)}", bold = true)
+        lines += PdfReceiptLine(if (isUrdu) "کل POS بل: ${formatPkr(bill.totalAmount, language)}" else "TOTAL POS BILL: ${formatPkr(bill.totalAmount, language)}", bold = true, accentColor = Color.rgb(8, 76, 54))
+        lines += PdfReceiptLine(if (isUrdu) "کارڈ سے کٹوتی: ${formatPkr(bill.subsidyUsed, language)}" else "POS Card Used: ${formatPkr(bill.subsidyUsed, language)}")
+        if (bill.cashTopUp > 0.0) {
+            lines += PdfReceiptLine(if (isUrdu) "اضافی نقد ادائیگی: ${formatPkr(bill.cashTopUp, language)}" else "Extra Cash Paid: ${formatPkr(bill.cashTopUp, language)}", bold = true, accentColor = Color.rgb(180, 100, 12))
+        }
+        lines += PdfReceiptLine(if (isUrdu) "بقایا خالص بیلنس: ${formatPkr(bill.remainingSubsidy, language)}" else "Remaining Net Balance: ${formatPkr(bill.remainingSubsidy, language)}")
+
+        val safeName = bill.billNumber.replace(Regex("[^A-Za-z0-9_-]"), "_")
+        return renderReceiptPdf(
+            context = context,
+            fileName = "POS_${safeName}.pdf",
+            shopTitle = title,
+            shopSubtitle = address,
+            shopPhone = settings.shopPhone,
+            badgeText = if (isUrdu) "POS / پی او ایس کارڈ رسید" else "POS CARD RECEIPT",
+            badgeColor = Color.rgb(200, 138, 20),
+            lines = lines,
+            footer = if (isUrdu) "شکریہ — $title" else "Thank you — $title"
+        )
+    }
+
+    private data class PdfReceiptLine(
+        val text: String,
+        val bold: Boolean = false,
+        val accentColor: Int = Color.rgb(24, 24, 24),
+        val isDivider: Boolean = false
+    ) {
+        companion object {
+            fun divider() = PdfReceiptLine("", isDivider = true)
+        }
+    }
+
+    private fun renderReceiptPdf(
+        context: Context,
+        fileName: String,
+        shopTitle: String,
+        shopSubtitle: String,
+        shopPhone: String,
+        badgeText: String,
+        badgeColor: Int,
+        lines: List<PdfReceiptLine>,
+        footer: String
+    ): File? {
+        return try {
+            val contentWidth = PDF_PAGE_WIDTH - (PDF_MARGIN * 2)
+            val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(15, 81, 50); textSize = 15f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
+            val subPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(80, 80, 80); textSize = 10f }
+            val badgePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 10f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
+            val bodyRegular = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(28, 28, 28); textSize = 11f }
+            val bodyBold = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(18, 18, 18); textSize = 11.5f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
+            val dividerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(190, 190, 190); strokeWidth = 1f }
+
+            fun makeLayout(text: String, paint: TextPaint, align: Layout.Alignment): StaticLayout =
+                StaticLayout.Builder.obtain(text, 0, text.length, paint, contentWidth).setAlignment(align).setLineSpacing(2f, 1.15f).setIncludePad(false).build()
+
+            val titleLayout = makeLayout(shopTitle, titlePaint, Layout.Alignment.ALIGN_CENTER)
+            val subLayout = if (shopSubtitle.isNotBlank()) makeLayout(shopSubtitle, subPaint, Layout.Alignment.ALIGN_CENTER) else null
+            val phoneLayout = if (shopPhone.isNotBlank()) makeLayout(shopPhone, subPaint, Layout.Alignment.ALIGN_CENTER) else null
+            val badgeLayout = makeLayout(badgeText, badgePaint, Layout.Alignment.ALIGN_CENTER)
+            val footerLayout = makeLayout(footer, subPaint, Layout.Alignment.ALIGN_CENTER)
+
+            val bodyLayouts = lines.map { line ->
+                if (line.isDivider) null else makeLayout(line.text, TextPaint(if (line.bold) bodyBold else bodyRegular).apply { color = line.accentColor }, Layout.Alignment.ALIGN_NORMAL)
+            }
+
+            var totalHeight = PDF_MARGIN + titleLayout.height + 6 + (subLayout?.height?.plus(3) ?: 0) + (phoneLayout?.height?.plus(3) ?: 0) + badgeLayout.height + 20
+            bodyLayouts.forEach { totalHeight += if (it == null) 14 else (it.height + 6) }
+            totalHeight += 18 + footerLayout.height + PDF_MARGIN
+
+            val document = PdfDocument()
+            val page = document.startPage(PdfDocument.PageInfo.Builder(PDF_PAGE_WIDTH, totalHeight.coerceAtLeast(280), 1).create())
+            val canvas = page.canvas
+            canvas.drawColor(Color.WHITE)
+
+            var y = PDF_MARGIN.toFloat()
+            canvas.save(); canvas.translate(PDF_MARGIN.toFloat(), y); titleLayout.draw(canvas); canvas.restore(); y += titleLayout.height + 4f
+            if (subLayout != null) { canvas.save(); canvas.translate(PDF_MARGIN.toFloat(), y); subLayout.draw(canvas); canvas.restore(); y += subLayout.height + 3f }
+            if (phoneLayout != null) { canvas.save(); canvas.translate(PDF_MARGIN.toFloat(), y); phoneLayout.draw(canvas); canvas.restore(); y += phoneLayout.height + 4f }
+
+            val pillTop = y + 2f
+            val pillBottom = pillTop + badgeLayout.height + 10f
+            canvas.drawRoundRect(PDF_MARGIN + 18f, pillTop, (PDF_PAGE_WIDTH - PDF_MARGIN - 18f), pillBottom, 10f, 10f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = badgeColor })
+            canvas.save(); canvas.translate(PDF_MARGIN.toFloat(), pillTop + 5f); badgeLayout.draw(canvas); canvas.restore()
+            y = pillBottom + 12f
+
+            bodyLayouts.forEach { layout ->
+                if (layout == null) { canvas.drawLine(PDF_MARGIN.toFloat(), y + 6f, (PDF_PAGE_WIDTH - PDF_MARGIN).toFloat(), y + 6f, dividerPaint); y += 14f }
+                else { canvas.save(); canvas.translate(PDF_MARGIN.toFloat(), y); layout.draw(canvas); canvas.restore(); y += layout.height + 6f }
+            }
+
+            y += 6f; canvas.drawLine(PDF_MARGIN.toFloat(), y, (PDF_PAGE_WIDTH - PDF_MARGIN).toFloat(), y, dividerPaint); y += 8f
+            canvas.save(); canvas.translate(PDF_MARGIN.toFloat(), y); footerLayout.draw(canvas); canvas.restore()
+            document.finishPage(page)
+
+            val pdfFile = File(File(context.cacheDir, "receipts").apply { mkdirs() }, fileName)
+            FileOutputStream(pdfFile).use { document.writeTo(it) }
+            document.close()
+            pdfFile
+        } catch (_: Throwable) { null }
+    }
+
+    private fun sharePdfFileViaWhatsApp(context: Context, pdfFile: File, caption: String, subject: String) {
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", pdfFile)
+        val whatsappPackage = findInstalledWhatsAppPackage(context)
+        val baseIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "application/pdf"; putExtra(Intent.EXTRA_STREAM, uri); putExtra(Intent.EXTRA_SUBJECT, subject); putExtra(Intent.EXTRA_TEXT, caption)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        try {
+            if (whatsappPackage != null) { baseIntent.setPackage(whatsappPackage); context.startActivity(baseIntent) }
+            else context.startActivity(Intent.createChooser(baseIntent, subject).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
+        } catch (_: Exception) { shareText(context, caption, subject) }
+    }
+
+    private fun findInstalledWhatsAppPackage(context: Context): String? {
+        val pm = context.packageManager
+        return listOf("com.whatsapp", "com.whatsapp.w4b").firstOrNull { pkg ->
+            try { pm.getPackageInfo(pkg, 0); true } catch (_: Throwable) { false }
+        }
+    }
+
+    fun formatPakistaniWhatsAppNumber(rawPhone: String): String {
+        val digits = rawPhone.filter { it.isDigit() }
+        return when {
+            digits.startsWith("0092") && digits.length >= 13 -> digits.removePrefix("00")
+            digits.startsWith("92") && digits.length >= 11 -> digits
+            digits.startsWith("0") && digits.length >= 10 -> "92" + digits.drop(1)
+            digits.startsWith("3") && digits.length == 10 -> "92$digits"
+            else -> digits
+        }
+    }
+
+    fun formatPakistaniSmsNumber(rawPhone: String): String {
+        val digits = rawPhone.filter { it.isDigit() }
+        return when {
+            digits.startsWith("0092") && digits.length >= 13 -> "0" + digits.removePrefix("0092")
+            digits.startsWith("92") && digits.length >= 12 -> "0" + digits.removePrefix("92")
+            digits.startsWith("3") && digits.length == 10 -> "0$digits"
+            else -> digits
+        }
+    }
+
+    fun sendViaWhatsApp(context: Context, phone: String, message: String) {
+        val waNumber = formatPakistaniWhatsAppNumber(phone)
+        if (waNumber.isNotBlank()) {
+            try {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$waNumber?text=${Uri.encode(message)}")).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
+                return
+            } catch (_: Exception) {}
+        }
+        val whatsappPackage = findInstalledWhatsAppPackage(context)
+        if (whatsappPackage != null) {
+            try {
+                context.startActivity(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; setPackage(whatsappPackage); putExtra(Intent.EXTRA_TEXT, message); addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
+                return
+            } catch (_: Exception) {}
+        }
+        shareText(context, message, "WhatsApp Receipt")
+    }
+
+    fun sendViaSimSms(context: Context, phone: String, message: String) {
+        try {
+            context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:${formatPakistaniSmsNumber(phone)}")).apply { putExtra("sms_body", message); addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
+        } catch (_: Exception) { shareText(context, message, "SMS Receipt") }
+    }
+
+    fun shareText(context: Context, text: String, title: String) {
+        context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_SUBJECT, title); putExtra(Intent.EXTRA_TEXT, text) }, title).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
+    }
+            }
+            
     fun generateKhataReceiptPdf(
         context: Context,
         entry: LedgerEntry,
