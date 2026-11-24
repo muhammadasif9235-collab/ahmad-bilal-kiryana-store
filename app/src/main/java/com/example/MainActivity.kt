@@ -2,11 +2,11 @@ package com.example
 
 import android.content.Intent
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Settings
@@ -62,7 +63,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -79,14 +79,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.credentials.CredentialManager
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import androidx.compose.foundation.border
-import androidx.compose.material.icons.filled.PhoneAndroid
 import com.example.auth.AuthScreen
+import com.example.auth.FingerprintAppLockScreen
+import com.example.auth.ShopSecurityVault
 import com.example.auth.onGoogleSignInClicked
 import com.example.auth.signOutShopAccount
 import com.example.data.DailyCashType
@@ -122,7 +123,6 @@ import com.example.ui.screens.RationFundScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.StockScreen
 import com.example.ui.screens.isManualRoznamchaEntry
-import java.util.Calendar
 import com.example.ui.theme.EmeraldPrimary
 import com.example.ui.theme.GoldShimmer
 import com.example.ui.theme.KiryanaTheme
@@ -131,6 +131,7 @@ import com.example.viewmodel.ShopViewModel
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.auth
+import java.util.Calendar
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -152,7 +153,7 @@ enum class ShopDestination(
     SETTINGS("سیٹنگز", "Settings", Icons.Default.Settings)
 }
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     private val _incomingNfcCard = MutableStateFlow<ScannedNfcCard?>(null)
     val incomingNfcCard: StateFlow<ScannedNfcCard?> = _incomingNfcCard.asStateFlow()
@@ -206,7 +207,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
 @Composable
 fun AppRoot(
     incomingNfcFlow: StateFlow<ScannedNfcCard?>,
@@ -237,8 +237,16 @@ fun AppRoot(
                         .background(EmeraldPrimary)
                 )
             } else {
-                val isLoggedIn = settings.localOwnerLoggedIn || currentUser != null
-                if (!isLoggedIn) {
+                val stayLoggedIn = remember { ShopSecurityVault.isStayLoggedIn(context) }
+                var sessionUnlocked by rememberSaveable { mutableStateOf(false) }
+                var biometricUnlocked by rememberSaveable {
+                    mutableStateOf(!ShopSecurityVault.isFingerprintLockEnabled(context))
+                }
+                val isGuest = ShopSecurityVault.isGuestMode(context)
+                val effectivelyLoggedIn =
+                    (stayLoggedIn && (settings.localOwnerLoggedIn || currentUser != null)) || sessionUnlocked
+
+                if (!effectivelyLoggedIn) {
                     AuthScreen(
                         language = language,
                         onToggleLanguage = {
@@ -248,15 +256,30 @@ fun AppRoot(
                             }
                         },
                         onLocalOwnerLogin = {
-                            scope.launch {
-                                preferences.setLocalOwnerLoggedIn(true)
-                            }
+                            sessionUnlocked = true
+                            biometricUnlocked = true
+                            scope.launch { preferences.setLocalOwnerLoggedIn(true) }
                         },
                         onGoogleAuthSuccess = {
                             currentUser = Firebase.auth.currentUser
-                            scope.launch {
-                                preferences.setLocalOwnerLoggedIn(true)
-                            }
+                            sessionUnlocked = true
+                            biometricUnlocked = true
+                            scope.launch { preferences.setLocalOwnerLoggedIn(true) }
+                        },
+                        onGuestLogin = {
+                            sessionUnlocked = true
+                            biometricUnlocked = true
+                            scope.launch { preferences.setLocalOwnerLoggedIn(true) }
+                        }
+                    )
+                } else if (!isGuest && ShopSecurityVault.isFingerprintLockEnabled(context) && !biometricUnlocked) {
+                    FingerprintAppLockScreen(
+                        language = language,
+                        shopTitle = language.pick(settings.storeNameUrdu, settings.storeNameEnglish),
+                        onUnlocked = { biometricUnlocked = true },
+                        onSwitchToLoginScreen = {
+                            sessionUnlocked = false
+                            scope.launch { preferences.setLocalOwnerLoggedIn(false) }
                         }
                     )
                 } else {
@@ -268,9 +291,9 @@ fun AppRoot(
                         onGoogleUserUpdated = { currentUser = Firebase.auth.currentUser },
                         onSignedOut = {
                             currentUser = Firebase.auth.currentUser
-                            scope.launch {
-                                preferences.setLocalOwnerLoggedIn(false)
-                            }
+                            sessionUnlocked = false
+                            ShopSecurityVault.setGuestMode(context, false)
+                            scope.launch { preferences.setLocalOwnerLoggedIn(false) }
                         }
                     )
                 }
@@ -365,7 +388,23 @@ private fun MainShopShell(
     var showLowStockReportDialog by remember { mutableStateOf(false) }
     var editingOrder by remember { mutableStateOf<Order?>(null) }
 
-    // Route real NFC card taps straight to the POS / پی او ایس Card screen
+    val isGuestUser = remember { ShopSecurityVault.isGuestMode(context) }
+    LaunchedEffect(currentDestination, isGuestUser) {
+        if (isGuestUser && (
+            currentDestination == ShopDestination.KHATA ||
+            currentDestination == ShopDestination.ROZNAMCHA ||
+            currentDestination == ShopDestination.RATION_CARD
+        )) {
+            viewModel.postMessage(
+                language.pick(
+                    "گیسٹ موڈ میں کھاتہ، روزنامچہ اور راشن کارڈ POS بند ہیں — مکمل فیچرز کے لیے سیٹنگز سے سائن اپ کریں!",
+                    "Khata, Cashbook & Ration Card POS are locked in Guest Mode — Sign up from Settings to unlock!"
+                )
+            )
+            currentDestination = ShopDestination.HOME
+        }
+    }
+        // Route real NFC card taps straight to the POS / پی او ایس Card screen
     val incomingNfc by incomingNfcFlow.collectAsStateWithLifecycle()
     LaunchedEffect(incomingNfc?.scannedAtMs) {
         val card = incomingNfc ?: return@LaunchedEffect
@@ -640,8 +679,7 @@ private fun MainShopShell(
                             )
                         }
                     }
-
-                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                                        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                         when (currentDestination) {
                             ShopDestination.HOME -> DashboardScreen(
                                 language = language,
@@ -664,7 +702,8 @@ private fun MainShopShell(
                                 onOpenRoznamcha = { currentDestination = ShopDestination.ROZNAMCHA },
                                 onOpenCustomerOrder = { currentDestination = ShopDestination.CUSTOMER_ORDER },
                                 onEditOrder = { editingOrder = it },
-                                onOpenLowStockReport = { showLowStockReportDialog = true }
+                                onOpenLowStockReport = { showLowStockReportDialog = true },
+                                settings = settings
                             )
 
                             ShopDestination.BILLING -> BillingScreen(
@@ -744,8 +783,6 @@ private fun MainShopShell(
                                 onOpenLowStockReport = { showLowStockReportDialog = true }
                             )
 
-                            
-
                             ShopDestination.ROZNAMCHA -> DailyRoznamchaScreen(
                                 language = language,
                                 settings = settings,
@@ -766,35 +803,35 @@ private fun MainShopShell(
                                     viewModel.deleteDailyCashEntry(id)
                                 }
                             )
- 
+
                             ShopDestination.KHATA -> KhataScreen(
-    language = language,
-    customers = customers,
-    ledgerEntries = ledgerEntries,
-    orders = orders,
-    onAddCustomer = { name, phone, addr, opening ->
-        viewModel.addCustomer(name, phone, addr, opening)
-    },
-    onRecordTransaction = { cust, type, amt, note ->
-        viewModel.recordCustomerTransaction(cust, type, amt, note)
-    },
-    onOpenEntryReceipt = { entry ->
-        viewModel.openPaymentReceipt(entry)
-    },
-    onEditOrder = { order ->
-        editingOrder = order
-    },
-    onUpdateTransaction = { entry, newType, newAmt, newNote ->
-        viewModel.updateCustomerTransaction(entry, newType, newAmt, newNote)
-    },
-    onDeleteTransaction = { entry ->
-        viewModel.deleteCustomerTransaction(entry)
-    },
-    onDeleteCustomer = { customerId ->
-        viewModel.deleteCustomer(customerId)
-    }
-)
-                            
+                                language = language,
+                                customers = customers,
+                                ledgerEntries = ledgerEntries,
+                                orders = orders,
+                                onAddCustomer = { name, phone, addr, opening ->
+                                    viewModel.addCustomer(name, phone, addr, opening)
+                                },
+                                onRecordTransaction = { cust, type, amt, note ->
+                                    viewModel.recordCustomerTransaction(cust, type, amt, note)
+                                },
+                                onOpenEntryReceipt = { entry ->
+                                    viewModel.openPaymentReceipt(entry)
+                                },
+                                onEditOrder = { order ->
+                                    editingOrder = order
+                                },
+                                onUpdateTransaction = { entry, newType, newAmt, newNote ->
+                                    viewModel.updateCustomerTransaction(entry, newType, newAmt, newNote)
+                                },
+                                onDeleteTransaction = { entry ->
+                                    viewModel.deleteCustomerTransaction(entry)
+                                },
+                                onDeleteCustomer = { customerId ->
+                                    viewModel.deleteCustomer(customerId)
+                                }
+                            )
+
                             ShopDestination.CUSTOMER_ORDER -> CustomerOrderScreen(
                                 language = language,
                                 settings = settings,
@@ -900,7 +937,6 @@ private fun MainShopShell(
         }
     }
 
-    // Automatic Receipt Modal after every normal bill
     val receiptOrder = activeReceiptOrder
     if (receiptOrder != null) {
         val matchedCustomerPhone = remember(receiptOrder.customerId, customers) {
@@ -921,7 +957,6 @@ private fun MainShopShell(
         )
     }
 
-    // Full Manual Bill Editor & Amount Adjustment Dialog
     val orderBeingEdited = editingOrder
     if (orderBeingEdited != null) {
         BillEditorDialog(
@@ -946,7 +981,6 @@ private fun MainShopShell(
         )
     }
 
-    // Automatic Receipt Modal after POS Card bill
     val rationReceipt = activeRationCardReceipt
     if (rationReceipt != null) {
         RationCardReceiptDialog(
@@ -958,7 +992,6 @@ private fun MainShopShell(
         )
     }
 
-    // Automatic Payment Receipt after Udhar Khata transaction
     val payReceipt = activePaymentReceipt
     if (payReceipt != null) {
         val matchedCustomerPhone = remember(payReceipt.customerId, customers) {
@@ -974,7 +1007,6 @@ private fun MainShopShell(
         )
     }
 
-    // CameraX + ML Kit Barcode Scanner Dialog
     if (showBarcodeScanner) {
         BarcodeScannerDialog(
             language = language,
@@ -986,7 +1018,6 @@ private fun MainShopShell(
         )
     }
 
-    // 2-Tab "QR سکین و پیمنٹ" Modal (My Bank EMVCo/RAAST QR + CameraX QR/Card Scanner with Torch)
     if (showQrPaymentModal) {
         QrScanAndPaymentDialog(
             language = language,
@@ -1027,7 +1058,6 @@ private fun MainShopShell(
         )
     }
 
-    // Low Stock Replenishment Report & PDF Export Modal
     if (showLowStockReportDialog) {
         LowStockReportDialog(
             language = language,
