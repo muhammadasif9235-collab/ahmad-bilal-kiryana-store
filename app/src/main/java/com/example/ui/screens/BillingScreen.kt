@@ -113,11 +113,8 @@ private data class QuickWeightPreset(
 ) {
     fun labelFor(unit: String, language: AppLanguage): String {
         val isLiter = unit.equals("liter", ignoreCase = true) || unit.equals("l", ignoreCase = true)
-        return if (isLiter) {
-            language.pick(labelLiterUrdu, labelLiterEnglish)
-        } else {
-            language.pick(labelKgUrdu, labelKgEnglish)
-        }
+        return if (isLiter) language.pick(labelLiterUrdu, labelLiterEnglish)
+        else language.pick(labelKgUrdu, labelKgEnglish)
     }
 }
 
@@ -142,11 +139,8 @@ private fun roundMoney(value: Double): Double = round(value * 100.0) / 100.0
 
 private fun formatExactQty(qty: Double): String {
     val rounded = round(qty * 1000.0) / 1000.0
-    return if (rounded % 1.0 == 0.0) {
-        rounded.toLong().toString()
-    } else {
-        String.format(Locale.US, "%.3f", rounded).trimEnd('0').trimEnd('.')
-    }
+    return if (rounded % 1.0 == 0.0) rounded.toLong().toString()
+    else String.format(Locale.US, "%.3f", rounded).trimEnd('0').trimEnd('.')
 }
 
 private fun formatGramsSubLabel(qty: Double, unit: String): String? {
@@ -155,7 +149,7 @@ private fun formatGramsSubLabel(qty: Double, unit: String): String? {
     if (!isKg && !isLiter) return null
     val subVal = round(qty * 1000.0).toLong()
     val suffix = if (isKg) "g" else "ml"
-    return if (subVal < 1000L) "$subVal$suffix" else "${formatExactQty(qty)} ${if (isKg) "kg" else "L"}"
+    return if (subVal < 1000L) "$subVal$suffix" else "${formatExactQty(qty)}${if (isKg) "kg" else "L"}"
 }
 
 private fun isWalkInName(name: String): Boolean {
@@ -167,11 +161,7 @@ private fun isWalkInName(name: String): Boolean {
 
 private fun packPhoneIntoNote(phone: String, rawNote: String): String {
     val cleanPhone = phone.trim()
-    return if (cleanPhone.isBlank()) {
-        rawNote
-    } else {
-        "\u001FCP:$cleanPhone\u001F$rawNote"
-    }
+    return if (cleanPhone.isBlank()) rawNote else "\u001FCP:$cleanPhone\u001F$rawNote"
 }
 
 @Composable
@@ -197,9 +187,10 @@ fun BillingScreen(
     manualCustomerPhone: String = "",
     onManualCustomerPhoneChange: ((String) -> Unit)? = null,
     onEditOrder: (Order) -> Unit = {},
+    onDeleteOrder: (Order) -> Unit = {},
     onOpenLowStockReport: () -> Unit = {}
 ) {
-    var activeTab by remember { mutableIntStateOf(0) } // 0 = New Bill, 1 = Orders & Bills History
+    var activeTab by remember { mutableIntStateOf(0) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf<ProductCategory?>(null) }
     var showOnlyLowStock by remember { mutableStateOf(false) }
@@ -226,29 +217,17 @@ fun BillingScreen(
     val cartSubtotal = remember(cartItems) { roundMoney(cartItems.sumOf { roundMoney(it.lineTotal) }) }
     val cartMap = remember(cartItems) { cartItems.associateBy { it.product.id } }
 
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.TopCenter
-    ) {
-        Column(
-            modifier = Modifier
-                .widthIn(max = 720.dp)
-                .fillMaxSize()
-        ) {
-            // Mode Switcher: New Bill vs Orders & Bills
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        Column(modifier = Modifier.widthIn(max = 720.dp).fillMaxSize()) {
             SingleChoiceSegmentedButtonRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 SegmentedButton(
                     selected = activeTab == 0,
                     onClick = { activeTab = 0 },
                     shape = SegmentedButtonDefaults.itemShape(0, 2),
                     modifier = Modifier.testTag("billing_new_bill_tab")
-                ) {
-                    Text(language.pick("نیا بل / آرڈر", "New Bill / Order"))
-                }
+                ) { Text(language.pick("نیا بل / آرڈر", "New Bill / Order")) }
                 SegmentedButton(
                     selected = activeTab == 1,
                     onClick = { activeTab = 1 },
@@ -256,43 +235,28 @@ fun BillingScreen(
                     modifier = Modifier.testTag("billing_history_tab")
                 ) {
                     val pendingCount = orders.count { it.statusEnum() == OrderStatus.PENDING }
-                    val label = if (pendingCount > 0) {
-                        language.pick("آرڈرز و بل ($pendingCount)", "Orders & Bills ($pendingCount)")
-                    } else {
-                        language.pick("آرڈرز اور بلز", "Orders & Bills")
-                    }
-                    Text(label)
+                    Text(
+                        if (pendingCount > 0) language.pick("آرڈرز و بل ($pendingCount)", "Orders & Bills ($pendingCount)")
+                        else language.pick("آرڈرز اور بلز", "Orders & Bills")
+                    )
                 }
             }
-
-            if (activeTab == 0) {
-                // Visual Low Stock Warning Banner on POS / Billing Screen
+                        if (activeTab == 0) {
                 PosLowStockWarningBanner(
                     language = language,
                     lowStockProducts = lowStockProducts,
                     onOpenLowStockReport = onOpenLowStockReport,
                     showOnlyLowStockActive = showOnlyLowStock,
                     onToggleLowStockFilter = { showOnlyLowStock = !showOnlyLowStock },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
+                    modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
                 )
 
-                // Customer Name Selector (Urdu RTL / English LTR)
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                ) {
+                Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                     OutlinedTextField(
                         value = manualCustomerName,
                         onValueChange = onManualCustomerNameChange,
-                        label = {
-                            Text(language.pick("کسٹمر کا نام (اردو یا انگلش)", "Customer Name (for Bill)"))
-                        },
-                        placeholder = {
-                            Text(language.pick("نقد کسٹمر یا کھاتہ منتخب کریں", "Walk-in or pick from Khata"))
-                        },
+                        label = { Text(language.pick("کسٹمر کا نام (اردو یا انگلش)", "Customer Name (for Bill)")) },
+                        placeholder = { Text(language.pick("نقد کسٹمر یا کھاتہ منتخب کریں", "Walk-in or pick from Khata")) },
                         leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
                         trailingIcon = {
                             TextButton(onClick = { showCustomerDropdown = true }) {
@@ -301,9 +265,7 @@ fun BillingScreen(
                         },
                         singleLine = true,
                         shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("bill_customer_name_input")
+                        modifier = Modifier.fillMaxWidth().testTag("bill_customer_name_input")
                     )
 
                     DropdownMenu(
@@ -346,11 +308,8 @@ fun BillingScreen(
 
                 Spacer(Modifier.height(8.dp))
 
-                // Search + Barcode Scanner Row
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -363,9 +322,7 @@ fun BillingScreen(
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                         singleLine = true,
                         shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("billing_search_input")
+                        modifier = Modifier.weight(1f).testTag("billing_search_input")
                     )
                     FilledIconButton(
                         onClick = onOpenScanner,
@@ -373,18 +330,12 @@ fun BillingScreen(
                             containerColor = MaterialTheme.colorScheme.secondary,
                             contentColor = Color.White
                         ),
-                        modifier = Modifier
-                            .size(52.dp)
-                            .testTag("billing_barcode_scan_button")
+                        modifier = Modifier.size(52.dp).testTag("billing_barcode_scan_button")
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.QrCodeScanner,
-                            contentDescription = language.pick("بارکوڈ اسکین کریں", "Scan Barcode")
-                        )
+                        Icon(Icons.Default.QrCodeScanner, contentDescription = language.pick("بارکوڈ اسکین کریں", "Scan Barcode"))
                     }
                 }
 
-                // Category Chips
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -406,7 +357,6 @@ fun BillingScreen(
                     }
                 }
 
-                // Product List for Fast POS Selection
                 LazyColumn(
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(
@@ -427,22 +377,16 @@ fun BillingScreen(
                             cartQty = currentQty,
                             lineTotal = inCart?.lineTotal ?: 0.0,
                             onIncrement = {
-                                if (currentQty <= 0.0) {
-                                    onAddProductToCart(prod, if (prod.isWeightBased()) 1.0 else 1.0)
-                                } else {
-                                    onAddProductToCart(prod, step)
-                                }
+                                if (currentQty <= 0.0) onAddProductToCart(prod, 1.0)
+                                else onAddProductToCart(prod, step)
                             },
                             onDecrement = {
                                 val next = currentQty - step
                                 onSetCartItemQuantity(prod.id, if (next <= 0.0005) 0.0 else next)
                             },
                             onSetQuickWeight = { weight ->
-                                if (currentQty <= 0.0) {
-                                    onAddProductToCart(prod, weight)
-                                } else {
-                                    onSetCartItemQuantity(prod.id, weight)
-                                }
+                                if (currentQty <= 0.0) onAddProductToCart(prod, weight)
+                                else onSetCartItemQuantity(prod.id, weight)
                             },
                             onOpenCustomWeight = { customWeightProduct = prod },
                             onOpenRupeeCalculator = { rupeeCalcProduct = prod }
@@ -450,7 +394,6 @@ fun BillingScreen(
                     }
                 }
 
-                // Sticky Bottom Cart Bar
                 if (cartItems.isNotEmpty()) {
                     Surface(
                         color = MaterialTheme.colorScheme.primary,
@@ -460,9 +403,7 @@ fun BillingScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -483,15 +424,8 @@ fun BillingScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                IconButton(
-                                    onClick = onClearCart,
-                                    modifier = Modifier.testTag("clear_cart_button")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.DeleteOutline,
-                                        contentDescription = language.pick("خالی کریں", "Clear"),
-                                        tint = Color.White
-                                    )
+                                IconButton(onClick = onClearCart, modifier = Modifier.testTag("clear_cart_button")) {
+                                    Icon(Icons.Default.DeleteOutline, contentDescription = language.pick("خالی کریں", "Clear"), tint = Color.White)
                                 }
                                 Button(
                                     onClick = { showCheckoutDialog = true },
@@ -502,11 +436,7 @@ fun BillingScreen(
                                     shape = RoundedCornerShape(14.dp),
                                     modifier = Modifier.testTag("open_checkout_button")
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.ShoppingCartCheckout,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
-                                    )
+                                    Icon(Icons.Default.ShoppingCartCheckout, contentDescription = null, modifier = Modifier.size(18.dp))
                                     Spacer(Modifier.size(6.dp))
                                     Text(language.pick("بل بنائیں", "Checkout"))
                                 }
@@ -515,12 +445,12 @@ fun BillingScreen(
                     }
                 }
             } else {
-                // Orders & Completed Bills History
                 OrdersHistoryList(
                     language = language,
                     orders = orders,
                     onOpenReceipt = onOpenReceipt,
                     onEditOrder = onEditOrder,
+                    onDeleteOrder = onDeleteOrder,
                     onCompletePendingOrder = onCompletePendingOrder,
                     onCancelPendingOrder = onCancelPendingOrder
                 )
@@ -528,7 +458,6 @@ fun BillingScreen(
         }
     }
 
-    // Custom Weight / Quantity Input Dialog
     val weightTarget = customWeightProduct
     if (weightTarget != null) {
         val currentCartQty = cartMap[weightTarget.id]?.quantity ?: 0.0
@@ -537,11 +466,8 @@ fun BillingScreen(
             language = language,
             currentCartQty = currentCartQty,
             onApplyWeight = { newWeight ->
-                if (currentCartQty <= 0.0) {
-                    onAddProductToCart(weightTarget, newWeight)
-                } else {
-                    onSetCartItemQuantity(weightTarget.id, newWeight)
-                }
+                if (currentCartQty <= 0.0) onAddProductToCart(weightTarget, newWeight)
+                else onSetCartItemQuantity(weightTarget.id, newWeight)
                 customWeightProduct = null
             },
             onSwitchToRupeeCalc = {
@@ -552,7 +478,6 @@ fun BillingScreen(
         )
     }
 
-    // "رقم کے حساب سے دیں (Buy by Rupee Amount)" Calculator Dialog
     val rupeeTarget = rupeeCalcProduct
     if (rupeeTarget != null) {
         val currentCartQty = cartMap[rupeeTarget.id]?.quantity ?: 0.0
@@ -561,18 +486,14 @@ fun BillingScreen(
             language = language,
             currentCartQty = currentCartQty,
             onAddCalculatedWeight = { exactWeight, replaceExisting ->
-                if (replaceExisting && currentCartQty > 0.0) {
-                    onSetCartItemQuantity(rupeeTarget.id, exactWeight)
-                } else {
-                    onAddProductToCart(rupeeTarget, exactWeight)
-                }
+                if (replaceExisting && currentCartQty > 0.0) onSetCartItemQuantity(rupeeTarget.id, exactWeight)
+                else onAddProductToCart(rupeeTarget, exactWeight)
                 rupeeCalcProduct = null
             },
             onDismiss = { rupeeCalcProduct = null }
         )
     }
-
-    if (showCheckoutDialog) {
+        if (showCheckoutDialog) {
         CheckoutDialog(
             language = language,
             cartItems = cartItems,
@@ -647,9 +568,7 @@ private fun BillingProductRow(
         )
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
@@ -658,10 +577,7 @@ private fun BillingProductRow(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
                             text = product.nameUrdu.ifBlank { product.nameEnglish },
                             style = MaterialTheme.typography.titleMedium,
@@ -681,18 +597,9 @@ private fun BillingProductRow(
                                     horizontalArrangement = Arrangement.spacedBy(3.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.WarningAmber,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(12.dp)
-                                    )
+                                    Icon(Icons.Default.WarningAmber, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
                                     Text(
-                                        text = if (isOutOfStock) {
-                                            language.pick("ختم!", "OUT")
-                                        } else {
-                                            language.pick("کم اسٹاک", "LOW")
-                                        },
+                                        text = if (isOutOfStock) language.pick("ختم!", "OUT") else language.pick("کم اسٹاک", "LOW"),
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = Color.White
@@ -710,10 +617,7 @@ private fun BillingProductRow(
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = "${formatPkr(product.sellingPrice, language)} / ${unitLabel(product.unit, language)}",
                             style = MaterialTheme.typography.labelLarge,
@@ -734,14 +638,8 @@ private fun BillingProductRow(
                 }
 
                 if (cartQty > 0) {
-                    Column(
-                        horizontalAlignment = Alignment.End,
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                             IconButton(
                                 onClick = onDecrement,
                                 modifier = Modifier
@@ -750,15 +648,7 @@ private fun BillingProductRow(
                                     .background(MaterialTheme.colorScheme.surfaceVariant)
                                     .testTag("decrement_${product.id}")
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Remove,
-                                    contentDescription = if (isWeight) {
-                                        language.pick("125 گرام کم کریں", "Decrease 125g")
-                                    } else {
-                                        language.pick("کم کریں", "Decrease")
-                                    },
-                                    modifier = Modifier.size(18.dp)
-                                )
+                                Icon(Icons.Default.Remove, contentDescription = null, modifier = Modifier.size(18.dp))
                             }
                             Surface(
                                 color = MaterialTheme.colorScheme.surface,
@@ -769,10 +659,7 @@ private fun BillingProductRow(
                                     .clickable { onOpenCustomWeight() }
                                     .testTag("qty_badge_${product.id}")
                             ) {
-                                Column(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
+                                Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text(
                                         text = "${formatExactQty(cartQty)} ${unitLabel(product.unit, language)}",
                                         style = MaterialTheme.typography.labelLarge,
@@ -780,11 +667,7 @@ private fun BillingProductRow(
                                     )
                                     val subGrams = formatGramsSubLabel(cartQty, product.unit)
                                     if (subGrams != null && cartQty < 1.0) {
-                                        Text(
-                                            text = subGrams,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
+                                        Text(subGrams, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                 }
                             }
@@ -796,16 +679,7 @@ private fun BillingProductRow(
                                     .background(MaterialTheme.colorScheme.primary)
                                     .testTag("increment_${product.id}")
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Add,
-                                    contentDescription = if (isWeight) {
-                                        language.pick("125 گرام بڑھائیں", "Increase 125g")
-                                    } else {
-                                        language.pick("بڑھائیں", "Increase")
-                                    },
-                                    tint = Color.White,
-                                    modifier = Modifier.size(18.dp)
-                                )
+                                Icon(Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                             }
                         }
                         Text(
@@ -824,15 +698,11 @@ private fun BillingProductRow(
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.size(2.dp))
-                        Text(
-                            if (isWeight) language.pick("1 کلو", "1 ${unitLabel(product.unit, language)}")
-                            else language.pick("شامل", "Add")
-                        )
+                        Text(if (isWeight) language.pick("1 کلو", "1 ${unitLabel(product.unit, language)}") else language.pick("شامل", "Add"))
                     }
                 }
             }
-
-            if (willDropBelowThreshold || (cartQty > 0.0 && cartQty > product.stockQty)) {
+                        if (willDropBelowThreshold || (cartQty > 0.0 && cartQty > product.stockQty)) {
                 Surface(
                     color = if (cartQty > product.stockQty) UdharCrimson.copy(alpha = 0.12f) else WarningAmber.copy(alpha = 0.14f),
                     shape = RoundedCornerShape(8.dp),
@@ -870,11 +740,8 @@ private fun BillingProductRow(
             }
 
             if (isWeight) {
-                // Quick Weight Chips: 125g, 250g, 500g, 750g, 1kg, 1.25kg, 1.5kg + Custom Weight
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -896,13 +763,7 @@ private fun BillingProductRow(
                     FilterChip(
                         selected = false,
                         onClick = onOpenCustomWeight,
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.Scale,
-                                contentDescription = null,
-                                modifier = Modifier.size(15.dp)
-                            )
-                        },
+                        leadingIcon = { Icon(Icons.Default.Scale, contentDescription = null, modifier = Modifier.size(15.dp)) },
                         label = {
                             Text(
                                 text = language.pick("کسٹم وزن", "Custom Wt"),
@@ -914,7 +775,6 @@ private fun BillingProductRow(
                     )
                 }
 
-                // Buy by Rupee Amount Action Bar ("رقم کے حساب سے دیں")
                 if (product.sellingPrice > 0.0) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -924,10 +784,7 @@ private fun BillingProductRow(
                         Surface(
                             color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
                             shape = RoundedCornerShape(10.dp),
-                            border = BorderStroke(
-                                1.dp,
-                                MaterialTheme.colorScheme.secondary.copy(alpha = 0.35f)
-                            ),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.35f)),
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(10.dp))
@@ -939,18 +796,10 @@ private fun BillingProductRow(
                                 horizontalArrangement = Arrangement.Center,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Calculate,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.secondary,
-                                    modifier = Modifier.size(16.dp)
-                                )
+                                Icon(Icons.Default.Calculate, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.size(6.dp))
                                 Text(
-                                    text = language.pick(
-                                        "رقم کے حساب سے دیں (مثلاً 50 یا 100 روپے)",
-                                        "Buy by Rupee Amount (PKR → Weight)"
-                                    ),
+                                    text = language.pick("رقم کے حساب سے دیں (مثلاً 50 یا 100 روپے)", "Buy by Rupee Amount (PKR → Weight)"),
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -978,11 +827,7 @@ private fun CustomWeightDialog(
     val isWeight = product.isWeightBased()
     val isKg = product.unit.equals("kg", ignoreCase = true)
     var inputInGrams by remember { mutableStateOf(false) }
-    var qtyText by remember {
-        mutableStateOf(
-            if (currentCartQty > 0.0) formatExactQty(currentCartQty) else ""
-        )
-    }
+    var qtyText by remember { mutableStateOf(if (currentCartQty > 0.0) formatExactQty(currentCartQty) else "") }
 
     val parsedInput = qtyText.toDoubleOrNull() ?: 0.0
     val finalWeight = if (isWeight && inputInGrams) parsedInput / 1000.0 else parsedInput
@@ -992,42 +837,25 @@ private fun CustomWeightDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Scale,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
-                )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Icons.Default.Scale, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 Text(
-                    text = if (isWeight) {
-                        language.pick("کسٹم وزن درج کریں", "Enter Custom Weight")
-                    } else {
-                        language.pick("مقدار درج کریں", "Enter Quantity")
-                    },
+                    text = if (isWeight) language.pick("کسٹم وزن درج کریں", "Enter Custom Weight")
+                    else language.pick("مقدار درج کریں", "Enter Quantity"),
                     fontWeight = FontWeight.Bold
                 )
             }
         },
         text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    text = "${product.nameUrdu.ifBlank { product.nameEnglish }} • ${formatPkr(product.sellingPrice, language)} / ${unitLabel(product.unit, language)}",
+                    text = "${product.nameUrdu.ifBlank { product.nameEnglish }} • ${formatPkr(product.sellingPrice, language)} /${unitLabel(product.unit, language)}",
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.primary
                 )
 
                 if (isWeight) {
-                    // Kg / Grams toggle
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilterChip(
                             selected = !inputInGrams,
                             onClick = {
@@ -1037,12 +865,7 @@ private fun CustomWeightDialog(
                                     inputInGrams = false
                                 }
                             },
-                            label = {
-                                Text(
-                                    if (isKg) language.pick("کلوگرام (kg)", "Kilograms (kg)")
-                                    else language.pick("لیٹر (L)", "Liters (L)")
-                                )
-                            },
+                            label = { Text(if (isKg) language.pick("کلوگرام (kg)", "Kilograms (kg)") else language.pick("لیٹر (L)", "Liters (L)")) },
                             modifier = Modifier.weight(1f)
                         )
                         FilterChip(
@@ -1054,12 +877,7 @@ private fun CustomWeightDialog(
                                     inputInGrams = true
                                 }
                             },
-                            label = {
-                                Text(
-                                    if (isKg) language.pick("گرام (g)", "Grams (g)")
-                                    else language.pick("ملی لیٹر (ml)", "Milliliters (ml)")
-                                )
-                            },
+                            label = { Text(if (isKg) language.pick("گرام (g)", "Grams (g)") else language.pick("ملی لیٹر (ml)", "Milliliters (ml)")) },
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -1067,9 +885,7 @@ private fun CustomWeightDialog(
 
                 OutlinedTextField(
                     value = qtyText,
-                    onValueChange = { raw ->
-                        qtyText = raw.filter { it.isDigit() || it == '.' }
-                    },
+                    onValueChange = { raw -> qtyText = raw.filter { it.isDigit() || it == '.' } },
                     label = {
                         Text(
                             when {
@@ -1084,38 +900,8 @@ private fun CustomWeightDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("custom_weight_input")
+                    modifier = Modifier.fillMaxWidth().testTag("custom_weight_input")
                 )
-
-                if (isWeight) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        QUICK_WEIGHT_PRESETS.forEach { preset ->
-                            FilterChip(
-                                selected = abs(finalWeight - preset.weight) < 0.001,
-                                onClick = {
-                                    qtyText = if (inputInGrams) {
-                                        round(preset.weight * 1000.0).toLong().toString()
-                                    } else {
-                                        formatExactQty(preset.weight)
-                                    }
-                                },
-                                label = {
-                                    Text(
-                                        text = preset.labelFor(product.unit, language),
-                                        style = MaterialTheme.typography.labelSmall
-                                    )
-                                }
-                            )
-                        }
-                    }
-                }
 
                 if (validWeight) {
                     Surface(
@@ -1123,53 +909,18 @@ private fun CustomWeightDialog(
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = language.pick("کل وزن / مقدار:", "Exact Weight:"),
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                                val subText = if (isWeight) {
-                                    " (${round(finalWeight * 1000.0).toLong()}${if (isKg) "g" else "ml"})"
-                                } else {
-                                    ""
-                                }
-                                Text(
-                                    text = "${formatExactQty(finalWeight)} ${unitLabel(product.unit, language)}$subText",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = language.pick("بل کی رقم:", "Bill Amount:"),
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                                Text(
-                                    text = formatPkr(previewTotal, language),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = ProfitGreen
-                                )
-                            }
+                            Text(text = language.pick("بل کی رقم:", "Bill Amount:"), style = MaterialTheme.typography.bodySmall)
+                            Text(text = formatPkr(previewTotal, language), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = ProfitGreen)
                         }
                     }
                 }
 
                 if (isWeight && product.sellingPrice > 0.0) {
-                    TextButton(
-                        onClick = onSwitchToRupeeCalc,
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
+                    TextButton(onClick = onSwitchToRupeeCalc, modifier = Modifier.align(Alignment.End)) {
                         Icon(Icons.Default.Calculate, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.size(6.dp))
                         Text(language.pick("رقم کے حساب سے دیں", "Switch to Buy by Rs. Amount"))
@@ -1182,18 +933,11 @@ private fun CustomWeightDialog(
                 onClick = { onApplyWeight(finalWeight) },
                 enabled = validWeight,
                 modifier = Modifier.testTag("confirm_custom_weight_button")
-            ) {
-                Text(language.pick("بل میں شامل کریں", "Set Weight"))
-            }
+            ) { Text(language.pick("بل میں شامل کریں", "Set Weight")) }
         },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(language.pick("منسوخ", "Cancel"))
-            }
-        }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(language.pick("منسوخ", "Cancel")) } }
     )
 }
-
 @Composable
 private fun BuyByRupeeAmountDialog(
     product: Product,
@@ -1209,184 +953,43 @@ private fun BuyByRupeeAmountDialog(
     val exactWeight = if (isValid) (amountPkr / ratePerUnit).coerceAtLeast(0.001) else 0.0
     val isKg = product.unit.equals("kg", ignoreCase = true)
     val gramsOrMl = round(exactWeight * 1000.0).toLong()
-    val stockAfterDeduction = (product.stockQty - exactWeight).coerceAtLeast(0.0)
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Calculate,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.secondary
-                )
-                Column {
-                    Text(
-                        text = language.pick("رقم کے حساب سے دیں", "Buy by Rupee Amount"),
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = language.pick(
-                            "رقم لکھیں — وزن خودکار نکلے گا اور اسٹاک سے کٹے گا",
-                            "Enter PKR — auto-calculates exact weight & deducts stock"
-                        ),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        },
+        title = { Text(language.pick("رقم کے حساب سے دیں", "Buy by Rupee Amount"), fontWeight = FontWeight.Bold) },
         text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        Text(
-                            text = product.nameUrdu.ifBlank { product.nameEnglish },
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "${language.pick("ریٹ", "Rate")}: ${formatPkr(ratePerUnit, language)} / ${unitLabel(product.unit, language)}  •  ${language.pick("اسٹاک", "Stock")}: ${formatExactQty(product.stockQty)}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-
-                // Quick PKR Amount Chips
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "${product.nameUrdu.ifBlank { product.nameEnglish }} • ${formatPkr(ratePerUnit, language)} / ${unitLabel(product.unit, language)}",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     QUICK_RUPEE_AMOUNTS.forEach { presetAmt ->
                         FilterChip(
                             selected = abs(amountPkr - presetAmt.toDouble()) < 0.01,
                             onClick = { amountStr = presetAmt.toString() },
-                            label = {
-                                Text(
-                                    text = if (language == AppLanguage.URDU) "روپے $presetAmt" else "Rs. $presetAmt",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            },
-                            modifier = Modifier.testTag("rupee_chip_$presetAmt")
+                            label = { Text(if (language == AppLanguage.URDU) "روپے $presetAmt" else "Rs. $presetAmt", style = MaterialTheme.typography.labelSmall) }
                         )
                     }
                 }
-
                 OutlinedTextField(
                     value = amountStr,
-                    onValueChange = { raw ->
-                        amountStr = raw.filter { it.isDigit() || it == '.' }
-                    },
-                    label = {
-                        Text(language.pick("مطلوبہ رقم درج کریں (روپے)", "Enter PKR Amount"))
-                    },
-                    placeholder = {
-                        Text(language.pick("مثلاً 50، 100، 250", "e.g. 50, 100, 250"))
-                    },
+                    onValueChange = { raw -> amountStr = raw.filter { it.isDigit() || it == '.' } },
+                    label = { Text(language.pick("مطلوبہ رقم درج کریں (روپے)", "Enter PKR Amount")) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("rupee_amount_input")
+                    modifier = Modifier.fillMaxWidth().testTag("rupee_amount_input")
                 )
-
                 if (isValid) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
-                        shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Text(
-                                text = "${formatPkr(amountPkr, language)} ÷ ${formatPkr(ratePerUnit, language)}/${unitLabel(product.unit, language)}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = language.pick("صحیح وزن:", "Calculated Weight:"),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Text(
-                                    text = "${formatExactQty(exactWeight)} ${unitLabel(product.unit, language)} ($gramsOrMl${if (isKg) "g" else "ml"})",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = language.pick("بل میں شامل رقم:", "Exact Bill Total:"),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Text(
-                                    text = formatPkr(roundMoney(amountPkr), language),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = ProfitGreen
-                                )
-                            }
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = language.pick("اسٹاک سے کٹوتی:", "Stock Deduction:"),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    text = "-${formatExactQty(exactWeight)} (${language.pick("باقی", "Left")}: ${formatExactQty(stockAfterDeduction)})",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (exactWeight > product.stockQty) UdharCrimson else MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                            if (exactWeight > product.stockQty) {
-                                Text(
-                                    text = language.pick(
-                                        "توجہ: مطلوبہ وزن موجودہ اسٹاک (${formatExactQty(product.stockQty)}) سے زیادہ ہے۔",
-                                        "Note: Weight exceeds current recorded stock (${formatExactQty(product.stockQty)})."
-                                    ),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = UdharCrimson
-                                )
-                            }
-                        }
-                    }
+                    Text(
+                        text = "${language.pick("صحیح وزن:", "Weight:")} ${formatExactQty(exactWeight)} ${unitLabel(product.unit, language)} ($gramsOrMl${if (isKg) "g" else "ml"})",
+                        fontWeight = FontWeight.Bold,
+                        color = ProfitGreen
+                    )
                 }
             }
         },
@@ -1395,39 +998,18 @@ private fun BuyByRupeeAmountDialog(
                 Button(
                     onClick = { onAddCalculatedWeight(exactWeight, false) },
                     enabled = isValid,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("confirm_rupee_amount_add_button")
-                ) {
-                    Text(
-                        if (currentCartQty > 0.0) {
-                            language.pick(
-                                "موجودہ میں شامل کریں (+${formatPkr(roundMoney(amountPkr), language)})",
-                                "Add to Existing (+${formatPkr(roundMoney(amountPkr), language)})"
-                            )
-                        } else {
-                            language.pick("بل میں شامل کریں", "Add to Bill")
-                        }
-                    )
-                }
+                    modifier = Modifier.fillMaxWidth().testTag("confirm_rupee_amount_add_button")
+                ) { Text(language.pick("بل میں شامل کریں", "Add to Bill")) }
                 if (currentCartQty > 0.0) {
                     OutlinedButton(
                         onClick = { onAddCalculatedWeight(exactWeight, true) },
                         enabled = isValid,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("confirm_rupee_amount_replace_button")
-                    ) {
-                        Text(language.pick("صرف یہی رقم رکھیں", "Replace Item Quantity"))
-                    }
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(language.pick("صرف یہی رقم رکھیں", "Replace Quantity")) }
                 }
             }
         },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(language.pick("منسوخ", "Cancel"))
-            }
-        }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(language.pick("منسوخ", "Cancel")) } }
     )
 }
 
@@ -1441,16 +1023,7 @@ private fun CheckoutDialog(
     initialCustomerPhone: String,
     subtotal: Double,
     isBusy: Boolean,
-    onConfirm: (
-        paymentMethod: PaymentMethod,
-        discount: Double,
-        paidAmt: Double,
-        isPending: Boolean,
-        note: String,
-        pickedCustomer: Customer?,
-        newCustomerName: String,
-        newCustomerPhone: String
-    ) -> Unit,
+    onConfirm: (PaymentMethod, Double, Double, Boolean, String, Customer?, String, String) -> Unit,
     onDismiss: () -> Unit
 ) {
     var paymentMethod by remember { mutableStateOf(PaymentMethod.CASH) }
@@ -1458,37 +1031,13 @@ private fun CheckoutDialog(
     var paidStr by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
 
-    // Khata customer state inside Checkout for Full Credit (ادھار) & Partial Credit (جزوی ادھار)
     val initialHasCustomTypedName = selectedCustomer == null && !isWalkInName(initialCustomerName)
     var createNewKhataCustomer by remember {
-        mutableStateOf(
-            when {
-                selectedCustomer != null -> false
-                customers.isEmpty() -> true
-                initialHasCustomTypedName -> true
-                else -> false
-            }
-        )
+        mutableStateOf(selectedCustomer == null && (customers.isEmpty() || initialHasCustomTypedName))
     }
     var pickedKhataCustomer by remember { mutableStateOf(selectedCustomer) }
-    var khataSearchQuery by remember { mutableStateOf("") }
-    var newCustomerName by remember {
-        mutableStateOf(if (initialHasCustomTypedName) initialCustomerName.trim() else "")
-    }
-    var newCustomerPhone by remember {
-        mutableStateOf(if (selectedCustomer == null) initialCustomerPhone.trim() else "")
-    }
-
-    val filteredKhataCustomers = remember(customers, khataSearchQuery) {
-        val q = khataSearchQuery.trim()
-        if (q.isBlank()) {
-            customers
-        } else {
-            customers.filter {
-                it.name.contains(q, ignoreCase = true) || it.phone.contains(q, ignoreCase = true)
-            }
-        }
-    }
+    var newCustomerName by remember { mutableStateOf(if (initialHasCustomTypedName) initialCustomerName.trim() else "") }
+    var newCustomerPhone by remember { mutableStateOf(if (selectedCustomer == null) initialCustomerPhone.trim() else "") }
 
     val discount = roundMoney(discountStr.toDoubleOrNull()?.coerceIn(0.0, subtotal) ?: 0.0)
     val grandTotal = roundMoney((subtotal - discount).coerceAtLeast(0.0))
@@ -1498,7 +1047,6 @@ private fun CheckoutDialog(
         PaymentMethod.PARTIAL -> roundMoney(paidStr.toDoubleOrNull()?.coerceIn(0.0, grandTotal) ?: 0.0)
     }
     val udharAmt = roundMoney((grandTotal - paidAmt).coerceAtLeast(0.0))
-
     val isCreditPayment = paymentMethod == PaymentMethod.UDHAR || paymentMethod == PaymentMethod.PARTIAL
     val needsKhataProfile = isCreditPayment && udharAmt > 0.0
     val hasValidCreditCustomer = when {
@@ -1507,77 +1055,11 @@ private fun CheckoutDialog(
         else -> pickedKhataCustomer != null
     }
 
-    val displayCustomerName = when {
-        isCreditPayment && !createNewKhataCustomer && pickedKhataCustomer != null -> pickedKhataCustomer!!.name
-        isCreditPayment && createNewKhataCustomer && newCustomerName.isNotBlank() -> newCustomerName.trim()
-        else -> initialCustomerName.ifBlank { language.pick("نقد کسٹمر", "Walk-in Customer") }
-    }
-
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = {
-            Text(language.pick("بل فائنل کریں اور رسید بنائیں", "Finalize Bill & Generate Receipt"))
-        },
+        title = { Text(language.pick("بل فائنل کریں اور رسید بنائیں", "Finalize Bill & Generate Receipt")) },
         text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Text(
-                    text = "${language.pick("کسٹمر", "Customer")}: $displayCustomerName (${cartItems.size} ${language.pick("اشیاء", "items")})",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-
-                val affectedLowStockItems = remember(cartItems) {
-                    cartItems.filter { item ->
-                        val remaining = (item.product.stockQty - item.quantity).coerceAtLeast(0.0)
-                        item.product.isLowStock() || (item.product.lowStockThreshold > 0.0 && remaining <= item.product.lowStockThreshold)
-                    }
-                }
-                if (affectedLowStockItems.isNotEmpty()) {
-                    Surface(
-                        color = WarningAmber.copy(alpha = 0.13f),
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, WarningAmber.copy(alpha = 0.55f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.WarningAmber,
-                                    contentDescription = null,
-                                    tint = WarningAmber,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Text(
-                                    text = language.pick(
-                                        "کم اسٹاک تنبیہ (${affectedLowStockItems.size} اشیاء):",
-                                        "Low Stock Alert (${affectedLowStockItems.size} items):"
-                                    ),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = WarningAmber
-                                )
-                            }
-                            affectedLowStockItems.take(4).forEach { item ->
-                                val afterQty = (item.product.stockQty - item.quantity).coerceAtLeast(0.0)
-                                Text(
-                                    text = "• ${item.product.nameUrdu.ifBlank { item.product.nameEnglish }}: ${language.pick("باقی ہو گا", "will leave")} ${formatExactQty(afterQty)} / ${language.pick("حد", "min")} ${formatExactQty(item.product.lowStockThreshold)} ${unitLabel(item.product.unit, language)}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                        }
-                    }
-                }
-
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
                     value = discountStr,
                     onValueChange = { discountStr = it.filter { ch -> ch.isDigit() || ch == '.' } },
@@ -1586,360 +1068,71 @@ private fun CheckoutDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-
-                Text(
-                    text = language.pick("ادائیگی کا طریقہ:", "Payment Method:"),
-                    style = MaterialTheme.typography.labelLarge
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     PaymentMethod.entries.forEach { method ->
                         val chipLabel = when (method) {
                             PaymentMethod.CASH -> language.pick("نقد", "Cash")
-                            PaymentMethod.UDHAR -> language.pick("ادھار", "Full Credit")
-                            PaymentMethod.PARTIAL -> language.pick("جزوی ادھار", "Partial")
+                            PaymentMethod.UDHAR -> language.pick("ادھار", "Credit")
+                            PaymentMethod.PARTIAL -> language.pick("جزوی", "Partial")
                         }
                         FilterChip(
                             selected = paymentMethod == method,
                             onClick = { paymentMethod = method },
-                            label = {
-                                Text(
-                                    text = chipLabel,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            },
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("checkout_payment_${method.name.lowercase()}")
+                            label = { Text(chipLabel, maxLines = 1) },
+                            modifier = Modifier.weight(1f).testTag("checkout_payment_${method.name.lowercase()}")
                         )
                     }
                 }
-
                 if (paymentMethod == PaymentMethod.PARTIAL) {
                     OutlinedTextField(
                         value = paidStr,
                         onValueChange = { paidStr = it.filter { ch -> ch.isDigit() || ch == '.' } },
-                        label = { Text(language.pick("نقد وصول شدہ رقم (روپے)", "Cash Paid Now (PKR)")) },
-                        placeholder = {
-                            Text(
-                                language.pick(
-                                    "مثلاً ${(grandTotal / 2).toLong()} (باقی ادھار ہو گا)",
-                                    "e.g. ${(grandTotal / 2).toLong()} (rest goes to Khata)"
-                                )
-                            )
-                        },
+                        label = { Text(language.pick("نقد وصول شدہ رقم", "Cash Paid Now")) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("checkout_partial_paid_input")
+                        modifier = Modifier.fillMaxWidth().testTag("checkout_partial_paid_input")
                     )
                 }
-
-                // Khata Customer Selector OR New Customer Auto-Create Panel for Credit / Partial Credit
                 if (isCreditPayment) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                        shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(
-                            1.dp,
-                            if (hasValidCreditCustomer) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
-                            else UdharCrimson.copy(alpha = 0.6f)
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.AccountBalanceWallet,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Text(
-                                    text = language.pick("ادھار کھاتہ کسٹمر", "Khata Credit Account"),
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            // Toggle: Existing Khata vs New Customer
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                FilterChip(
-                                    selected = !createNewKhataCustomer,
-                                    onClick = { createNewKhataCustomer = false },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = Icons.Default.Person,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    },
-                                    label = {
-                                        Text(
-                                            text = language.pick("موجودہ کھاتہ", "Existing Khata"),
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    },
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .testTag("checkout_existing_khata_tab")
-                                )
-                                FilterChip(
-                                    selected = createNewKhataCustomer,
-                                    onClick = { createNewKhataCustomer = true },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = Icons.Default.PersonAdd,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    },
-                                    label = {
-                                        Text(
-                                            text = language.pick("نیا کسٹمر", "New Customer"),
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    },
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer
-                                    ),
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .testTag("checkout_new_khata_tab")
-                                )
-                            }
-
-                            if (!createNewKhataCustomer) {
-                                if (customers.isEmpty()) {
-                                    Text(
-                                        text = language.pick(
-                                            "ابھی کوئی کھاتہ کسٹمر محفوظ نہیں۔ نیا کسٹمر ٹیب سے فوری کھاتہ بنائیں۔",
-                                            "No saved Khata customers yet. Switch to New Customer to create one automatically."
-                                        ),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    TextButton(
-                                        onClick = { createNewKhataCustomer = true },
-                                        modifier = Modifier.align(Alignment.End)
-                                    ) {
-                                        Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(16.dp))
-                                        Spacer(Modifier.size(4.dp))
-                                        Text(language.pick("نیا کھاتہ بنائیں", "Create New Khata"))
-                                    }
-                                } else {
-                                    if (customers.size > 3) {
-                                        OutlinedTextField(
-                                            value = khataSearchQuery,
-                                            onValueChange = { khataSearchQuery = it },
-                                            placeholder = {
-                                                Text(language.pick("نام یا فون سے تلاش کریں...", "Search name or phone..."))
-                                            },
-                                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                                            singleLine = true,
-                                            shape = RoundedCornerShape(10.dp),
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                    }
-
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .heightIn(max = 156.dp)
-                                            .verticalScroll(rememberScrollState()),
-                                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        filteredKhataCustomers.forEach { cust ->
-                                            val isSelected = pickedKhataCustomer?.id == cust.id
-                                            Surface(
-                                                color = if (isSelected) {
-                                                    MaterialTheme.colorScheme.primaryContainer
-                                                } else {
-                                                    MaterialTheme.colorScheme.surface
-                                                },
-                                                shape = RoundedCornerShape(10.dp),
-                                                border = BorderStroke(
-                                                    width = if (isSelected) 1.5.dp else 1.dp,
-                                                    color = if (isSelected) MaterialTheme.colorScheme.primary
-                                                    else MaterialTheme.colorScheme.outlineVariant
-                                                ),
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clip(RoundedCornerShape(10.dp))
-                                                    .clickable { pickedKhataCustomer = cust }
-                                                    .testTag("checkout_khata_customer_${cust.id}")
-                                            ) {
-                                                Row(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .padding(horizontal = 10.dp, vertical = 8.dp),
-                                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Column(modifier = Modifier.weight(1f)) {
-                                                        Text(
-                                                            text = cust.name,
-                                                            style = MaterialTheme.typography.bodyMedium,
-                                                            fontWeight = FontWeight.Bold,
-                                                            maxLines = 1,
-                                                            overflow = TextOverflow.Ellipsis
-                                                        )
-                                                        if (cust.phone.isNotBlank()) {
-                                                            Text(
-                                                                text = cust.phone,
-                                                                style = MaterialTheme.typography.labelSmall,
-                                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                            )
-                                                        }
-                                                    }
-                                                    Row(
-                                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                        Text(
-                                                            text = formatPkr(cust.balance, language),
-                                                            style = MaterialTheme.typography.labelMedium,
-                                                            fontWeight = FontWeight.Bold,
-                                                            color = if (cust.balance > 0) UdharCrimson else ProfitGreen
-                                                        )
-                                                        if (isSelected) {
-                                                            Icon(
-                                                                imageVector = Icons.Default.CheckCircle,
-                                                                contentDescription = null,
-                                                                tint = MaterialTheme.colorScheme.primary,
-                                                                modifier = Modifier.size(18.dp)
-                                                            )
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    val chosen = pickedKhataCustomer
-                                    if (chosen != null && udharAmt > 0.0) {
-                                        val projectedBalance = roundMoney(chosen.balance + udharAmt)
-                                        Text(
-                                            text = language.pick(
-                                                "سابقہ بقایا ${formatPkr(chosen.balance, language)} + نیا ادھار ${formatPkr(udharAmt, language)} = کل ${formatPkr(projectedBalance, language)}",
-                                                "Prev ${formatPkr(chosen.balance, language)} + New ${formatPkr(udharAmt, language)} = Total ${formatPkr(projectedBalance, language)}"
-                                            ),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = !createNewKhataCustomer,
+                            onClick = { createNewKhataCustomer = false },
+                            label = { Text(language.pick("موجودہ کھاتہ", "Existing")) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilterChip(
+                            selected = createNewKhataCustomer,
+                            onClick = { createNewKhataCustomer = true },
+                            label = { Text(language.pick("نیا کسٹمر", "New")) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    if (!createNewKhataCustomer) {
+                        Column(modifier = Modifier.fillMaxWidth().heightIn(max = 130.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            customers.forEach { cust ->
+                                val isSel = pickedKhataCustomer?.id == cust.id
+                                Surface(
+                                    color = if (isSel) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.fillMaxWidth().clickable { pickedKhataCustomer = cust }
+                                ) {
+                                    Row(modifier = Modifier.padding(8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text(cust.name, fontWeight = FontWeight.Bold)
+                                        Text(formatPkr(cust.balance, language), color = UdharCrimson)
                                     }
                                 }
-                            } else {
-                                // New Customer Name & Phone to auto-create Khata profile
-                                OutlinedTextField(
-                                    value = newCustomerName,
-                                    onValueChange = { newCustomerName = it },
-                                    label = { Text(language.pick("نئے کسٹمر کا نام *", "New Customer Name *")) },
-                                    placeholder = { Text(language.pick("مثلاً حاجی محمد اسلم", "e.g. Muhammad Aslam")) },
-                                    leadingIcon = { Icon(Icons.Default.PersonAdd, contentDescription = null) },
-                                    singleLine = true,
-                                    shape = RoundedCornerShape(10.dp),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .testTag("checkout_new_customer_name")
-                                )
-                                OutlinedTextField(
-                                    value = newCustomerPhone,
-                                    onValueChange = { newCustomerPhone = it.filter { ch -> ch.isDigit() || ch == '+' || ch == '-' || ch == ' ' } },
-                                    label = { Text(language.pick("فون نمبر (موبائل)", "Phone Number")) },
-                                    placeholder = { Text("0300-1234567") },
-                                    leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                                    singleLine = true,
-                                    shape = RoundedCornerShape(10.dp),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .testTag("checkout_new_customer_phone")
-                                )
-                                Text(
-                                    text = language.pick(
-                                        "بل مکمل ہونے پر نیا کھاتہ خودکار بن جائے گا اور بقایا ادھار (${formatPkr(udharAmt, language)}) درج ہو جائے گا۔",
-                                        "Auto-creates Khata profile and posts unpaid balance (${formatPkr(udharAmt, language)})."
-                                    ),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = ProfitGreen
-                                )
-                            }
-
-                            if (!hasValidCreditCustomer) {
-                                Text(
-                                    text = if (createNewKhataCustomer) {
-                                        language.pick(
-                                            "براہِ کرم نیا کھاتہ بنانے کے لیے کسٹمر کا نام درج کریں۔",
-                                            "Please enter the new customer's name to auto-create their Khata."
-                                        )
-                                    } else {
-                                        language.pick(
-                                            "ادھار درج کرنے کے لیے اوپر سے کھاتہ کسٹمر منتخب کریں یا «نیا کسٹمر» پر کلک کریں۔",
-                                            "Select a Khata customer above or switch to New Customer."
-                                        )
-                                    },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = UdharCrimson
-                                )
                             }
                         }
+                    } else {
+                        OutlinedTextField(value = newCustomerName, onValueChange = { newCustomerName = it }, label = { Text(language.pick("کسٹمر کا نام*", "Customer Name*")) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = newCustomerPhone, onValueChange = { newCustomerPhone = it }, label = { Text(language.pick("فون نمبر", "Phone")) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     }
                 }
-
-                OutlinedTextField(
-                    value = note,
-                    onValueChange = { note = it },
-                    label = { Text(language.pick("نوٹ (اختیاری)", "Order Note (optional)")) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                HorizontalDivider()
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
+                OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text(language.pick("نوٹ", "Note")) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(language.pick("کل رقم:", "Grand Total:"), fontWeight = FontWeight.Bold)
-                    Text(
-                        formatPkr(grandTotal, language),
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-                if (paymentMethod == PaymentMethod.PARTIAL && paidAmt > 0.0) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(language.pick("نقد وصول:", "Cash Received:"), color = ProfitGreen)
-                        Text(formatPkr(paidAmt, language), color = ProfitGreen, fontWeight = FontWeight.Bold)
-                    }
-                }
-                if (udharAmt > 0.0) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(language.pick("ادھار کھاتہ میں:", "Added to Khata Udhar:"), color = UdharCrimson)
-                        Text(formatPkr(udharAmt, language), color = UdharCrimson, fontWeight = FontWeight.Bold)
-                    }
+                    Text(formatPkr(grandTotal, language), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                 }
             }
         },
@@ -1948,50 +1141,30 @@ private fun CheckoutDialog(
                 Button(
                     onClick = {
                         onConfirm(
-                            paymentMethod,
-                            discount,
-                            paidAmt,
-                            false,
-                            note,
+                            paymentMethod, discount, paidAmt, false, note,
                             if (!createNewKhataCustomer) pickedKhataCustomer else null,
                             if (createNewKhataCustomer) newCustomerName.trim() else "",
                             if (createNewKhataCustomer) newCustomerPhone.trim() else ""
                         )
                     },
                     enabled = !isBusy && hasValidCreditCustomer,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("confirm_complete_bill_button")
-                ) {
-                    Text(language.pick("بل مکمل کریں (خودکار رسید)", "Complete Bill & Auto Receipt"))
-                }
+                    modifier = Modifier.fillMaxWidth().testTag("confirm_complete_bill_button")
+                ) { Text(language.pick("بل مکمل کریں (خودکار رسید)", "Complete Bill & Auto Receipt")) }
                 OutlinedButton(
                     onClick = {
                         onConfirm(
-                            paymentMethod,
-                            discount,
-                            0.0,
-                            true,
-                            note,
+                            paymentMethod, discount, 0.0, true, note,
                             if (!createNewKhataCustomer) pickedKhataCustomer else null,
                             if (createNewKhataCustomer) newCustomerName.trim() else "",
                             if (createNewKhataCustomer) newCustomerPhone.trim() else ""
                         )
                     },
                     enabled = !isBusy,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("save_pending_order_button")
-                ) {
-                    Text(language.pick("زیرِ التواء آرڈر محفوظ کریں", "Save as Pending Order"))
-                }
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(language.pick("زیرِ التواء آرڈر محفوظ کریں", "Save Pending Order")) }
             }
         },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(language.pick("منسوخ", "Cancel"))
-            }
-        }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(language.pick("منسوخ", "Cancel")) } }
     )
 }
 
@@ -2001,27 +1174,37 @@ private fun OrdersHistoryList(
     orders: List<Order>,
     onOpenReceipt: (Order) -> Unit,
     onEditOrder: (Order) -> Unit,
+    onDeleteOrder: (Order) -> Unit,
     onCompletePendingOrder: (Order, PaymentMethod) -> Unit,
     onCancelPendingOrder: (String) -> Unit
 ) {
+    var orderToDelete by remember { mutableStateOf<Order?>(null) }
+    val pendingDelete = orderToDelete
+    if (pendingDelete != null) {
+        AlertDialog(
+            onDismissRequest = { orderToDelete = null },
+            title = { Text(language.pick("بل مستقل ڈیلیٹ کریں؟", "Delete Bill Permanently?"), fontWeight = FontWeight.Bold, color = UdharCrimson) },
+            text = {
+                Text(
+                    language.pick(
+                        "کیا آپ واقعی بل نمبر ${pendingDelete.billNumber} (${pendingDelete.customerName}) کو مستقل طور پر ڈیلیٹ کرنا چاہتے ہیں؟",
+                        "Are you sure you want to permanently delete Bill #${pendingDelete.billNumber} (${pendingDelete.customerName})?"
+                    )
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { onDeleteOrder(pendingDelete); orderToDelete = null },
+                    colors = ButtonDefaults.buttonColors(containerColor = UdharCrimson)
+                ) { Text(language.pick("جی ہاں، ڈیلیٹ کریں", "Yes, Delete"), color = Color.White) }
+            },
+            dismissButton = { TextButton(onClick = { orderToDelete = null }) { Text(language.pick("منسوخ", "Cancel")) } }
+        )
+    }
+
     if (orders.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(24.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.ReceiptLong,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(44.dp)
-                )
-                Text(
-                    text = language.pick("ابھی کوئی آرڈر یا بل موجود نہیں", "No orders or bills recorded yet"),
-                    style = MaterialTheme.typography.titleMedium
-                )
-            }
+            Text(language.pick("ابھی کوئی آرڈر یا بل موجود نہیں", "No orders or bills recorded yet"))
         }
         return
     }
@@ -2034,128 +1217,40 @@ private fun OrdersHistoryList(
         items(orders, key = { it.id }) { order ->
             val status = order.statusEnum()
             Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onOpenReceipt(order) },
+                modifier = Modifier.fillMaxWidth().clickable { onOpenReceipt(order) },
                 shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = order.customerName,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "${order.billNumber} • ${order.items.size} ${language.pick("اشیاء", "items")}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Text(order.customerName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text("${order.billNumber} • ${order.items.size} ${language.pick("اشیاء", "items")}", style = MaterialTheme.typography.bodySmall)
                         }
-                        Surface(
-                            color = when (status) {
-                                OrderStatus.PENDING -> MaterialTheme.colorScheme.secondaryContainer
-                                OrderStatus.COMPLETED -> MaterialTheme.colorScheme.primaryContainer
-                                OrderStatus.CANCELLED -> MaterialTheme.colorScheme.errorContainer
-                            },
-                            shape = RoundedCornerShape(50.dp)
-                        ) {
-                            Text(
-                                text = status.label(language),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = when (status) {
-                                    OrderStatus.PENDING -> WarningAmber
-                                    OrderStatus.COMPLETED -> ProfitGreen
-                                    OrderStatus.CANCELLED -> UdharCrimson
-                                },
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                            )
-                        }
+                        Text(formatPkr(order.totalAmount, language), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                     }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "${language.pick("منافع", "Profit")}: ${formatPkr(order.profitAmount, language)}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = ProfitGreen
-                        )
-                        Text(
-                            text = formatPkr(order.totalAmount, language),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = { onEditOrder(order) },
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("edit_order_${order.id}")
-                        ) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedButton(onClick = { onEditOrder(order) }, modifier = Modifier.weight(1f)) {
                             Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.size(4.dp))
-                            Text(
-                                language.pick("بل ایڈٹ / رقم تبدیل", "Edit Bill"),
-                                maxLines = 1
-                            )
+                            Text(language.pick("ایڈٹ", "Edit"))
                         }
-                        FilledTonalButton(
-                            onClick = { onOpenReceipt(order) },
-                            modifier = Modifier.weight(1f)
-                        ) {
+                        FilledTonalButton(onClick = { onOpenReceipt(order) }, modifier = Modifier.weight(1.2f)) {
                             Icon(Icons.Default.ReceiptLong, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.size(4.dp))
-                            Text(
-                                language.pick("رسید / واٹس ایپ", "Receipt / WA"),
-                                maxLines = 1
-                            )
+                            Text(language.pick("رسید / WA", "Receipt"))
+                        }
+                        IconButton(onClick = { orderToDelete = order }, modifier = Modifier.testTag("billing_delete_order_${order.id}")) {
+                            Icon(Icons.Default.DeleteOutline, contentDescription = language.pick("ڈیلیٹ", "Delete"), tint = UdharCrimson)
                         }
                     }
-
                     if (status == OrderStatus.PENDING) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Button(
-                                onClick = { onCompletePendingOrder(order, PaymentMethod.CASH) },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.size(4.dp))
-                                Text(language.pick("نقد بل مکمل", "Complete Cash"))
-                            }
-                            if (order.customerId.isNotBlank()) {
-                                FilledTonalButton(
-                                    onClick = { onCompletePendingOrder(order, PaymentMethod.UDHAR) },
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text(language.pick("ادھار مکمل", "Complete Udhar"))
-                                }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { onCompletePendingOrder(order, PaymentMethod.CASH) }, modifier = Modifier.weight(1f)) {
+                                Text(language.pick("نقد مکمل", "Complete Cash"))
                             }
                             IconButton(onClick = { onCancelPendingOrder(order.id) }) {
-                                Icon(
-                                    imageVector = Icons.Default.Cancel,
-                                    contentDescription = language.pick("منسوخ", "Cancel"),
-                                    tint = UdharCrimson
-                                )
+                                Icon(Icons.Default.Cancel, contentDescription = null, tint = UdharCrimson)
                             }
                         }
                     }
