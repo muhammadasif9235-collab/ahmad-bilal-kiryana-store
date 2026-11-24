@@ -167,7 +167,7 @@ object ReceiptFormatter {
                 table { width: 100%; border-collapse: collapse; font-size: 13px; }
                 th { background: #065F46; color: #FDE68A; padding: 8px 6px; border: 1px solid #043927; font-weight: bold; }
                 td { padding: 7px 6px; border: 1px solid #CBD5E1; }
-                .c-sr { width: 9%; text-align: center; font-weight: bold; color: #065F46; }
+                .c-sr { width: 9%; text-align: center; font-weight: bold; color: #064E3B; }
                 .c-qty { width: 16%; text-align: start; }
                 .c-item { width: 45%; text-align: start; font-weight: 600; }
                 .c-rate { width: 14%; text-align: center; }
@@ -233,9 +233,7 @@ object ReceiptFormatter {
         fun cmd(vararg bytes: Int) { bytes.forEach { out.write(it) } }
         fun line(text: String) { out.write("$text\n".toByteArray(Charsets.UTF_8)) }
 
-        cmd(0x1B, 0x40)
-        cmd(0x1B, 0x61, 0x01)
-        cmd(0x1B, 0x45, 0x01)
+        cmd(0x1B, 0x40); cmd(0x1B, 0x61, 0x01); cmd(0x1B, 0x45, 0x01)
         line(shopNameEnglish.uppercase(Locale.US))
         line(shopAddressEnglish.uppercase(Locale.US))
         cmd(0x1B, 0x45, 0x00)
@@ -291,6 +289,67 @@ object ReceiptFormatter {
             val typeText = if (isCredit) "Payment Receipt (Cash)" else "Udhar Debit Entry"
             "$shopNameEnglish ($shopAddressEnglish)\n$typeText\nCustomer: ${entry.customerName}\nAmount: ${formatPkr(entry.amount, AppLanguage.ENGLISH)}\nRemaining Balance: ${formatPkr(entry.balanceAfter, AppLanguage.ENGLISH)}\nDate: $dateStr"
         }
+    }
+
+    fun buildPaymentPrintableHtml(
+        entry: LedgerEntry,
+        language: AppLanguage,
+        shopPhone: String = "",
+        shopNameUrdu: String = SHOP_NAME_URDU,
+        shopNameEnglish: String = SHOP_NAME_ENGLISH,
+        shopAddressUrdu: String = SHOP_CITY_URDU,
+        shopAddressEnglish: String = SHOP_CITY_ENGLISH
+    ): String {
+        val isUrdu = language == AppLanguage.URDU
+        val dir = if (isUrdu) "rtl" else "ltr"
+        val dateStr = formatDateTime(entry.createdAt?.toDate()?.time ?: System.currentTimeMillis())
+        val isCredit = entry.entryTypeEnum() == LedgerEntryType.CREDIT
+        val title = if (isUrdu) (if (isCredit) "وصولی رسید (نقد)" else "ادھار کھاتہ رسید") else (if (isCredit) "Payment Receipt" else "Udhar Receipt")
+        return """
+            <!DOCTYPE html><html dir="$dir" lang="${language.code}"><head><meta charset="UTF-8" /></head>
+            <body style="font-family:sans-serif;margin:14px;">
+                <div style="border:2px solid #064E3B;border-radius:14px;overflow:hidden;max-width:520px;margin:auto;">
+                    <div style="background:#065F46;color:#FDE68A;padding:12px;text-align:center;border-bottom:3px solid #D4AF37;">
+                        <h2 style="margin:0;">${escapeHtml(if (isUrdu) shopNameUrdu else shopNameEnglish)}</h2>
+                        <div style="font-size:12px;color:#fff;">${escapeHtml(if (isUrdu) shopAddressUrdu else shopAddressEnglish)} ${if (shopPhone.isNotBlank()) "• $shopPhone" else ""}</div>
+                    </div>
+                    <div style="padding:14px;font-size:14px;line-height:1.9;">
+                        <div style="text-align:center;font-weight:bold;color:#065F46;margin-bottom:8px;">$title</div>
+                        <div><strong>${if (isUrdu) "کسٹمر:" else "Customer:"}</strong> ${escapeHtml(entry.customerName)}</div>
+                        <div><strong>${if (isUrdu) "رقم:" else "Amount:"}</strong> ${escapeHtml(formatPkr(entry.amount, language))}</div>
+                        <div><strong>${if (isUrdu) "بقایا ادھار:" else "Remaining Balance:"}</strong> ${escapeHtml(formatPkr(entry.balanceAfter, language))}</div>
+                        <div><strong>${if (isUrdu) "تاریخ:" else "Date:"}</strong> ${escapeHtml(dateStr)}</div>
+                        ${if (entry.note.isNotBlank()) "<div><strong>${if (isUrdu) "نوٹ:" else "Note:"}</strong> ${escapeHtml(entry.note)}</div>" else ""}
+                    </div>
+                </div>
+            </body></html>
+        """.trimIndent()
+    }
+
+    fun buildPaymentEscPosBytes(
+        entry: LedgerEntry,
+        shopPhone: String = "",
+        shopNameEnglish: String = SHOP_NAME_ENGLISH,
+        shopAddressEnglish: String = SHOP_CITY_ENGLISH
+    ): ByteArray {
+        val out = ByteArrayOutputStream()
+        fun cmd(vararg bytes: Int) { bytes.forEach { out.write(it) } }
+        fun line(text: String) { out.write("$text\n".toByteArray(Charsets.UTF_8)) }
+        cmd(0x1B, 0x40); cmd(0x1B, 0x61, 0x01); cmd(0x1B, 0x45, 0x01)
+        line(shopNameEnglish.uppercase(Locale.US))
+        line(shopAddressEnglish.uppercase(Locale.US))
+        cmd(0x1B, 0x45, 0x00)
+        if (shopPhone.isNotBlank()) line("Tel: $shopPhone")
+        line("--------------------------------")
+        cmd(0x1B, 0x61, 0x00)
+        line("Customer : ${entry.customerName}")
+        line("Type     : ${entry.entryType}")
+        line("Amount   : Rs. ${entry.amount.toLong()}")
+        line("Balance  : Rs. ${entry.balanceAfter.toLong()}")
+        line("Date     : ${formatDateTime(entry.createdAt?.toDate()?.time ?: System.currentTimeMillis())}")
+        line("--------------------------------")
+        cmd(0x1B, 0x61, 0x01); line("Shukriya!"); line("\n\n\n"); cmd(0x1D, 0x56, 0x41, 0x03)
+        return out.toByteArray()
     }
 
     fun buildRationCardShareText(
@@ -409,9 +468,7 @@ object ReceiptFormatter {
         fun cmd(vararg bytes: Int) { bytes.forEach { out.write(it) } }
         fun line(text: String) { out.write("$text\n".toByteArray(Charsets.UTF_8)) }
 
-        cmd(0x1B, 0x40)
-        cmd(0x1B, 0x61, 0x01)
-        cmd(0x1B, 0x45, 0x01)
+        cmd(0x1B, 0x40); cmd(0x1B, 0x61, 0x01); cmd(0x1B, 0x45, 0x01)
         line(shopNameEnglish.uppercase(Locale.US))
         line(shopAddressEnglish.uppercase(Locale.US))
         cmd(0x1B, 0x45, 0x00)
@@ -449,6 +506,8 @@ object ReceiptFormatter {
         language: AppLanguage,
         shopNameUrdu: String = SHOP_NAME_URDU,
         shopNameEnglish: String = SHOP_NAME_ENGLISH,
+        shopAddressUrdu: String = SHOP_CITY_URDU,
+        shopAddressEnglish: String = SHOP_CITY_ENGLISH,
         shopPhone: String = ""
     ): String {
         val sb = StringBuilder()
@@ -456,6 +515,7 @@ object ReceiptFormatter {
         if (language == AppLanguage.URDU) {
             sb.appendLine("============================")
             sb.appendLine("  $shopNameUrdu")
+            sb.appendLine("  $shopAddressUrdu")
             sb.appendLine("  روزنامچہ اسٹیٹمنٹ ($periodLabel)")
             if (shopPhone.isNotBlank()) sb.appendLine("  فون: $shopPhone")
             sb.appendLine("============================")
@@ -471,6 +531,7 @@ object ReceiptFormatter {
         } else {
             sb.appendLine("============================")
             sb.appendLine("  $shopNameEnglish")
+            sb.appendLine("  $shopAddressEnglish")
             sb.appendLine("  Roznamcha Statement ($periodLabel)")
             sb.appendLine("============================")
             entries.forEachIndexed { idx, e ->
@@ -491,30 +552,61 @@ object ReceiptFormatter {
         language: AppLanguage,
         shopNameUrdu: String = SHOP_NAME_URDU,
         shopNameEnglish: String = SHOP_NAME_ENGLISH,
+        shopAddressUrdu: String = SHOP_CITY_URDU,
+        shopAddressEnglish: String = SHOP_CITY_ENGLISH,
         shopPhone: String = ""
     ): String {
         val sb = StringBuilder()
         if (language == AppLanguage.URDU) {
             sb.appendLine("============================")
             sb.appendLine("  $shopNameUrdu")
+            sb.appendLine("  $shopAddressUrdu")
             sb.appendLine("  کم اسٹاک / خریداری لسٹ")
             if (shopPhone.isNotBlank()) sb.appendLine("  فون: $shopPhone")
             sb.appendLine("============================")
             lowStockProducts.forEachIndexed { idx, p ->
-                sb.appendLine("${idx + 1}. ${p.nameUrdu.ifBlank { p.nameEnglish }} — بقایا: ${formatQty(p.stockQuantity)} ${unitLabel(p.unit, AppLanguage.URDU)}")
+                sb.appendLine("${idx + 1}. ${p.nameUrdu.ifBlank { p.nameEnglish }} — بقایا: ${formatQty(p.stockQty)} ${unitLabel(p.unit, AppLanguage.URDU)}")
             }
             sb.appendLine("============================")
         } else {
             sb.appendLine("============================")
             sb.appendLine("  $shopNameEnglish")
+            sb.appendLine("  $shopAddressEnglish")
             sb.appendLine("  Low Stock Purchase List")
             sb.appendLine("============================")
             lowStockProducts.forEachIndexed { idx, p ->
-                sb.appendLine("${idx + 1}. ${p.nameEnglish.ifBlank { p.nameUrdu }} — Left: ${formatQty(p.stockQuantity)} ${unitLabel(p.unit, AppLanguage.ENGLISH)}")
+                sb.appendLine("${idx + 1}. ${p.nameEnglish.ifBlank { p.nameUrdu }} — Left: ${formatQty(p.stockQty)} ${unitLabel(p.unit, AppLanguage.ENGLISH)}")
             }
             sb.appendLine("============================")
         }
         return sb.toString()
+    }
+    fun buildLowStockReportPrintableHtml(
+        lowStockProducts: List<Product>,
+        language: AppLanguage,
+        shopNameUrdu: String = SHOP_NAME_URDU,
+        shopNameEnglish: String = SHOP_NAME_ENGLISH,
+        shopAddressUrdu: String = SHOP_CITY_URDU,
+        shopAddressEnglish: String = SHOP_CITY_ENGLISH,
+        shopPhone: String = ""
+    ): String {
+        val isUrdu = language == AppLanguage.URDU
+        val dir = if (isUrdu) "rtl" else "ltr"
+        val rows = lowStockProducts.mapIndexed { idx, p ->
+            val name = if (isUrdu) p.nameUrdu.ifBlank { p.nameEnglish } else p.nameEnglish.ifBlank { p.nameUrdu }
+            """<tr><td style="padding:6px;border:1px solid #ccc;text-align:center;">${idx + 1}</td><td style="padding:6px;border:1px solid #ccc;">${escapeHtml(name)}</td><td style="padding:6px;border:1px solid #ccc;text-align:center;">${formatQty(p.stockQty)} ${unitLabel(p.unit, language)}</td></tr>"""
+        }.joinToString("\n")
+        return """
+            <!DOCTYPE html><html dir="$dir" lang="${language.code}"><head><meta charset="UTF-8" /></head>
+            <body style="font-family:sans-serif;margin:14px;">
+                <h2 style="color:#065F46;text-align:center;">${escapeHtml(if (isUrdu) shopNameUrdu else shopNameEnglish)}</h2>
+                <p style="text-align:center;font-size:12px;">${escapeHtml(if (isUrdu) shopAddressUrdu else shopAddressEnglish)} ${if (shopPhone.isNotBlank()) "• $shopPhone" else ""}</p>
+                <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                    <thead><tr style="background:#065F46;color:#FDE68A;"><th>#</th><th>${if (isUrdu) "آئٹم" else "Item"}</th><th>${if (isUrdu) "بقایا اسٹاک" else "Stock"}</th></tr></thead>
+                    <tbody>$rows</tbody>
+                </table>
+            </body></html>
+        """.trimIndent()
     }
 
     private fun escapeHtml(input: String): String =
