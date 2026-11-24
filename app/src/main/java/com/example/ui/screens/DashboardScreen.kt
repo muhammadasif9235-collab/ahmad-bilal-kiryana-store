@@ -16,16 +16,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.AddShoppingCart
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.LocalShipping
@@ -38,6 +40,7 @@ import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.VolunteerActivism
 import androidx.compose.material.icons.filled.WarningAmber
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -48,19 +51,23 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -71,12 +78,12 @@ import com.example.R
 import com.example.data.Order
 import com.example.data.OrderStatus
 import com.example.data.Product
+import com.example.data.ShopSettings
 import com.example.i18n.AppLanguage
 import com.example.i18n.formatPkr
 import com.example.i18n.formatQty
 import com.example.i18n.pick
 import com.example.i18n.unitLabel
-import com.example.ui.components.AsyncBannerImage
 import com.example.ui.components.ShopLogoBadge
 import com.example.ui.theme.EmeraldBright
 import com.example.ui.theme.EmeraldPrimary
@@ -87,13 +94,10 @@ import com.example.ui.theme.SaffronSecondary
 import com.example.ui.theme.UdharCrimson
 import com.example.ui.theme.WarningAmber
 import com.example.viewmodel.ShopAnalytics
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import kotlinx.coroutines.delay
 
 @Composable
 fun DashboardScreen(
@@ -115,8 +119,35 @@ fun DashboardScreen(
     onOpenCustomerOrder: () -> Unit = {},
     onEditOrder: (Order) -> Unit = {},
     onDeleteOrder: (Order) -> Unit = {},
-    onOpenLowStockReport: () -> Unit = {}
+    onOpenLowStockReport: () -> Unit = {},
+    settings: ShopSettings = ShopSettings()
 ) {
+    // Live ticking clock & date (updates every second)
+    var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1000L)
+            nowMillis = System.currentTimeMillis()
+        }
+    }
+    val liveTimeText = remember(nowMillis) {
+        SimpleDateFormat("hh:mm:ss a", Locale.US).format(Date(nowMillis))
+    }
+    val liveDateText = remember(nowMillis) {
+        SimpleDateFormat("EEE, dd MMM yyyy", Locale.US).format(Date(nowMillis))
+    }
+
+    val displayShopTitle = if (language == AppLanguage.URDU) {
+        settings.storeNameUrdu.ifBlank { "کریانہ اینڈ جنرل سٹور" }
+    } else {
+        settings.storeNameEnglish.ifBlank { "Kiryana & General Store" }
+    }
+    val displayShopAddress = if (language == AppLanguage.URDU) {
+        settings.shopAddressUrdu
+    } else {
+        settings.shopAddressEnglish
+    }
+
     var orderToDelete by remember { mutableStateOf<Order?>(null) }
     val pendingDelete = orderToDelete
     if (pendingDelete != null) {
@@ -160,7 +191,6 @@ fun DashboardScreen(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.TopCenter
     ) {
-        
         LazyColumn(
             modifier = Modifier
                 .widthIn(max = 740.dp)
@@ -168,76 +198,83 @@ fun DashboardScreen(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // 1. Royal Emerald & Gold Marquee Banner with Official Store Emblem
+            // 1. Modern Executive Fintech Header with Live Clock & Dynamic Shop Title
             item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(26.dp))
-                        .border(
-                            width = 1.5.dp,
-                            brush = Brush.linearGradient(listOf(GoldShimmer, SaffronSecondary, GoldShimmer)),
-                            shape = RoundedCornerShape(26.dp)
-                        )
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    border = BorderStroke(1.2.dp, GoldShimmer.copy(alpha = 0.7f)),
+                    colors = CardDefaults.cardColors(containerColor = Color.Transparent)
                 ) {
-                    AsyncBannerImage(
-                        resId = R.drawable.img_kiryana_banner_1795314088201,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.matchParentSize()
-                    )
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .background(
-                                Brush.linearGradient(
-                                    colors = listOf(
-                                        Color(0xEC042B1E),
-                                        Color(0xD4084C36),
-                                        Color(0xE6052B1E)
-                                    )
-                                )
-                            )
-                            .drawBehind {
-                                val filigree = Color(0x30FDE68A)
-                                drawCircle(
-                                    color = filigree,
-                                    radius = size.height * 0.62f,
-                                    center = Offset(size.width * 0.06f, size.height * 0.12f),
-                                    style = Stroke(width = 2.5f)
-                                )
-                                drawCircle(
-                                    color = filigree,
-                                    radius = size.height * 0.48f,
-                                    center = Offset(size.width * 0.94f, size.height * 0.88f),
-                                    style = Stroke(width = 2f)
-                                )
-                            }
-                    )
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .background(
+                                Brush.linearGradient(
+                                    colors = listOf(EmeraldPrimaryDark, EmeraldPrimary, EmeraldBright)
+                                )
+                            )
                             .padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        // Top Badge & Gujrat Rate Sync Row
+                        // Top Live Date & Ticking Clock Bar + Rate Sync Button
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Surface(
-                                color = SaffronSecondary,
-                                shape = RoundedCornerShape(50.dp)
+                                color = Color.Black.copy(alpha = 0.22f),
+                                shape = RoundedCornerShape(50.dp),
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.24f))
                             ) {
-                                Text(
-                                    text = language.pick("ٹانڈہ • ضلع گجرات", "Tanda • District Gujrat"),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                                )
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.CalendarToday,
+                                            contentDescription = null,
+                                            tint = GoldShimmer,
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                        Text(
+                                            text = liveDateText,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color.White
+                                        )
+                                    }
+                                    Text(
+                                        text = "•",
+                                        color = GoldShimmer,
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.AccessTime,
+                                            contentDescription = null,
+                                            tint = Color(0xFF86EFAC),
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                        Text(
+                                            text = liveTimeText,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = Color(0xFF86EFAC)
+                                        )
+                                    }
+                                }
                             }
+
                             Surface(
                                 color = Color.White.copy(alpha = 0.16f),
                                 shape = RoundedCornerShape(50.dp),
@@ -268,29 +305,26 @@ fun DashboardScreen(
                             }
                         }
 
-                        // Official Circular Logo + Bold Store Title Row
+                        // Store Emblem + Dynamic Store Name & Address
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(76.dp)
+                                    .size(62.dp)
                                     .clip(CircleShape)
                                     .border(
                                         width = 2.dp,
-                                        brush = Brush.linearGradient(listOf(GoldShimmer, SaffronSecondary, GoldShimmer)),
+                                        brush = Brush.linearGradient(listOf(GoldShimmer, SaffronSecondary)),
                                         shape = CircleShape
                                     )
                                     .padding(2.dp)
                             ) {
                                 ShopLogoBadge(
                                     resId = R.drawable.img_shop_logo,
-                                    contentDescription = language.pick(
-                                        "احمد بلال کریانہ سٹور ٹانڈہ لوگو",
-                                        "Ahmad Bilal Kiryana Store, Tanda Logo"
-                                    ),
+                                    contentDescription = displayShopTitle,
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .clip(CircleShape)
@@ -298,46 +332,44 @@ fun DashboardScreen(
                             }
                             Column(
                                 modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                                verticalArrangement = Arrangement.spacedBy(3.dp)
                             ) {
                                 Text(
-                                    text = language.pick("احمد بلال کریانہ سٹور ٹانڈہ", "Ahmad Bilal Kiryana Store, Tanda"),
-                                    style = MaterialTheme.typography.headlineMedium.copy(
-                                        fontSize = if (language == AppLanguage.URDU) 24.sp else 20.sp,
-                                        lineHeight = if (language == AppLanguage.URDU) 34.sp else 26.sp,
+                                    text = displayShopTitle,
+                                    style = MaterialTheme.typography.titleLarge.copy(
+                                        fontSize = if (language == AppLanguage.URDU) 22.sp else 19.sp,
                                         fontWeight = FontWeight.ExtraBold
                                     ),
                                     color = Color.White,
-                                    maxLines = 2
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .width(84.dp)
-                                        .height(2.5.dp)
-                                        .clip(RoundedCornerShape(50.dp))
-                                        .background(
-                                            Brush.horizontalGradient(
-                                                listOf(GoldShimmer, SaffronSecondary, Color.Transparent)
-                                            )
-                                        )
-                                )
-                                Text(
-                                    text = language.pick(
-                                        "آج کی فروخت، منافع، اسٹاک، راشن کارڈ اور ادھار کھاتہ",
-                                        "Daily Sales, Profit, Inventory, Ration Card & Udhar Khata"
-                                    ),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = GoldShimmer.copy(alpha = 0.94f),
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis
                                 )
+                                if (displayShopAddress.isNotBlank()) {
+                                    Text(
+                                        text = displayShopAddress,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = GoldShimmer,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                } else {
+                                    Text(
+                                        text = language.pick(
+                                            "پروفیشنل POS • کھاتہ • روزنامچہ • اسٹاک منیجر",
+                                            "Smart POS • Khata Ledger • Daily Cashbook • Stock"
+                                        ),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color.White.copy(alpha = 0.88f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
-
-            // 2. Elevated Quick Action Dock
+                        // 2. Elevated Quick Action Dock
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -395,7 +427,7 @@ fun DashboardScreen(
                 }
             }
 
-            // 2a. Standalone Daily Roznamcha (Manual Cash In/Out) & Customer WhatsApp + GPS Order Cards
+            // 2a. Standalone Daily Roznamcha & Customer WhatsApp + GPS Order Cards
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -614,7 +646,7 @@ fun DashboardScreen(
                 }
             }
 
-            // 2c. Ration Charity Fund Featured Card (Muhammad Asif HBL Account)
+            // 2c. Ration Charity Fund Featured Card
             item {
                 Card(
                     modifier = Modifier
@@ -689,7 +721,7 @@ fun DashboardScreen(
                 }
             }
 
-            // 3. KPI Metric Grid (2x2) with crisp heritage framing
+            // 3. KPI Metric Grid (2x2)
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(
@@ -703,7 +735,7 @@ fun DashboardScreen(
                                 "کل: ${formatPkr(analytics.totalSalesAllTime, AppLanguage.URDU)}",
                                 "All-time: ${formatPkr(analytics.totalSalesAllTime, AppLanguage.ENGLISH)}"
                             ),
-                            icon = Icons.Default.PointOfSale,
+                            icon = Icons.Default.PointOSale,
                             accentColor = EmeraldPrimary,
                             modifier = Modifier.weight(1f)
                         )
@@ -749,9 +781,15 @@ fun DashboardScreen(
                     }
                 }
             }
-
-            // 4. 7-Day Sales Mini Bar Chart
+                        // 4. Enhanced 7-Day Sales Analytics Graph with Weekly Total & Daily Values
             item {
+                val weekTotal = remember(analytics.dailySalesLast7Days) {
+                    analytics.dailySalesLast7Days.sumOf { it.second }
+                }
+                val weekAvg = remember(weekTotal, analytics.dailySalesLast7Days) {
+                    val count = analytics.dailySalesLast7Days.size.coerceAtLeast(1)
+                    weekTotal / count
+                }
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
@@ -767,11 +805,22 @@ fun DashboardScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = language.pick("گزشتہ 7 دنوں کی فروخت", "Last 7 Days Sales"),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Column {
+                                Text(
+                                    text = language.pick("گزشتہ 7 دنوں کی فروخت کا گراف", "Last 7 Days Sales Analytics"),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = language.pick(
+                                        "ہفتہ وار کل: ${formatPkr(weekTotal, AppLanguage.URDU)} • یومیہ اوسط: ${formatPkr(weekAvg, AppLanguage.URDU)}",
+                                        "7-Day Total: ${formatPkr(weekTotal, AppLanguage.ENGLISH)} • Avg/Day: ${formatPkr(weekAvg, AppLanguage.ENGLISH)}"
+                                    ),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
                             if (analytics.pendingOrderCount > 0) {
                                 Surface(
                                     color = MaterialTheme.colorScheme.secondaryContainer,
@@ -779,7 +828,7 @@ fun DashboardScreen(
                                 ) {
                                     Text(
                                         text = language.pick(
-                                            "${analytics.pendingOrderCount} زیرِ التواء آرڈرز",
+                                            "${analytics.pendingOrderCount} زیرِ التواء",
                                             "${analytics.pendingOrderCount} Pending"
                                         ),
                                         style = MaterialTheme.typography.labelSmall,
@@ -943,8 +992,7 @@ fun DashboardScreen(
                         }
                     }
                 }
-            
-              } else {
+            } else {
                 items(recentOrders.take(5).size) { idx ->
                     val order = recentOrders[idx]
                     Card(
@@ -1150,6 +1198,27 @@ private fun SalesBarChart(
 ) {
     val maxVal = (buckets.maxOfOrNull { it.second } ?: 0.0).coerceAtLeast(100.0)
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        // Amount labels above each bar
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            buckets.forEachIndexed { index, (_, amount) ->
+                val shortAmt = when {
+                    amount >= 1000.0 -> String.format(Locale.US, "%.1fk", amount / 1000.0)
+                    amount > 0.0 -> "${amount.toLong()}"
+                    else -> "0"
+                }
+                Text(
+                    text = shortAmt,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = if (index == buckets.lastIndex) FontWeight.Bold else FontWeight.Normal,
+                    color = if (index == buckets.lastIndex) highlightColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1179,9 +1248,13 @@ private fun SalesBarChart(
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f)
                 )
             }
         }
     }
 }
+
+                            
