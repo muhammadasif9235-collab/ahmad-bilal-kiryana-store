@@ -35,20 +35,17 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudDownload
-import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MyLocation
-import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.Print
@@ -218,6 +215,7 @@ private fun SettingsAccordionBar(
         }
     }
 }
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
@@ -250,7 +248,8 @@ fun SettingsScreen(
     onTestBluetoothPrint: () -> Unit,
     onOpenRationFund: () -> Unit,
     onSignOut: () -> Unit,
-    onUpdateShopLocation: (Double, Double, String?) -> Unit = { _, _, _ -> }
+    onUpdateShopLocation: (Double, Double, String?) -> Unit = { _, _, _ -> },
+    onOpenBusinessSetup: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -333,7 +332,6 @@ fun SettingsScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Compact Profile Photo & Store Header Card
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -409,6 +407,29 @@ fun SettingsScreen(
                             }
                         }
                     }
+                }
+            }
+
+            // Business Category & Ready-Made Items Preset Button
+            item {
+                FilledTonalButton(
+                    onClick = onOpenBusinessSetup,
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = EmeraldPrimary.copy(alpha = 0.12f),
+                        contentColor = EmeraldPrimary
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Category, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.size(8.dp))
+                    Text(
+                        text = language.pick(
+                            "کاروبار کی قسم تبدیل کریں / تیار سامان لوڈ کریں (15+ کاروبار)",
+                            "Select Business Type / Load Ready-Made Items (15+ Businesses)"
+                        ),
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
 
@@ -505,7 +526,8 @@ fun SettingsScreen(
                     }
                 }
             }
-                        // Bar 2: Personal Bank / RAAST QR (Shop Sales ONLY)
+
+            // Bar 2: Personal Bank / RAAST QR (Shop Sales ONLY)
             item {
                 SettingsAccordionBar(
                     title = language.pick("2. ذاتی بینک اکاؤنٹ اور RAAST QR", "2. Personal Bank & Sales RAAST QR"),
