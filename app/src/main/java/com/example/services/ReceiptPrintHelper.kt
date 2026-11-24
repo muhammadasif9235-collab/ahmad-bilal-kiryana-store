@@ -1021,8 +1021,215 @@ object ReceiptPrintHelper {
             canvas.drawRoundRect(tableLeft, y, tableRight, y + tableHeaderHeight, 6f, 6f, strokePaint)
 
             val tblHdrPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+
+    fun generateOrderReceiptPdf(
+        context: Context,
+        order: Order,
+        language: AppLanguage,
+        settings: ShopSettings
+    ): File? {
+        return try {
+            val isUrdu = language == AppLanguage.URDU
+            val shopNameUr = settings.storeNameUrdu.ifBlank { "احمد بلال کریانہ سٹور ٹانڈہ" }
+            val shopNameEn = settings.storeNameEnglish.ifBlank { "Ahmad Bilal Kiryana Store, Tanda" }
+            val shopAddr = if (isUrdu) settings.shopAddressUrdu else settings.shopAddressEnglish
+            val dateStr = ReceiptFormatter.formatDateTime(order.createdAt?.toDate()?.time ?: System.currentTimeMillis())
+
+            val pageWidth = 420
+            val margin = 18f
+            val contentWidth = pageWidth - (margin * 2f)
+
+            val minRows = 15
+            val totalRows = maxOf(order.items.size, minRows)
+            val rowHeight = 20f
+            val headerHeight = 76f
+            val metaHeight = 54f
+            val tableHeaderHeight = 24f
+            val footerTotalsHeight = 78f
+            val pageHeight = (margin * 2f + headerHeight + metaHeight + tableHeaderHeight + (totalRows * rowHeight) + footerTotalsHeight + 16f)
+                .toInt()
+                .coerceAtLeast(605)
+
+            val document = PdfDocument()
+            val page = document.startPage(PdfDocument.PageInfo.Builder(pageWidth, pageHeight, 1).create())
+            val canvas = page.canvas
+            canvas.drawColor(Color.WHITE)
+
+            // Royal Emerald & Gold Theme
+            val emeraldDark = Color.rgb(6, 78, 59)
+            val emeraldMid = Color.rgb(6, 95, 70)
+            val emeraldLight = Color.rgb(236, 253, 245)
+            val emeraldZebra = Color.rgb(244, 249, 246)
+            val goldBar = Color.rgb(212, 175, 55)
+            val goldText = Color.rgb(253, 230, 138)
+            val crimsonRed = Color.rgb(185, 28, 28)
+            val borderSlate = Color.rgb(148, 163, 184)
+            val darkInk = Color.rgb(17, 24, 39)
+
+            val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+            val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = 1.2f
+                color = emeraldDark
+            }
+            val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = 0.8f
+                color = borderSlate
+            }
+
+            fun drawAlignedText(
+                text: String,
+                paint: TextPaint,
+                x: Float,
+                y: Float,
+                w: Float,
+                align: Layout.Alignment
+            ) {
+                val safeW = w.toInt().coerceAtLeast(10)
+                val layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, safeW)
+                    .setAlignment(align)
+                    .setLineSpacing(0f, 1.0f)
+                    .setIncludePad(false)
+                    .build()
+                canvas.save()
+                canvas.translate(x, y)
+                layout.draw(canvas)
+                canvas.restore()
+            }
+
+            // 1. Outer Border
+            canvas.drawRoundRect(margin, margin, pageWidth - margin, pageHeight - margin, 10f, 10f, strokePaint)
+
+            // 2. Royal Emerald & Gold Header Banner
+            val bannerTop = margin
+            val bannerBottom = bannerTop + headerHeight
+            fillPaint.color = emeraldMid
+            canvas.drawRect(margin + 1f, bannerTop + 1f, pageWidth - margin - 1f, bannerBottom - 18f, fillPaint)
+
+            fillPaint.color = goldBar
+            canvas.drawRect(margin + 1f, bannerBottom - 18f, pageWidth - margin - 1f, bannerBottom, fillPaint)
+
+            val enHeaderPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+                textSize = 12.5f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+            val urHeaderPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = goldText
+                textSize = 16f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+            val addrPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = emeraldDark
+                textSize = 9.5f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+
+            drawAlignedText(shopNameEn, enHeaderPaint, margin + 8f, bannerTop + 12f, (contentWidth * 0.45f), Layout.Alignment.ALIGN_NORMAL)
+            drawAlignedText(shopNameUr, urHeaderPaint, margin + (contentWidth * 0.43f), bannerTop + 8f, (contentWidth * 0.55f) - 8f, Layout.Alignment.ALIGN_OPPOSITE)
+
+            val addressAndPhone = buildString {
+                if (shopAddr.isNotBlank()) append(shopAddr)
+                if (settings.shopPhone.isNotBlank()) {
+                    if (isNotEmpty()) append("  •  ")
+                    append(settings.shopPhone)
+                }
+            }
+            if (addressAndPhone.isNotBlank()) {
+                drawAlignedText(addressAndPhone, addrPaint, margin + 6f, bannerBottom - 14f, contentWidth - 12f, Layout.Alignment.ALIGN_CENTER)
+            }
+
+            // 3. Meta Section: Bill #, Cash Memo Pill, Date, and Buyer Name strictly from Right Edge
+            var y = bannerBottom + 8f
+            val metaValPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = darkInk
+                textSize = 10f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+            val badgePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = goldText
                 textSize = 10.5f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+
+            val pillW = 100f
+            val pillX = margin + (contentWidth - pillW) / 2f
+            fillPaint.color = emeraldMid
+            canvas.drawRoundRect(pillX, y - 2f, pillX + pillW, y + 16f, 8f, 8f, fillPaint)
+            drawAlignedText(if (isUrdu) "کیش میمو" else "CASH MEMO", badgePaint, pillX, y + 1f, pillW, Layout.Alignment.ALIGN_CENTER)
+
+            val leftMeta = if (isUrdu) "تاریخ: $dateStr" else "No: ${order.billNumber}"
+            val rightMeta = if (isUrdu) "نمبر: ${order.billNumber}" else "Date: $dateStr"
+            drawAlignedText(leftMeta, metaValPaint, margin + 8f, y + 1f, pillX - margin - 12f, Layout.Alignment.ALIGN_NORMAL)
+            drawAlignedText(rightMeta, metaValPaint, pillX + pillW + 4f, y + 1f, (pageWidth - margin) - (pillX + pillW) - 12f, Layout.Alignment.ALIGN_OPPOSITE)
+
+            y += 24f
+            val buyerPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = emeraldDark
+                textSize = 11f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+            val cleanCust = order.customerName.trim()
+            val isWalkIn = cleanCust.isBlank() || cleanCust == "نقد کسٹمر" || cleanCust.equals("Walk-in Customer", ignoreCase = true)
+            val custLineText = if (isUrdu) {
+                if (isWalkIn) "نام خریدار:  ____________________________"
+                else "نام خریدار:  $cleanCust  (${order.paymentMethodEnum().label(AppLanguage.URDU)})"
+            } else {
+                if (isWalkIn) "Buyer Name:  ____________________________"
+                else "Buyer Name:  $cleanCust  (${order.paymentMethodEnum().label(AppLanguage.ENGLISH)})"
+            }
+            // Strictly Right-Aligned (ALIGN_OPPOSITE) for Urdu RTL
+            drawAlignedText(
+                custLineText,
+                buyerPaint,
+                margin + 8f,
+                y,
+                contentWidth - 16f,
+                if (isUrdu) Layout.Alignment.ALIGN_OPPOSITE else Layout.Alignment.ALIGN_NORMAL
+            )
+            y += 16f
+            canvas.drawLine(margin + 6f, y, pageWidth - margin - 6f, y, gridPaint)
+            y += 6f
+
+            // 4. 5-Column RTL Urdu Table: [Rupees | Rate | Description | Qty | Sr#] (Right-to-Left)
+            val tableLeft = margin + 6f
+            val tableRight = pageWidth - margin - 6f
+            val tableWidth = tableRight - tableLeft
+
+            val wSr = 34f
+            val wQty = 52f
+            val wRate = 50f
+            val wAmount = 66f
+            val wDesc = tableWidth - wSr - wQty - wRate - wAmount
+
+            val xCol0: Float
+            val xCol1: Float
+            val xCol2: Float
+            val xCol3: Float
+            val xCol4: Float
+            if (isUrdu) {
+                // Left -> Right coordinates for RTL columns: روپے | نرخ | تفصیل اشیاء | تعداد | نمبر شمار
+                xCol0 = tableLeft              // روپے (Leftmost)
+                xCol1 = xCol0 + wAmount        // نرخ
+                xCol2 = xCol1 + wRate          // تفصیل اشیاء
+                xCol3 = xCol2 + wDesc          // تعداد
+                xCol4 = xCol3 + wQty           // نمبر شمار (Rightmost)
+            } else {
+                xCol0 = tableLeft              // Sr#
+                xCol1 = xCol0 + wSr            // Qty
+                xCol2 = xCol1 + wQty           // Description
+                xCol3 = xCol2 + wDesc          // Rate
+                xCol4 = xCol3 + wRate          // Amount
+            }
+
+            fillPaint.color = emeraldMid
+            canvas.drawRect(tableLeft, y, tableRight, y + tableHeaderHeight, fillPaint)
+            canvas.drawRect(tableLeft, y, tableRight, y + tableHeaderHeight, strokePaint)
+
+            val tblHdrPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = goldText
+                textSize = 9.8f
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             }
 
@@ -1031,27 +1238,31 @@ object ReceiptPrintHelper {
                 drawAlignedText("نرخ", tblHdrPaint, xCol1, y + 6f, wRate, Layout.Alignment.ALIGN_CENTER)
                 drawAlignedText("تفصیل اشیاء", tblHdrPaint, xCol2, y + 6f, wDesc, Layout.Alignment.ALIGN_CENTER)
                 drawAlignedText("تعداد", tblHdrPaint, xCol3, y + 6f, wQty, Layout.Alignment.ALIGN_CENTER)
+                drawAlignedText("نمبر شمار", tblHdrPaint, xCol4, y + 6f, wSr, Layout.Alignment.ALIGN_CENTER)
             } else {
-                drawAlignedText("Qty", tblHdrPaint, xCol0, y + 6f, wQty, Layout.Alignment.ALIGN_CENTER)
-                drawAlignedText("Description", tblHdrPaint, xCol1, y + 6f, wDesc, Layout.Alignment.ALIGN_CENTER)
-                drawAlignedText("Rate", tblHdrPaint, xCol2, y + 6f, wRate, Layout.Alignment.ALIGN_CENTER)
-                drawAlignedText("Amount", tblHdrPaint, xCol3, y + 6f, wAmount, Layout.Alignment.ALIGN_CENTER)
+                drawAlignedText("Sr#", tblHdrPaint, xCol0, y + 6f, wSr, Layout.Alignment.ALIGN_CENTER)
+                drawAlignedText("Qty", tblHdrPaint, xCol1, y + 6f, wQty, Layout.Alignment.ALIGN_CENTER)
+                drawAlignedText("Description", tblHdrPaint, xCol2, y + 6f, wDesc, Layout.Alignment.ALIGN_CENTER)
+                drawAlignedText("Rate", tblHdrPaint, xCol3, y + 6f, wRate, Layout.Alignment.ALIGN_CENTER)
+                drawAlignedText("Amount", tblHdrPaint, xCol4, y + 6f, wAmount, Layout.Alignment.ALIGN_CENTER)
             }
 
-            canvas.drawLine(xCol1, y, xCol1, y + tableHeaderHeight, strokePaint)
-            canvas.drawLine(xCol2, y, xCol2, y + tableHeaderHeight, strokePaint)
-            canvas.drawLine(xCol3, y, xCol3, y + tableHeaderHeight, strokePaint)
+            listOf(xCol1, xCol2, xCol3, xCol4).forEach { colX ->
+                canvas.drawLine(colX, y, colX, y + tableHeaderHeight, strokePaint)
+            }
 
             y += tableHeaderHeight
             val rowsTopY = y
 
-            val cellTextPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = darkInk
-                textSize = 10f
-            }
+            val cellTextPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = darkInk; textSize = 9.8f }
             val cellBoldPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = darkInk
-                textSize = 10f
+                textSize = 9.8f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+            val srPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = emeraldDark
+                textSize = 9.8f
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             }
 
@@ -1059,53 +1270,61 @@ object ReceiptPrintHelper {
                 val rowTop = rowsTopY + (r * rowHeight)
                 val rowBottom = rowTop + rowHeight
                 if (r % 2 == 1) {
-                    fillPaint.color = Color.rgb(248, 250, 252)
+                    fillPaint.color = emeraldZebra
                     canvas.drawRect(tableLeft, rowTop, tableRight, rowBottom, fillPaint)
                 }
-                canvas.drawLine(tableLeft, rowBottom, tableRight, rowBottom, rulePaint)
+                canvas.drawLine(tableLeft, rowBottom, tableRight, rowBottom, gridPaint)
+
+                // Always draw Serial Number (1, 2, 3...)
+                val srStr = "${r + 1}"
+                if (isUrdu) {
+                    drawAlignedText(srStr, srPaint, xCol4, rowTop + 4f, wSr, Layout.Alignment.ALIGN_CENTER)
+                } else {
+                    drawAlignedText(srStr, srPaint, xCol0, rowTop + 4f, wSr, Layout.Alignment.ALIGN_CENTER)
+                }
 
                 if (r < order.items.size) {
                     val item = order.items[r]
-                    val itemName = if (isUrdu) item.nameUrdu else item.nameEnglish
+                    val itemName = if (isUrdu) item.nameUrdu.ifBlank { item.nameEnglish } else item.nameEnglish.ifBlank { item.nameUrdu }
                     val qtyText = "${formatQty(item.quantity)} ${unitLabel(item.unit, language)}"
                     val rateText = "${item.unitPrice.toLong()}"
                     val amtText = "${item.lineTotal.toLong()}/-"
 
                     if (isUrdu) {
-                        drawAlignedText(amtText, cellBoldPaint, xCol0 + 4f, rowTop + 4f, wAmount - 8f, Layout.Alignment.ALIGN_CENTER)
+                        drawAlignedText(amtText, cellBoldPaint, xCol0 + 2f, rowTop + 4f, wAmount - 4f, Layout.Alignment.ALIGN_CENTER)
                         drawAlignedText(rateText, cellTextPaint, xCol1 + 2f, rowTop + 4f, wRate - 4f, Layout.Alignment.ALIGN_CENTER)
-                        drawAlignedText(itemName, cellBoldPaint, xCol2 + 4f, rowTop + 4f, wDesc - 10f, Layout.Alignment.ALIGN_OPPOSITE)
+                        drawAlignedText(itemName, cellBoldPaint, xCol2 + 4f, rowTop + 4f, wDesc - 8f, Layout.Alignment.ALIGN_OPPOSITE)
                         drawAlignedText(qtyText, cellTextPaint, xCol3 + 2f, rowTop + 4f, wQty - 4f, Layout.Alignment.ALIGN_CENTER)
                     } else {
-                        drawAlignedText(qtyText, cellTextPaint, xCol0 + 2f, rowTop + 4f, wQty - 4f, Layout.Alignment.ALIGN_CENTER)
-                        drawAlignedText(itemName, cellBoldPaint, xCol1 + 6f, rowTop + 4f, wDesc - 10f, Layout.Alignment.ALIGN_NORMAL)
-                        drawAlignedText(rateText, cellTextPaint, xCol2 + 2f, rowTop + 4f, wRate - 4f, Layout.Alignment.ALIGN_CENTER)
-                        drawAlignedText(amtText, cellBoldPaint, xCol3 + 4f, rowTop + 4f, wAmount - 8f, Layout.Alignment.ALIGN_CENTER)
+                        drawAlignedText(qtyText, cellTextPaint, xCol1 + 2f, rowTop + 4f, wQty - 4f, Layout.Alignment.ALIGN_CENTER)
+                        drawAlignedText(itemName, cellBoldPaint, xCol2 + 4f, rowTop + 4f, wDesc - 8f, Layout.Alignment.ALIGN_NORMAL)
+                        drawAlignedText(rateText, cellTextPaint, xCol3 + 2f, rowTop + 4f, wRate - 4f, Layout.Alignment.ALIGN_CENTER)
+                        drawAlignedText(amtText, cellBoldPaint, xCol4 + 2f, rowTop + 4f, wAmount - 4f, Layout.Alignment.ALIGN_CENTER)
                     }
                 }
             }
 
             val rowsBottomY = rowsTopY + (totalRows * rowHeight)
             canvas.drawRect(tableLeft, rowsTopY, tableRight, rowsBottomY, strokePaint)
-            canvas.drawLine(xCol1, rowsTopY, xCol1, rowsBottomY, rulePaint)
-            canvas.drawLine(xCol2, rowsTopY, xCol2, rowsBottomY, rulePaint)
-            canvas.drawLine(xCol3, rowsTopY, xCol3, rowsBottomY, rulePaint)
+            listOf(xCol1, xCol2, xCol3, xCol4).forEach { colX ->
+                canvas.drawLine(colX, rowsTopY, colX, rowsBottomY, gridPaint)
+            }
 
-            // 5. Bottom Meezan / Total Box + "بھول چوک لین دین"
-            y = rowsBottomY + 6f
-            val totalBoxW = wAmount + wRate + 36f
+            // 5. Bottom Emerald Totals Box + Right-Aligned Note
+            y = rowsBottomY + 8f
+            val totalBoxW = wAmount + wRate + 34f
             val totalBoxX = if (isUrdu) tableLeft else (tableRight - totalBoxW)
             val noteX = if (isUrdu) (totalBoxX + totalBoxW + 8f) else tableLeft
             val noteW = tableWidth - totalBoxW - 8f
 
-            fillPaint.color = goldLight
-            canvas.drawRoundRect(totalBoxX, y, totalBoxX + totalBoxW, y + 60f, 6f, 6f, fillPaint)
+            fillPaint.color = emeraldLight
+            canvas.drawRoundRect(totalBoxX, y, totalBoxX + totalBoxW, y + 60f, 8f, 8f, fillPaint)
             strokePaint.color = emeraldDark
-            canvas.drawRoundRect(totalBoxX, y, totalBoxX + totalBoxW, y + 60f, 6f, 6f, strokePaint)
+            canvas.drawRoundRect(totalBoxX, y, totalBoxX + totalBoxW, y + 60f, 8f, 8f, strokePaint)
 
             val totalBoldPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = emeraldDark
-                textSize = 11.5f
+                textSize = 11f
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             }
             val subTotalPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -1115,35 +1334,35 @@ object ReceiptPrintHelper {
             }
             val udharPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = crimsonRed
-                textSize = 10f
+                textSize = 9.8f
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             }
 
-            val meezanStr = if (isUrdu) "میزان:  ${formatPkr(order.totalAmount, language)}" else "TOTAL:  ${formatPkr(order.totalAmount, language)}"
+            val meezanStr = if (isUrdu) "میزان کل:  ${formatPkr(order.totalAmount, language)}" else "TOTAL:  ${formatPkr(order.totalAmount, language)}"
             val paidStr = if (isUrdu) "وصول شدہ:  ${formatPkr(order.paidAmount, language)}" else "Paid:  ${formatPkr(order.paidAmount, language)}"
-            drawAlignedText(meezanStr, totalBoldPaint, totalBoxX + 6f, y + 6f, totalBoxW - 12f, Layout.Alignment.ALIGN_CENTER)
-            drawAlignedText(paidStr, subTotalPaint, totalBoxX + 6f, y + 24f, totalBoxW - 12f, Layout.Alignment.ALIGN_CENTER)
+            drawAlignedText(meezanStr, totalBoldPaint, totalBoxX + 4f, y + 6f, totalBoxW - 8f, Layout.Alignment.ALIGN_CENTER)
+            drawAlignedText(paidStr, subTotalPaint, totalBoxX + 4f, y + 24f, totalBoxW - 8f, Layout.Alignment.ALIGN_CENTER)
 
             if (order.remainingUdhar > 0.0) {
                 val remStr = if (isUrdu) "بقایا ادھار:  ${formatPkr(order.remainingUdhar, language)}" else "Balance Due:  ${formatPkr(order.remainingUdhar, language)}"
-                drawAlignedText(remStr, udharPaint, totalBoxX + 6f, y + 40f, totalBoxW - 12f, Layout.Alignment.ALIGN_CENTER)
+                drawAlignedText(remStr, udharPaint, totalBoxX + 4f, y + 40f, totalBoxW - 8f, Layout.Alignment.ALIGN_CENTER)
             } else if (order.discount > 0.0) {
                 val discStr = if (isUrdu) "رعایت:  -${formatPkr(order.discount, language)}" else "Discount:  -${formatPkr(order.discount, language)}"
-                drawAlignedText(discStr, subTotalPaint, totalBoxX + 6f, y + 40f, totalBoxW - 12f, Layout.Alignment.ALIGN_CENTER)
+                drawAlignedText(discStr, subTotalPaint, totalBoxX + 4f, y + 40f, totalBoxW - 8f, Layout.Alignment.ALIGN_CENTER)
             }
 
             val bhoolChookPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = crimsonRed
-                textSize = 11f
+                color = emeraldDark
+                textSize = 10.5f
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             }
             val thanksPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = emeraldDark
+                color = darkInk
                 textSize = 9.5f
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             }
             drawAlignedText(
-                if (isUrdu) "بھول چوک لین دین" else "Errors & Omissions Excepted",
+                if (isUrdu) "بھول چوک لین دین معاف" else "Errors & Omissions Excepted",
                 bhoolChookPaint,
                 noteX,
                 y + 10f,
@@ -1173,7 +1392,7 @@ object ReceiptPrintHelper {
             null
         }
     }
-
+    
     fun generateKhataReceiptPdf(
         context: Context,
         entry: LedgerEntry,
