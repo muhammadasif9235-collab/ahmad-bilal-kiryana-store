@@ -503,4 +503,479 @@ fun BillingScreen(
             }
         }
     }
-    
+        val weightTarget = customWeightProduct
+    if (weightTarget != null) {
+        val currentCartQty = cartMap[weightTarget.id]?.quantity ?: 0.0
+        CustomWeightDialog(
+            product = weightTarget,
+            language = language,
+            currentCartQty = currentCartQty,
+            onApplyWeight = { newWeight ->
+                if (currentCartQty <= 0.0) onAddProductToCart(weightTarget, newWeight)
+                else onSetCartItemQuantity(weightTarget.id, newWeight)
+                customWeightProduct = null
+            },
+            onSwitchToRupeeCalc = {
+                customWeightProduct = null
+                rupeeCalcProduct = weightTarget
+            },
+            onDismiss = { customWeightProduct = null }
+        )
+    }
+
+    val rupeeTarget = rupeeCalcProduct
+    if (rupeeTarget != null) {
+        val currentCartQty = cartMap[rupeeTarget.id]?.quantity ?: 0.0
+        BuyByRupeeAmountDialog(
+            product = rupeeTarget,
+            language = language,
+            currentCartQty = currentCartQty,
+            onAddCalculatedWeight = { exactWeight, replaceExisting ->
+                if (replaceExisting && currentCartQty > 0.0) onSetCartItemQuantity(rupeeTarget.id, exactWeight)
+                else onAddProductToCart(rupeeTarget, exactWeight)
+                rupeeCalcProduct = null
+            },
+            onDismiss = { rupeeCalcProduct = null }
+        )
+    }
+
+    if (showCheckoutDialog) {
+        CheckoutDialog(
+            language = language,
+            cartItems = cartItems,
+            customers = customers,
+            selectedCustomer = selectedCustomer,
+            initialCustomerName = manualCustomerName,
+            initialCustomerPhone = manualCustomerPhone,
+            subtotal = cartSubtotal,
+            isBusy = isBusy,
+            onConfirm = { method, discount, paid, isPending, note, pickedCustomer, newCustName, newCustPhone ->
+                showCheckoutDialog = false
+                val isCreditFlow = method == PaymentMethod.UDHAR || method == PaymentMethod.PARTIAL
+                val finalNote = if (isCreditFlow && pickedCustomer != null) {
+                    onSelectCustomer(pickedCustomer)
+                    note
+                } else if (isCreditFlow && newCustName.isNotBlank()) {
+                    onSelectCustomer(null)
+                    onManualCustomerNameChange(newCustName.trim())
+                    if (onManualCustomerPhoneChange != null) {
+                        onManualCustomerPhoneChange(newCustPhone.trim())
+                        note
+                    } else {
+                        packPhoneIntoNote(newCustPhone.trim(), note)
+                    }
+                } else {
+                    note
+                }
+                onCheckout(method, discount, paid, isPending, finalNote)
+            },
+            onDismiss = { showCheckoutDialog = false }
+        )
+    }
+}
+
+@Composable
+private fun BillingProductRow(
+    product: Product,
+    language: AppLanguage,
+    cartQty: Double,
+    lineTotal: Double,
+    onIncrement: () -> Unit,
+    onDecrement: () -> Unit,
+    onSetQuickWeight: (Double) -> Unit,
+    onOpenCustomWeight: () -> Unit,
+    onOpenRupeeCalculator: () -> Unit
+) {
+    val isWeight = product.isWeightBased()
+    val isOutOfStock = product.isOutOfStock()
+    val isLowStock = product.isLowStock()
+    val projectedAfterCart = (product.stockQty - cartQty).coerceAtLeast(0.0)
+    val willDropBelowThreshold = cartQty > 0.0 && !isLowStock && product.lowStockThreshold > 0.0 && projectedAfterCart <= product.lowStockThreshold
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        border = when {
+            isOutOfStock -> BorderStroke(1.2.dp, UdharCrimson.copy(alpha = 0.75f))
+            isLowStock || willDropBelowThreshold -> BorderStroke(1.2.dp, WarningAmber.copy(alpha = 0.75f))
+            else -> null
+        },
+        colors = CardDefaults.cardColors(
+            containerColor = when {
+                cartQty > 0 -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                isOutOfStock -> UdharCrimson.copy(alpha = 0.05f)
+                isLowStock -> WarningAmber.copy(alpha = 0.06f)
+                else -> MaterialTheme.colorScheme.surface
+            }
+        )
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = product.nameUrdu.ifBlank { product.nameEnglish },
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        if (isLowStock) {
+                            Surface(color = if (isOutOfStock) UdharCrimson else WarningAmber, shape = RoundedCornerShape(50.dp)) {
+                                Text(
+                                    text = if (isOutOfStock) language.pick("ختم!", "OUT") else language.pick("کم", "LOW"),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                                )
+                            }
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "${formatPkr(product.sellingPrice, language)} / ${unitLabel(product.unit, language)}",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "• ${language.pick("اسٹاک", "Stock")}: ${formatExactQty(product.stockQty)}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isOutOfStock) UdharCrimson else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                if (cartQty > 0) {
+                    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = onDecrement, modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)) {
+                                Icon(Icons.Default.Remove, contentDescription = null, modifier = Modifier.size(16.dp))
+                            }
+                            Surface(
+                                color = MaterialTheme.colorScheme.surface,
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                modifier = Modifier.clickable { onOpenCustomWeight() }
+                            ) {
+                                Text(
+                                    text = "${formatExactQty(cartQty)} ${unitLabel(product.unit, language)}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                                )
+                            }
+                            IconButton(onClick = onIncrement, modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary)) {
+                                Icon(Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                            }
+                        }
+                        Text("= ${formatPkr(roundMoney(lineTotal), language)}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = ProfitGreen)
+                    }
+                } else {
+                    FilledTonalButton(onClick = onIncrement, contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp), shape = RoundedCornerShape(10.dp)) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(Modifier.size(2.dp))
+                        Text(if (isWeight) language.pick("1 کلو", "1 ${unitLabel(product.unit, language)}") else language.pick("شامل", "Add"), style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+
+            if (isWeight) {
+                Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+                    QUICK_WEIGHT_PRESETS.forEach { preset ->
+                        val isSelected = cartQty > 0.0 && abs(cartQty - preset.weight) < 0.001
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { onSetQuickWeight(preset.weight) },
+                            label = { Text(preset.labelFor(product.unit, language), style = MaterialTheme.typography.labelSmall) }
+                        )
+                    }
+                    FilterChip(
+                        selected = false,
+                        onClick = onOpenCustomWeight,
+                        label = { Text(language.pick("کسٹم وزن", "Custom"), style = MaterialTheme.typography.labelSmall) }
+                    )
+                    if (product.sellingPrice > 0.0) {
+                        FilterChip(
+                            selected = false,
+                            onClick = onOpenRupeeCalculator,
+                            label = { Text(language.pick("رقم سے وزن", "By Rs."), style = MaterialTheme.typography.labelSmall) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+@Composable
+private fun CustomWeightDialog(
+    product: Product,
+    language: AppLanguage,
+    currentCartQty: Double,
+    onApplyWeight: (Double) -> Unit,
+    onSwitchToRupeeCalc: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val isWeight = product.isWeightBased()
+    val isKg = product.unit.equals("kg", ignoreCase = true)
+    var inputInGrams by remember { mutableStateOf(false) }
+    var qtyText by remember { mutableStateOf(if (currentCartQty > 0.0) formatExactQty(currentCartQty) else "") }
+
+    val parsedInput = qtyText.toDoubleOrNull() ?: 0.0
+    val finalWeight = if (isWeight && inputInGrams) parsedInput / 1000.0 else parsedInput
+    val validWeight = finalWeight >= 0.001
+    val previewTotal = roundMoney(finalWeight * product.sellingPrice)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (isWeight) language.pick("کسٹم وزن درج کریں", "Enter Custom Weight") else language.pick("مقدار درج کریں", "Enter Quantity"), fontWeight = FontWeight.Bold) },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("${product.nameUrdu.ifBlank { product.nameEnglish }} • ${formatPkr(product.sellingPrice, language)} /${unitLabel(product.unit, language)}", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                if (isWeight) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(selected = !inputInGrams, onClick = { inputInGrams = false }, label = { Text(if (isKg) "kg" else "L") }, modifier = Modifier.weight(1f))
+                        FilterChip(selected = inputInGrams, onClick = { inputInGrams = true }, label = { Text(if (isKg) "g" else "ml") }, modifier = Modifier.weight(1f))
+                    }
+                }
+                OutlinedTextField(
+                    value = qtyText,
+                    onValueChange = { raw -> qtyText = raw.filter { it.isDigit() || it == '.' } },
+                    label = { Text(language.pick("مقدار / وزن", "Quantity / Weight")) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (validWeight) {
+                    Text("${language.pick("بل کی رقم:", "Total:")} ${formatPkr(previewTotal, language)}", fontWeight = FontWeight.Bold, color = ProfitGreen)
+                }
+                if (isWeight && product.sellingPrice > 0.0) {
+                    TextButton(onClick = onSwitchToRupeeCalc) { Text(language.pick("رقم کے حساب سے دیں", "Buy by Rs. Amount")) }
+                }
+            }
+        },
+        confirmButton = { Button(onClick = { onApplyWeight(finalWeight) }, enabled = validWeight) { Text(language.pick("شامل کریں", "Apply")) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(language.pick("منسوخ", "Cancel")) } }
+    )
+}
+
+@Composable
+private fun BuyByRupeeAmountDialog(
+    product: Product,
+    language: AppLanguage,
+    currentCartQty: Double,
+    onAddCalculatedWeight: (exactWeight: Double, replaceExisting: Boolean) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var amountStr by remember { mutableStateOf("") }
+    val amountPkr = amountStr.toDoubleOrNull() ?: 0.0
+    val ratePerUnit = product.sellingPrice
+    val isValid = amountPkr > 0.0 && ratePerUnit > 0.0
+    val exactWeight = if (isValid) (amountPkr / ratePerUnit).coerceAtLeast(0.001) else 0.0
+    val isKg = product.unit.equals("kg", ignoreCase = true)
+    val gramsOrMl = round(exactWeight * 1000.0).toLong()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(language.pick("رقم کے حساب سے دیں", "Buy by Rupee Amount"), fontWeight = FontWeight.Bold) },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    QUICK_RUPEE_AMOUNTS.forEach { presetAmt ->
+                        FilterChip(selected = abs(amountPkr - presetAmt.toDouble()) < 0.01, onClick = { amountStr = presetAmt.toString() }, label = { Text("Rs. $presetAmt", style = MaterialTheme.typography.labelSmall) })
+                    }
+                }
+                OutlinedTextField(
+                    value = amountStr,
+                    onValueChange = { raw -> amountStr = raw.filter { it.isDigit() || it == '.' } },
+                    label = { Text(language.pick("مطلوبہ رقم (روپے)", "Enter PKR Amount")) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (isValid) {
+                    Text("${language.pick("صحیح وزن:", "Weight:")} ${formatExactQty(exactWeight)} ${unitLabel(product.unit, language)} ($gramsOrMl${if (isKg) "g" else "ml"})", fontWeight = FontWeight.Bold, color = ProfitGreen)
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onAddCalculatedWeight(exactWeight, currentCartQty > 0.0) }, enabled = isValid) { Text(language.pick("شامل کریں", "Add")) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(language.pick("منسوخ", "Cancel")) } }
+    )
+}
+
+@Composable
+private fun CheckoutDialog(
+    language: AppLanguage,
+    cartItems: List<CartItem>,
+    customers: List<Customer>,
+    selectedCustomer: Customer?,
+    initialCustomerName: String,
+    initialCustomerPhone: String,
+    subtotal: Double,
+    isBusy: Boolean,
+    onConfirm: (PaymentMethod, Double, Double, Boolean, String, Customer?, String, String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var paymentMethod by remember { mutableStateOf(PaymentMethod.CASH) }
+    var discountStr by remember { mutableStateOf("0") }
+    var paidStr by remember { mutableStateOf("") }
+    var note by remember { mutableStateOf("") }
+
+    val initialHasCustomTypedName = selectedCustomer == null && !isWalkInName(initialCustomerName)
+    var createNewKhataCustomer by remember { mutableStateOf(selectedCustomer == null && (customers.isEmpty() || initialHasCustomTypedName)) }
+    var pickedKhataCustomer by remember { mutableStateOf(selectedCustomer) }
+    var newCustomerName by remember { mutableStateOf(if (initialHasCustomTypedName) initialCustomerName.trim() else "") }
+    var newCustomerPhone by remember { mutableStateOf(if (selectedCustomer == null) initialCustomerPhone.trim() else "") }
+
+    val discount = roundMoney(discountStr.toDoubleOrNull()?.coerceIn(0.0, subtotal) ?: 0.0)
+    val grandTotal = roundMoney((subtotal - discount).coerceAtLeast(0.0))
+    val paidAmt = when (paymentMethod) {
+        PaymentMethod.CASH -> grandTotal
+        PaymentMethod.UDHAR -> 0.0
+        PaymentMethod.PARTIAL -> roundMoney(paidStr.toDoubleOrNull()?.coerceIn(0.0, grandTotal) ?: 0.0)
+    }
+    val udharAmt = roundMoney((grandTotal - paidAmt).coerceAtLeast(0.0))
+    val isCreditPayment = paymentMethod == PaymentMethod.UDHAR || paymentMethod == PaymentMethod.PARTIAL
+    val needsKhataProfile = isCreditPayment && udharAmt > 0.0
+    val hasValidCreditCustomer = when {
+        !needsKhataProfile -> true
+        createNewKhataCustomer -> !isWalkInName(newCustomerName)
+        else -> pickedKhataCustomer != null
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(language.pick("بل فائنل کریں اور رسید بنائیں", "Finalize Bill & Generate Receipt")) },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(value = discountStr, onValueChange = { discountStr = it.filter { ch -> ch.isDigit() || ch == '.' } }, label = { Text(language.pick("رعایت (روپے)", "Discount (PKR)")) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.fillMaxWidth())
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    PaymentMethod.entries.forEach { method ->
+                        val chipLabel = when (method) {
+                            PaymentMethod.CASH -> language.pick("نقد", "Cash")
+                            PaymentMethod.UDHAR -> language.pick("ادھار", "Credit")
+                            PaymentMethod.PARTIAL -> language.pick("جزوی", "Partial")
+                        }
+                        FilterChip(selected = paymentMethod == method, onClick = { paymentMethod = method }, label = { Text(chipLabel, maxLines = 1) }, modifier = Modifier.weight(1f))
+                    }
+                }
+                if (paymentMethod == PaymentMethod.PARTIAL) {
+                    OutlinedTextField(value = paidStr, onValueChange = { paidStr = it.filter { ch -> ch.isDigit() || ch == '.' } }, label = { Text(language.pick("نقد وصول شدہ رقم", "Cash Paid Now")) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.fillMaxWidth())
+                }
+                if (isCreditPayment) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(selected = !createNewKhataCustomer, onClick = { createNewKhataCustomer = false }, label = { Text(language.pick("موجودہ کھاتہ", "Existing")) }, modifier = Modifier.weight(1f))
+                        FilterChip(selected = createNewKhataCustomer, onClick = { createNewKhataCustomer = true }, label = { Text(language.pick("نیا کسٹمر", "New")) }, modifier = Modifier.weight(1f))
+                    }
+                    if (!createNewKhataCustomer) {
+                        Column(modifier = Modifier.fillMaxWidth().heightIn(max = 120.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            customers.forEach { cust ->
+                                val isSel = pickedKhataCustomer?.id == cust.id
+                                Surface(color = if (isSel) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth().clickable { pickedKhataCustomer = cust }) {
+                                    Row(modifier = Modifier.padding(8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text(cust.name, fontWeight = FontWeight.Bold)
+                                        Text(formatPkr(cust.balance, language), color = UdharCrimson)
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        OutlinedTextField(value = newCustomerName, onValueChange = { newCustomerName = it }, label = { Text(language.pick("کسٹمر کا نام*", "Customer Name*")) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = newCustomerPhone, onValueChange = { newCustomerPhone = it }, label = { Text(language.pick("فون نمبر", "Phone")) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    }
+                }
+                OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text(language.pick("نوٹ", "Note")) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(language.pick("کل رقم:", "Grand Total:"), fontWeight = FontWeight.Bold)
+                    Text(formatPkr(grandTotal, language), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        },
+        confirmButton = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Button(
+                    onClick = {
+                        onConfirm(paymentMethod, discount, paidAmt, false, note, if (!createNewKhataCustomer) pickedKhataCustomer else null, if (createNewKhataCustomer) newCustomerName.trim() else "", if (createNewKhataCustomer) newCustomerPhone.trim() else "")
+                    },
+                    enabled = !isBusy && hasValidCreditCustomer,
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(language.pick("بل مکمل کریں (خودکار رسید)", "Complete Bill & Auto Receipt")) }
+                OutlinedButton(
+                    onClick = {
+                        onConfirm(paymentMethod, discount, 0.0, true, note, if (!createNewKhataCustomer) pickedKhataCustomer else null, if (createNewKhataCustomer) newCustomerName.trim() else "", if (createNewKhataCustomer) newCustomerPhone.trim() else "")
+                    },
+                    enabled = !isBusy,
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(language.pick("زیرِ التواء آرڈر محفوظ کریں", "Save Pending Order")) }
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(language.pick("منسوخ", "Cancel")) } }
+    )
+}
+
+@Composable
+private fun OrdersHistoryList(
+    language: AppLanguage,
+    orders: List<Order>,
+    onOpenReceipt: (Order) -> Unit,
+    onEditOrder: (Order) -> Unit,
+    onDeleteOrder: (Order) -> Unit,
+    onCompletePendingOrder: (Order, PaymentMethod) -> Unit,
+    onCancelPendingOrder: (String) -> Unit
+) {
+    var orderToDelete by remember { mutableStateOf<Order?>(null) }
+    val pendingDelete = orderToDelete
+    if (pendingDelete != null) {
+        AlertDialog(
+            onDismissRequest = { orderToDelete = null },
+            title = { Text(language.pick("بل مستقل ڈیلیٹ کریں؟", "Delete Bill Permanently?"), fontWeight = FontWeight.Bold, color = UdharCrimson) },
+            text = { Text(language.pick("کیا آپ واقعی بل نمبر ${pendingDelete.billNumber} (${pendingDelete.customerName}) کو ڈیلیٹ کرنا چاہتے ہیں؟", "Delete Bill #${pendingDelete.billNumber}?")) },
+            confirmButton = {
+                Button(onClick = { onDeleteOrder(pendingDelete); orderToDelete = null }, colors = ButtonDefaults.buttonColors(containerColor = UdharCrimson)) {
+                    Text(language.pick("جی ہاں، ڈیلیٹ کریں", "Yes, Delete"), color = Color.White)
+                }
+            },
+            dismissButton = { TextButton(onClick = { orderToDelete = null }) { Text(language.pick("منسوخ", "Cancel")) } }
+        )
+    }
+
+    if (orders.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text(language.pick("ابھی کوئی آرڈر یا بل موجود نہیں", "No orders or bills recorded yet"))
+        }
+        return
+    }
+
+    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(orders, key = { it.id }) { order ->
+            val status = order.statusEnum()
+            Card(modifier = Modifier.fillMaxWidth().clickable { onOpenReceipt(order) }, shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(order.customerName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                            Text("${order.billNumber} • ${order.items.size} ${language.pick("اشیاء", "items")}", style = MaterialTheme.typography.labelSmall)
+                        }
+                        Text(formatPkr(order.totalAmount, language), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedButton(onClick = { onEditOrder(order) }, modifier = Modifier.weight(1f)) { Text(language.pick("ایڈٹ", "Edit"), style = MaterialTheme.typography.labelSmall) }
+                        FilledTonalButton(onClick = { onOpenReceipt(order) }, modifier = Modifier.weight(1.2f)) { Text(language.pick("رسید / WA", "Receipt"), style = MaterialTheme.typography.labelSmall) }
+                        IconButton(onClick = { orderToDelete = order }) { Icon(Icons.Default.DeleteOutline, contentDescription = null, tint = UdharCrimson) }
+                    }
+                    if (status == OrderStatus.PENDING) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { onCompletePendingOrder(order, PaymentMethod.CASH) }, modifier = Modifier.weight(1f)) { Text(language.pick("نقد مکمل", "Complete Cash")) }
+                            IconButton(onClick = { onCancelPendingOrder(order.id) }) { Icon(Icons.Default.Cancel, contentDescription = null, tint = UdharCrimson) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
