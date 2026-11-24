@@ -78,6 +78,10 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.data.ShopSettings
+import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material3.Switch
+import com.example.auth.ShopSecurityVault
+import com.example.ui.theme.EmeraldPrimary
 import com.example.i18n.AppLanguage
 import com.example.i18n.pick
 import com.example.services.LocationHelper
@@ -527,6 +531,153 @@ fun SettingsScreen(
                                     "دکان اور ذاتی بینک پروفائل محفوظ کریں",
                                     "Save Shop & Personal Bank Profile"
                                 )
+                            )
+                        }
+                    }
+                }
+            }
+                     
+            // 1b. Biometric Fingerprint & 4-Digit PIN App Lock Card
+            item {
+                val isGuest = remember { ShopSecurityVault.isGuestMode(context) }
+                var fingerprintEnabled by remember {
+                    mutableStateOf(ShopSecurityVault.isFingerprintLockEnabled(context))
+                }
+                var backupPinInput by remember {
+                    mutableStateOf(ShopSecurityVault.getBackupPin(context))
+                }
+                var securityNotice by remember { mutableStateOf<String?>(null) }
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    border = BorderStroke(1.2.dp, EmeraldPrimary.copy(alpha = 0.45f)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Fingerprint,
+                                    contentDescription = null,
+                                    tint = EmeraldPrimary,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                                Column {
+                                    Text(
+                                        text = language.pick(
+                                            "فنگر پرنٹ لاک (App Lock)",
+                                            "Biometric Fingerprint Lock"
+                                        ),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = if (isGuest) {
+                                            language.pick(
+                                                "گیسٹ موڈ میں بند ہے — مکمل فیچرز کے لیے سائن اپ کریں",
+                                                "Locked in Guest Mode — Sign up to unlock"
+                                            )
+                                        } else {
+                                            language.pick(
+                                                "آن کرنے پر ہر بار ایپ فنگر پرنٹ سے کھلے گی",
+                                                "Require fingerprint scan every time app opens"
+                                            )
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            Switch(
+                                checked = fingerprintEnabled && !isGuest,
+                                enabled = !isGuest,
+                                onCheckedChange = { wantEnable ->
+                                    if (wantEnable) {
+                                        if (ShopSecurityVault.canUseBiometric(context)) {
+                                            ShopSecurityVault.launchBiometricPrompt(
+                                                context = context,
+                                                title = language.pick("فنگر پرنٹ تصدیق", "Verify Fingerprint"),
+                                                subtitle = language.pick(
+                                                    "ایپ لاک فعال کرنے کے لیے انگلی لگائیں",
+                                                    "Touch sensor to enable Fingerprint Lock"
+                                                ),
+                                                negativeButtonText = language.pick("منسوخ", "Cancel"),
+                                                onSuccess = {
+                                                    fingerprintEnabled = true
+                                                    ShopSecurityVault.setFingerprintLockEnabled(context, true)
+                                                    securityNotice = language.pick(
+                                                        "فنگر پرنٹ لاک کامیابی سے آن ہو گیا!",
+                                                        "Fingerprint Lock enabled successfully!"
+                                                    )
+                                                },
+                                                onError = { err -> securityNotice = err }
+                                            )
+                                        } else {
+                                            fingerprintEnabled = true
+                                            ShopSecurityVault.setFingerprintLockEnabled(context, true)
+                                            securityNotice = language.pick(
+                                                "ایپ لاک آن ہو گیا (نیچے 4 ہندسوں کا PIN بھی محفوظ کر لیں)",
+                                                "App Lock enabled (set a 4-digit backup PIN below)"
+                                            )
+                                        }
+                                    } else {
+                                        fingerprintEnabled = false
+                                        ShopSecurityVault.setFingerprintLockEnabled(context, false)
+                                        securityNotice = language.pick(
+                                            "فنگر پرنٹ لاک بند کر دیا گیا۔",
+                                            "Fingerprint Lock disabled."
+                                        )
+                                    }
+                                }
+                            )
+                        }
+
+                        if (!isGuest) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                OutlinedTextField(
+                                    value = backupPinInput,
+                                    onValueChange = { backupPinInput = it.filter { c -> c.isDigit() }.take(4) },
+                                    label = { Text(language.pick("4 ہندسوں کا بیک اپ PIN", "4-Digit Backup PIN")) },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                FilledTonalButton(
+                                    onClick = {
+                                        if (backupPinInput.length == 4) {
+                                            ShopSecurityVault.setBackupPin(context, backupPinInput)
+                                            securityNotice = language.pick("4 ہندسوں کا PIN محفوظ ہو گیا!", "4-Digit PIN saved!")
+                                        } else {
+                                            securityNotice = language.pick("پورا 4 ہندسوں کا PIN لکھیں", "Enter all 4 digits")
+                                        }
+                                    }
+                                ) {
+                                    Text(language.pick("PIN محفوظ", "Save PIN"))
+                                }
+                            }
+                        }
+
+                        if (securityNotice != null) {
+                            Text(
+                                text = securityNotice!!,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = ProfitGreen,
+                                fontWeight = FontWeight.Bold
                             )
                         }
                     }
