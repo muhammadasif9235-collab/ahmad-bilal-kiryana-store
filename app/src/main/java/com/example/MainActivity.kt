@@ -89,9 +89,9 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.auth.AuthScreen
 import com.example.auth.FingerprintAppLockScreen
 import com.example.auth.ShopSecurityVault
+import com.example.auth.UserInstallTracker
 import com.example.auth.onGoogleSignInClicked
 import com.example.auth.signOutShopAccount
-import com.example.auth.UserInstallTracker
 import com.example.data.BusinessCatalog
 import com.example.data.BusinessType
 import com.example.data.DailyCashType
@@ -412,24 +412,24 @@ private fun MainShopShell(
                 )
 
                 if (loadPresets) {
-                    val existingNames = products.map { it.nameUrdu.trim() }.toSet()
+                    products.forEach { oldProd ->
+                        viewModel.deleteProduct(oldProd.id)
+                    }
                     BusinessCatalog.presetsFor(selectedType).forEach { preset ->
-                        if (preset.nameUrdu.trim() !in existingNames) {
-                            viewModel.saveProduct(
-                                existingId = null,
-                                nameUrdu = preset.nameUrdu,
-                                nameEnglish = preset.nameEnglish,
-                                category = ProductCategory.OTHER,
-                                unit = preset.unit,
-                                costPrice = preset.costPrice,
-                                sellingPrice = preset.sellingPrice,
-                                marginPercent = settings.defaultMarginPercent,
-                                autoPriceEnabled = false,
-                                stockQty = preset.initialStock,
-                                lowStockThreshold = preset.lowStockThreshold,
-                                barcode = ""
-                            )
-                        }
+                        viewModel.saveProduct(
+                            existingId = null,
+                            nameUrdu = preset.nameUrdu,
+                            nameEnglish = preset.nameEnglish,
+                            category = ProductCategory.OTHER,
+                            unit = preset.unit,
+                            costPrice = preset.costPrice,
+                            sellingPrice = preset.sellingPrice,
+                            marginPercent = settings.defaultMarginPercent,
+                            autoPriceEnabled = false,
+                            stockQty = preset.initialStock,
+                            lowStockThreshold = preset.lowStockThreshold,
+                            barcode = ""
+                        )
                     }
                 }
                 showBusinessSetup = false
