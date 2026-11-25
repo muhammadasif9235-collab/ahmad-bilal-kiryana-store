@@ -1014,9 +1014,7 @@ private fun MainShopShell(
                                 onUpdateShopLocation = { lat, lng, addr ->
                                     viewModel.updateShopGpsLocation(lat, lng, addr)
                                 },
-                                onOpenBusinessSetup = { showBusinessSetup = true },
-                                onSignOut = {
-                                    if (Firebase.auth.currentUser != null)
+                                                                onOpenBusinessSetup = { showBusinessSetup = true },
                                 onSignOut = {
                                     if (Firebase.auth.currentUser != null) {
                                         signOutShopAccount(
@@ -1029,4 +1027,10 @@ private fun MainShopShell(
                                     }
                                 }
                             )
-                            
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
