@@ -1,4 +1,4 @@
-package com.example.ui.components
+package com.example.auth
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -24,10 +24,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.auth.InstallSummaryReport
-import com.example.auth.UserInstallTracker
-import com.example.i18n.AppLanguage
-import com.example.i18n.pick
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
