@@ -751,7 +751,6 @@ private fun MainShopShell(
                                 onOpenMaryamRationCard = { currentDestination = ShopDestination.RATION_CARD },
                                 onOpenRationFund = { currentDestination = ShopDestination.RATION_FUND },
                                 onSyncGujratRates = { viewModel.syncGujratMarketRates() },
-```[span_4](start_span)[span_4](end_span)
                                 onOpenReceipt = { viewModel.openReceipt(it) },
                                 todayManualCashNet = todayManualCashNet,
                                 onOpenRoznamcha = { currentDestination = ShopDestination.ROZNAMCHA },
@@ -759,9 +758,8 @@ private fun MainShopShell(
                                 onEditOrder = { editingOrder = it },
                                 onOpenLowStockReport = { showLowStockReportDialog = true },
                                 settings = settings
-                            )
-
-                            ShopDestination.BILLING -> BillingScreen(
+                                )
+                                ShopDestination.BILLING -> BillingScreen(
                                 language = language,
                                 products = products,
                                 customers = customers,
