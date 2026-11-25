@@ -1,199 +1,176 @@
 package com.example.auth
 
-import android.os.Build
-import android.util.Log
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FieldValue
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
-import com.google.firebase.firestore.SetOptions
-import java.util.UUID
-import kotlinx.coroutines.tasks.await
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.example.i18n.AppLanguage
+import com.example.i18n.pick
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
-data class UserInstallRecord(
-    val id: String = "",
-    val type: String = "INSTALL",
-    val storeName: String = "",
-    val phone: String = "",
-    val email: String = "",
-    val uid: String = "",
-    val deviceModel: String = "",
-    val androidVersion: String = "",
-    val timestampMs: Long = 0L
-)
+@Composable
+fun InstallSignUpSheet(
+    language: AppLanguage,
+    onDismiss: () -> Unit
+) {
+    var isLoading by remember { mutableStateOf(true) }
+    var errorText by remember { mutableStateOf<String?>(null) }
+    var report by remember { mutableStateOf(InstallSummaryReport()) }
 
-data class InstallSummaryReport(
-    val totalInstalls: Long = 0L,
-    val totalSignUps: Long = 0L,
-    val records: List<UserInstallRecord> = emptyList()
-)
+    LaunchedEffect(Unit) {
+        isLoading = true
+        errorText = null
+        UserInstallTracker.fetchAllRecords()
+            .onSuccess { report = it }
+            .onFailure { errorText = it.localizedMessage ?: "Failed to load records" }
+        isLoading = false
+    }
 
-object UserInstallTracker {
+    val formatter = remember { SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()) }
 
-    private const val TAG = "UserInstallTracker"
-    private const val COLLECTION_USERS = "registered_users"
-    private const val COLLECTION_INSTALLS = "app_installs"
-    private const val COLLECTION_STATS = "app_stats"
-    private const val DOC_SUMMARY = "summary"
-
-    fun recordSignUp(storeName: String = "", phone: String = "", installId: String = "") {
-        val db = FirebaseFirestore.getInstance()
-        val user = FirebaseAuth.getInstance().currentUser
-        val cleanStore = storeName.trim()
-        val cleanPhone = phone.trim()
-        val uniqueInstallKey = installId.trim().ifBlank { UUID.randomUUID().toString() }
-        val entryType = if (user != null) "SIGN_UP" else "INSTALL"
-
-        if (user != null) {
-            val userRecord = hashMapOf(
-                "uid" to user.uid,
-                "email" to (user.email ?: ""),
-                "storeName" to cleanStore,
-                "phone" to cleanPhone,
-                "installId" to uniqueInstallKey,
-                "signedUpAt" to FieldValue.serverTimestamp(),
-                "lastSeenAt" to FieldValue.serverTimestamp()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = language.pick(
+                    "انسٹال اور سائن اپ کرنے والوں کی لسٹ",
+                    "Installs & Sign-Ups List"
+                ),
+                fontWeight = FontWeight.Bold
             )
-
-            db.collection(COLLECTION_USERS)
-                .document(user.uid)
-                .set(userRecord, SetOptions.merge())
-                .addOnFailureListener { e ->
-                    Log.e(TAG, "Failed saving registered_users", e)
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = language.pick(
+                            "کل انسٹالز: ${report.totalInstalls}",
+                            "Total Installs: ${report.totalInstalls}"
+                        ),
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = language.pick(
+                            "کل سائن اپ: ${report.totalSignUps}",
+                            "Total Sign-Ups: ${report.totalSignUps}"
+                        ),
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
                 }
-        }
 
-        val installRecord = hashMapOf(
-            "installId" to uniqueInstallKey,
-            "type" to entryType,
-            "uid" to (user?.uid ?: ""),
-            "email" to (user?.email ?: ""),
-            "storeName" to cleanStore,
-            "phone" to cleanPhone,
-            "deviceModel" to "${Build.MANUFACTURER} ${Build.MODEL}".trim(),
-            "androidVersion" to (Build.VERSION.RELEASE ?: ""),
-            "installedAt" to FieldValue.serverTimestamp(),
-            "lastSeenAt" to FieldValue.serverTimestamp()
-        )
+                when {
+                    isLoading -> {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    }
 
-        db.collection(COLLECTION_INSTALLS)
-            .document(uniqueInstallKey)
-            .set(installRecord)
-            .addOnFailureListener { e ->
-                Log.e(TAG, "Failed saving app_installs", e)
+                    errorText != null -> {
+                        Text(
+                            text = errorText.orEmpty(),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+
+                    report.records.isEmpty() -> {
+                        Text(
+                            text = language.pick(
+                                "ابھی تک کوئی انسٹال یا سائن اپ ریکارڈ نہیں ملا",
+                                "No install or sign-up records found yet"
+                            ),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+
+                    else -> {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 360.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(report.records, key = { it.id }) { item ->
+                                Card(modifier = Modifier.fillMaxWidth()) {
+                                    Column(
+                                        modifier = Modifier.padding(10.dp),
+                                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                                    ) {
+                                        Text(
+                                            text = item.storeName.ifBlank {
+                                                language.pick("نام درج نہیں", "Unnamed Store")
+                                            },
+                                            fontWeight = FontWeight.Bold,
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                        Text(
+                                            text = "${item.type} • ${item.deviceModel.ifBlank { "Android" }}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        if (item.phone.isNotBlank()) {
+                                            Text(
+                                                text = "${language.pick("فون", "Phone")}: ${item.phone}",
+                                                style = MaterialTheme.typography.bodySmall
+                                            )
+                                        }
+                                        if (item.email.isNotBlank()) {
+                                            Text(
+                                                text = "${language.pick("ای میل", "Email")}: ${item.email}",
+                                                style = MaterialTheme.typography.bodySmall
+                                            )
+                                        }
+                                        if (item.timestampMs > 0L) {
+                                            Text(
+                                                text = formatter.format(Date(item.timestampMs)),
+                                                style = MaterialTheme.typography.labelSmall
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
-
-        val statsUpdate = hashMapOf<String, Any>(
-            "totalInstalls" to FieldValue.increment(1),
-            "lastStoreName" to cleanStore,
-            "lastInstallAt" to FieldValue.serverTimestamp()
-        )
-        if (user != null) {
-            statsUpdate["totalSignUps"] = FieldValue.increment(1)
-        }
-
-        db.collection(COLLECTION_STATS)
-            .document(DOC_SUMMARY)
-            .set(statsUpdate, SetOptions.merge())
-            .addOnFailureListener { e ->
-                Log.e(TAG, "Failed updating app_stats/summary", e)
-            }
-    }
-
-    fun touchLastSeen(installId: String = "") {
-        val db = FirebaseFirestore.getInstance()
-        val user = FirebaseAuth.getInstance().currentUser
-
-        if (user != null) {
-            db.collection(COLLECTION_USERS)
-                .document(user.uid)
-                .set(
-                    hashMapOf("lastSeenAt" to FieldValue.serverTimestamp()),
-                    SetOptions.merge()
-                )
-                .addOnFailureListener { e ->
-                    Log.e(TAG, "Failed updating user lastSeenAt", e)
-                }
-        }
-
-        if (installId.isNotBlank()) {
-            db.collection(COLLECTION_INSTALLS)
-                .document(installId.trim())
-                .set(
-                    hashMapOf("lastSeenAt" to FieldValue.serverTimestamp()),
-                    SetOptions.merge()
-                )
-                .addOnFailureListener { e ->
-                    Log.e(TAG, "Failed updating install lastSeenAt", e)
-                }
-        }
-    }
-
-    suspend fun fetchAllRecords(): Result<InstallSummaryReport> = runCatching {
-        val db = FirebaseFirestore.getInstance()
-
-        val summarySnap = db.collection(COLLECTION_STATS)
-            .document(DOC_SUMMARY)
-            .get()
-            .await()
-
-        val installsSnap = db.collection(COLLECTION_INSTALLS)
-            .orderBy("installedAt", Query.Direction.DESCENDING)
-            .limit(200)
-            .get()
-            .await()
-
-        val usersSnap = db.collection(COLLECTION_USERS)
-            .limit(200)
-            .get()
-            .await()
-
-        val installList = installsSnap.documents.map { doc ->
-            val ts = doc.getTimestamp("installedAt")?.toDate()?.time
-                ?: doc.getTimestamp("lastSeenAt")?.toDate()?.time
-                ?: 0L
-            UserInstallRecord(
-                id = doc.id,
-                type = doc.getString("type").orEmpty().ifBlank { "INSTALL" },
-                storeName = doc.getString("storeName").orEmpty(),
-                phone = doc.getString("phone").orEmpty(),
-                email = doc.getString("email").orEmpty(),
-                uid = doc.getString("uid").orEmpty(),
-                deviceModel = doc.getString("deviceModel").orEmpty(),
-                androidVersion = doc.getString("androidVersion").orEmpty(),
-                timestampMs = ts
-            )
-        }
-
-        val knownUids = installList.mapNotNull { it.uid.takeIf { id -> id.isNotBlank() } }.toSet()
-        val extraSignUpList = usersSnap.documents.mapNotNull { doc ->
-            val uid = doc.getString("uid").orEmpty().ifBlank { doc.id }
-            if (uid in knownUids) null
-            else {
-                val ts = doc.getTimestamp("signedUpAt")?.toDate()?.time
-                    ?: doc.getTimestamp("lastSeenAt")?.toDate()?.time
-                    ?: 0L
-                UserInstallRecord(
-                    id = doc.id,
-                    type = "SIGN_UP",
-                    storeName = doc.getString("storeName").orEmpty(),
-                    phone = doc.getString("phone").orEmpty(),
-                    email = doc.getString("email").orEmpty(),
-                    uid = uid,
-                    timestampMs = ts
-                )
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(language.pick("بند کریں", "Close"))
             }
         }
-
-        val combined = (installList + extraSignUpList).sortedByDescending { it.timestampMs }
-        val totalInstalls = summarySnap.getLong("totalInstalls") ?: combined.size.toLong()
-        val totalSignUps = summarySnap.getLong("totalSignUps")
-            ?: combined.count { it.type == "SIGN_UP" || it.email.isNotBlank() }.toLong()
-
-        InstallSummaryReport(
-            totalInstalls = totalInstalls,
-            totalSignUps = totalSignUps,
-            records = combined
-        )
-    }
+    )
 }
