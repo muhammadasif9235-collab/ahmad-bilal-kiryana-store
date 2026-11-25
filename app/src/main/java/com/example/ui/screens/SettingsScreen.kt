@@ -1,4 +1,4 @@
-Package com.example.ui.screens
+package com.example.ui.screens
 
 import android.Manifest
 import android.content.Context
