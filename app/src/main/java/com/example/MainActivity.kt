@@ -89,6 +89,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.auth.AuthScreen
 import com.example.auth.FingerprintAppLockScreen
+import com.example.auth.InstallSignUpSheet
 import com.example.auth.ShopSecurityVault
 import com.example.auth.UserInstallTracker
 import com.example.auth.onGoogleSignInClicked
@@ -113,7 +114,6 @@ import com.example.services.QrScanAndPaymentDialog
 import com.example.services.ScannedNfcCard
 import com.example.ui.components.AutoReceiptDialog
 import com.example.ui.components.BillEditorDialog
-import com.example.ui.components.InstallSignUpSheet
 import com.example.ui.components.LowStockReportDialog
 import com.example.ui.components.PaymentReceiptDialog
 import com.example.ui.components.RationCardReceiptDialog
@@ -765,7 +765,7 @@ private fun MainShopShell(
                                 onGoToKhata = { currentDestination = ShopDestination.KHATA },
                                 onOpenMaryamRationCard = { currentDestination = ShopDestination.RATION_CARD },
                                 onOpenRationFund = { currentDestination = ShopDestination.RATION_FUND },
-                                onSyncGujratRates = { viewModel.syncGujratMarketRates() },
+                                onSyncGujratMarketRates = { viewModel.syncGujratMarketRates() },
                                 onOpenReceipt = { viewModel.openReceipt(it) },
                                 todayManualCashNet = todayManualCashNet,
                                 onOpenRoznamcha = { currentDestination = ShopDestination.ROZNAMCHA },
