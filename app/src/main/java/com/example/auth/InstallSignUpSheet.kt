@@ -24,6 +24,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.i18n.AppLanguage
+import com.example.i18n.pick
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
