@@ -32,7 +32,6 @@ import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LocalShipping
@@ -89,7 +88,6 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.auth.AuthScreen
 import com.example.auth.FingerprintAppLockScreen
-import com.example.auth.InstallSignUpSheet
 import com.example.auth.ShopSecurityVault
 import com.example.auth.UserInstallTracker
 import com.example.auth.onGoogleSignInClicked
@@ -449,7 +447,6 @@ private fun MainShopShell(
     var showBarcodeScanner by remember { mutableStateOf(false) }
     var showQrPaymentModal by remember { mutableStateOf(false) }
     var showLowStockReportDialog by remember { mutableStateOf(false) }
-    var showInstallSignUpList by remember { mutableStateOf(false) }
     var editingOrder by remember { mutableStateOf<Order?>(null) }
 
     val isGuestUser = remember { ShopSecurityVault.isGuestMode(context) }
@@ -600,19 +597,6 @@ private fun MainShopShell(
                         }
                     },
                     actions = {
-                        IconButton(
-                            onClick = { showInstallSignUpList = true },
-                            modifier = Modifier.testTag("topbar_installs_signup_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Group,
-                                contentDescription = language.pick(
-                                    "انسٹال اور سائن اپ لسٹ",
-                                    "Installs & Sign-Ups"
-                                ),
-                                tint = GoldShimmer
-                            )
-                        }
                         IconButton(
                             onClick = { showQrPaymentModal = true },
                             modifier = Modifier.testTag("topbar_qr_payment_button")
@@ -1010,13 +994,6 @@ private fun MainShopShell(
                 }
             }
         }
-    }
-
-    if (showInstallSignUpList) {
-        InstallSignUpSheet(
-            language = language,
-            onDismiss = { showInstallSignUpList = false }
-        )
     }
 
     val receiptOrder = activeReceiptOrder
