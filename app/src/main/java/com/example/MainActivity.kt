@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LocalShipping
@@ -215,9 +216,16 @@ class MainActivity : FragmentActivity() {
 private const val BUSINESS_PREFS = "ahmad_bilal_business_setup"
 private const val KEY_BUSINESS_DONE = "business_setup_completed_v1"
 private const val KEY_BUSINESS_CODE = "selected_business_code"
-private const val INSTALL_TRACKER_PREFS = "ahmad_bilal_install_tracker"
-private const val KEY_DEVICE_INSTALL_ID = "device_install_id"
-private const val KEY_INITIAL_INSTALL_RECORDED = "initial_install_recorded_v1"
+private const val KEY_INSTALL_ID = "tracked_install_id_v1"
+
+private fun getOrCreateInstallId(context: Context): String {
+    val prefs = context.applicationContext.getSharedPreferences(BUSINESS_PREFS, Context.MODE_PRIVATE)
+    val existing = prefs.getString(KEY_INSTALL_ID, null)
+    if (!existing.isNullOrBlank()) return existing
+    val created = UUID.randomUUID().toString()
+    prefs.edit().putString(KEY_INSTALL_ID, created).apply()
+    return created
+}
 
 @Composable
 fun AppRoot(
@@ -230,6 +238,7 @@ fun AppRoot(
     val loadedSettings by preferences.settingsFlow.collectAsStateWithLifecycle(initialValue = null)
     val settings = loadedSettings ?: ShopSettings()
     val language = settings.language
+    val installId = remember { getOrCreateInstallId(context) }
 
     var currentUser by remember { mutableStateOf(Firebase.auth.currentUser) }
     DisposableEffect(Unit) {
@@ -238,6 +247,13 @@ fun AppRoot(
         }
         Firebase.auth.addAuthStateListener(listener)
         onDispose { Firebase.auth.removeAuthStateListener(listener) }
+    }
+
+    LaunchedEffect(installId) {
+        try {
+            UserInstallTracker.touchLastSeen(installId)
+        } catch (_: Throwable) {
+        }
     }
 
     KiryanaTheme(language = language) {
@@ -277,6 +293,14 @@ fun AppRoot(
                             sessionUnlocked = true
                             biometricUnlocked = true
                             scope.launch { preferences.setLocalOwnerLoggedIn(true) }
+                            try {
+                                UserInstallTracker.recordSignUp(
+                                    storeName = settings.storeNameUrdu,
+                                    phone = settings.shopPhone,
+                                    installId = installId
+                                )
+                            } catch (_: Throwable) {
+                            }
                         },
                         onGuestLogin = {
                             sessionUnlocked = true
@@ -327,6 +351,7 @@ private fun MainShopShell(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val credentialManager = remember(context) { lazy { CredentialManager.create(context) } }
+    val installId = remember { getOrCreateInstallId(context) }
 
     val shopVmFactory = remember(context, preferences) {
         viewModelFactory {
@@ -424,6 +449,15 @@ private fun MainShopShell(
                     )
                 }
 
+                try {
+                    UserInstallTracker.recordSignUp(
+                        storeName = shopUr,
+                        phone = settings.shopPhone,
+                        installId = installId
+                    )
+                } catch (_: Throwable) {
+                }
+
                 showBusinessSetup = false
             }
         )
@@ -453,29 +487,6 @@ private fun MainShopShell(
     var showLowStockReportDialog by remember { mutableStateOf(false) }
     var showInstallSignUpSheet by remember { mutableStateOf(false) }
     var editingOrder by remember { mutableStateOf<Order?>(null) }
-
-    val trackerPrefs = remember {
-        context.applicationContext.getSharedPreferences(INSTALL_TRACKER_PREFS, Context.MODE_PRIVATE)
-    }
-    val installTrackerId = remember {
-        trackerPrefs.getString(KEY_DEVICE_INSTALL_ID, null) ?: UUID.randomUUID().toString().also { newId ->
-            trackerPrefs.edit().putString(KEY_DEVICE_INSTALL_ID, newId).apply()
-        }
-    }
-
-    LaunchedEffect(installTrackerId) {
-        val alreadyRecorded = trackerPrefs.getBoolean(KEY_INITIAL_INSTALL_RECORDED, false)
-        if (!alreadyRecorded) {
-            UserInstallTracker.recordSignUp(
-                storeName = settings.storeNameEnglish.ifBlank { settings.storeNameUrdu },
-                phone = settings.shopPhone,
-                installId = installTrackerId
-            )
-            trackerPrefs.edit().putBoolean(KEY_INITIAL_INSTALL_RECORDED, true).apply()
-        } else {
-            UserInstallTracker.touchLastSeen(installId = installTrackerId)
-        }
-    }
 
     val isGuestUser = remember { ShopSecurityVault.isGuestMode(context) }
     LaunchedEffect(currentDestination, isGuestUser) {
@@ -627,12 +638,12 @@ private fun MainShopShell(
                     actions = {
                         IconButton(
                             onClick = { showInstallSignUpSheet = true },
-                            modifier = Modifier.testTag("topbar_install_signup_sheet_button")
+                            modifier = Modifier.testTag("topbar_install_signup_button")
                         ) {
                             Icon(
-                                imageVector = Icons.Default.PhoneAndroid,
-                                contentDescription = language.pick("انسٹال و سائن اپ لسٹ", "Installs & Sign-Ups"),
-                                tint = Color.White
+                                imageVector = Icons.Default.GroupAdd,
+                                contentDescription = language.pick("انسٹال اور سائن اپ لسٹ", "Installs & Sign-Ups"),
+                                tint = GoldShimmer
                             )
                         }
                         IconButton(
@@ -970,6 +981,14 @@ private fun MainShopShell(
                                         credentialManager = credentialManager.value,
                                         onAuthSuccess = {
                                             onGoogleUserUpdated()
+                                            try {
+                                                UserInstallTracker.recordSignUp(
+                                                    storeName = settings.storeNameUrdu,
+                                                    phone = settings.shopPhone,
+                                                    installId = installId
+                                                )
+                                            } catch (_: Throwable) {
+                                            }
                                             viewModel.postMessage(
                                                 language.pick(
                                                     "گوگل اکاؤنٹ منسلک ہو گیا! اب آپ کلاؤڈ بیک اپ کر سکتے ہیں۔",
@@ -1013,7 +1032,7 @@ private fun MainShopShell(
                                 onOpenRationFund = { currentDestination = ShopDestination.RATION_FUND },
                                 onUpdateShopLocation = { lat, lng, addr ->
                                     viewModel.updateShopGpsLocation(lat, lng, addr)
-                                }
+                                },
                                 onOpenBusinessSetup = { showBusinessSetup = true },
                                 onSignOut = {
                                     if (Firebase.auth.currentUser != null) {
@@ -1032,3 +1051,168 @@ private fun MainShopShell(
                 }
             }
         }
+    }
+
+    if (showInstallSignUpSheet) {
+        InstallSignUpSheet(
+            language = language,
+            onDismiss = { showInstallSignUpSheet = false }
+        )
+    }
+
+    val receiptOrder = activeReceiptOrder
+    if (receiptOrder != null) {
+        val matchedCustomerPhone = remember(receiptOrder.customerId, customers) {
+            customers.firstOrNull { it.id == receiptOrder.customerId }?.phone.orEmpty()
+        }
+        AutoReceiptDialog(
+            order = receiptOrder,
+            language = language,
+            settings = settings,
+            customerPhone = matchedCustomerPhone,
+            hasBluetoothPrinter = settings.selectedPrinterAddress.isNotBlank(),
+            onBluetoothPrint = { viewModel.printOrderOnBluetooth(receiptOrder) },
+            onEditOrder = { orderToEdit ->
+                viewModel.dismissReceipt()
+                editingOrder = orderToEdit
+            },
+            onDismiss = { viewModel.dismissReceipt() }
+        )
+    }
+
+    val orderBeingEdited = editingOrder
+    if (orderBeingEdited != null) {
+        BillEditorDialog(
+            order = orderBeingEdited,
+            products = products,
+            language = language,
+            isBusy = isBusy,
+            onSaveUpdatedOrder = { updatedItems, discount, extraCharges, finalOverride, method, paid, note ->
+                viewModel.updateExistingOrder(
+                    existingOrder = orderBeingEdited,
+                    updatedItems = updatedItems,
+                    discount = discount,
+                    extraCharges = extraCharges,
+                    finalTotalOverride = finalOverride,
+                    paymentMethod = method,
+                    paidAmountInput = paid,
+                    note = note,
+                    onUpdated = { editingOrder = null }
+                )
+            },
+            onDismiss = { editingOrder = null }
+        )
+    }
+
+    val rationReceipt = activeRationCardReceipt
+    if (rationReceipt != null) {
+        RationCardReceiptDialog(
+            bill = rationReceipt,
+            language = language,
+            settings = settings,
+            onBluetoothPrint = { viewModel.printRationCardBillOnBluetooth(rationReceipt) },
+            onDismiss = { viewModel.dismissRationCardReceipt() }
+        )
+    }
+
+    val payReceipt = activePaymentReceipt
+    if (payReceipt != null) {
+        val matchedCustomerPhone = remember(payReceipt.customerId, customers) {
+            customers.firstOrNull { it.id == payReceipt.customerId }?.phone.orEmpty()
+        }
+        PaymentReceiptDialog(
+            entry = payReceipt,
+            language = language,
+            settings = settings,
+            customerPhone = matchedCustomerPhone,
+            onBluetoothPrint = { viewModel.printLedgerEntryOnBluetooth(payReceipt) },
+            onDismiss = { viewModel.dismissPaymentReceipt() }
+        )
+    }
+
+    if (showBarcodeScanner) {
+        BarcodeScannerDialog(
+            language = language,
+            onBarcodeScanned = { code ->
+                showBarcodeScanner = false
+                viewModel.addProductByBarcode(code)
+            },
+            onDismiss = { showBarcodeScanner = false }
+        )
+    }
+
+    if (showQrPaymentModal) {
+        QrScanAndPaymentDialog(
+            language = language,
+            settings = settings,
+            onRecordPaymentReceived = { amountPkr, refNote ->
+                viewModel.saveDailyCashEntry(
+                    existingId = null,
+                    entryType = DailyCashType.CASH_IN,
+                    paymentSource = DailyPaymentSource.HBL_QR,
+                    categoryOrTitle = language.pick(
+                        "بینک QR پیمنٹ وصولی (${settings.bankName})",
+                        "Bank QR Payment Received (${settings.bankName})"
+                    ),
+                    amount = amountPkr,
+                    referenceId = refNote.ifBlank { "RAAST-QR" },
+                    note = refNote.ifBlank {
+                        language.pick("RAAST / بینک QR پیمنٹ", "RAAST / Bank QR Payment")
+                    }
+                )
+            },
+            onScannedProductBarcode = { barcode ->
+                currentDestination = ShopDestination.BILLING
+                viewModel.addProductByBarcode(barcode)
+            },
+            onScannedCardNumber = { scannedCode ->
+                viewModel.onNfcCardScanned(
+                    ScannedNfcCard(
+                        uidHex = scannedCode.take(24),
+                        techSummary = "QR / Camera Scan",
+                        ndefText = scannedCode,
+                        suggestedCardNumber = scannedCode
+                    )
+                )
+                currentDestination = ShopDestination.RATION_CARD
+            },
+            onShowMessage = { viewModel.postMessage(it) },
+            onDismiss = { showQrPaymentModal = false }
+        )
+    }
+
+    if (showLowStockReportDialog) {
+        LowStockReportDialog(
+            language = language,
+            settings = settings,
+            lowStockProducts = lowStockProducts,
+            onUpdateThreshold = { prod, newThreshold ->
+                viewModel.saveProduct(
+                    existingId = prod.id,
+                    nameUrdu = prod.nameUrdu,
+                    nameEnglish = prod.nameEnglish,
+                    category = prod.categoryEnum(),
+                    unit = prod.unit,
+                    costPrice = prod.costPrice,
+                    sellingPrice = prod.sellingPrice,
+                    marginPercent = prod.marginPercent,
+                    autoPriceEnabled = prod.autoPriceEnabled,
+                    stockQty = prod.stockQty,
+                    lowStockThreshold = newThreshold,
+                    barcode = prod.barcode
+                )
+            },
+            onQuickRestock = { prod, reorderQty ->
+                viewModel.recordStockMovement(
+                    product = prod,
+                    type = StockMovementType.STOCK_IN,
+                    quantity = reorderQty,
+                    newUnitCost = prod.costPrice,
+                    note = language.pick("کم اسٹاک رپورٹ سے فوری ری اسٹاک", "Quick restock from Low Stock Report")
+                )
+            },
+            onReportGeneratedMessage = { msg -> viewModel.postMessage(msg) },
+            onDismiss = { showLowStockReportDialog = false }
+        )
+    }
+}
