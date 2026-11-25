@@ -89,7 +89,6 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.auth.AuthScreen
 import com.example.auth.FingerprintAppLockScreen
 import com.example.auth.ShopSecurityVault
-import com.example.auth.UserInstallTracker
 import com.example.auth.onGoogleSignInClicked
 import com.example.auth.signOutShopAccount
 import com.example.data.BusinessType
@@ -420,7 +419,6 @@ private fun MainShopShell(
                 }
 
                 showBusinessSetup = false
-                UserInstallTracker.recordSignUp(shopUr, settings.shopPhone)
             }
         )
         return
@@ -952,7 +950,7 @@ private fun MainShopShell(
                                 },
                                 onBackupToCloudNow = { viewModel.backupLocalToCloud() },
                                 onRestoreFromCloudNow = { viewModel.restoreCloudToLocal() },
-                                onSyncGujratMarketRates = { viewModel.syncGujratMarketRates() },
+                                onSyncGujratRates = { viewModel.syncGujratMarketRates() },
                                 onUpdateDefaultMargin = { viewModel.updateDefaultMargin(it) },
                                 onUpdateShopPhone = { viewModel.updateShopPhone(it) },
                                 onSaveStoreProfile = { nameUr, nameEn, addrUr, addrEn, phone, bank, title, accNo, iban, branch ->
