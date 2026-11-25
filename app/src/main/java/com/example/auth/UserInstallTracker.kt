@@ -12,7 +12,7 @@ import kotlinx.coroutines.tasks.await
 
 data class UserInstallRecord(
     val id: String = "",
-    val type: String = "INSTALL", // "INSTALL" یا "SIGN_UP"
+    val type: String = "INSTALL",
     val storeName: String = "",
     val phone: String = "",
     val email: String = "",
