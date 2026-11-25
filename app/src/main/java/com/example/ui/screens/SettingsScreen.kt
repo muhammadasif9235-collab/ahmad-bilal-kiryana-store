@@ -1,4 +1,4 @@
-package com.example.ui.screens
+Package com.example.ui.screens
 
 import android.Manifest
 import android.content.Context
@@ -228,7 +228,7 @@ fun SettingsScreen(
     onConnectGoogleAccount: () -> Unit,
     onBackupToCloudNow: () -> Unit,
     onRestoreFromCloudNow: () -> Unit,
-    onSyncGujratMarketRates: () -> Unit,
+    onSyncGujratRates: () -> Unit,
     onUpdateDefaultMargin: (Double) -> Unit,
     onUpdateShopPhone: (String) -> Unit,
     onSaveStoreProfile: (
@@ -410,7 +410,6 @@ fun SettingsScreen(
                 }
             }
 
-            // Business Category & Ready-Made Items Preset Button
             item {
                 FilledTonalButton(
                     onClick = onOpenBusinessSetup,
@@ -433,7 +432,6 @@ fun SettingsScreen(
                 }
             }
 
-            // Bar 1: Shop Profile, Phone & GPS Address
             item {
                 SettingsAccordionBar(
                     title = language.pick("1. دکان کا پروفائل، فون اور GPS پتہ", "1. Shop Profile, Phone & GPS Address"),
@@ -527,7 +525,6 @@ fun SettingsScreen(
                 }
             }
 
-            // Bar 2: Personal Bank / RAAST QR (Shop Sales ONLY)
             item {
                 SettingsAccordionBar(
                     title = language.pick("2. ذاتی بینک اکاؤنٹ اور RAAST QR", "2. Personal Bank & Sales RAAST QR"),
@@ -604,7 +601,6 @@ fun SettingsScreen(
                 }
             }
 
-            // Bar 3: Biometric Fingerprint Lock & 4-Digit PIN
             item {
                 val isGuest = remember { ShopSecurityVault.isGuestMode(context) }
                 var fingerprintEnabled by remember { mutableStateOf(ShopSecurityVault.isFingerprintLockEnabled(context)) }
@@ -687,7 +683,6 @@ fun SettingsScreen(
                 }
             }
 
-            // Bar 4: 58mm Bluetooth Thermal Printer
             item {
                 SettingsAccordionBar(
                     title = language.pick("4. 58mm بلوٹوتھ تھرمل پرنٹر", "4. 58mm Bluetooth Thermal Printer"),
@@ -737,7 +732,6 @@ fun SettingsScreen(
                 }
             }
 
-            // Bar 5: Cloud Backup & Google Account
             item {
                 val isGoogleConnected = !userEmail.isNullOrBlank()
                 SettingsAccordionBar(
@@ -777,7 +771,6 @@ fun SettingsScreen(
                 }
             }
 
-            // Bar 6: Market Rates, Profit Margin & Language
             item {
                 SettingsAccordionBar(
                     title = language.pick("6. مارکیٹ ریٹ، منافع اور زبان", "6. Market Rates, Margin & Language"),
@@ -799,7 +792,7 @@ fun SettingsScreen(
                             Text(language.pick("محفوظ", "Save"))
                         }
                     }
-                    OutlinedButton(onClick = onSyncGujratMarketRates, modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(onClick = onSyncGujratRates, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.size(6.dp))
                         Text(language.pick("مارکیٹ ریٹس خودکار اپڈیٹ کریں", "Auto-Update Market Rates"))
@@ -810,7 +803,6 @@ fun SettingsScreen(
                 }
             }
 
-            // Bar 7: Ration Charity Fund & Legal Policies
             item {
                 SettingsAccordionBar(
                     title = language.pick("7. راشن امداد فنڈ اور قانونی شرائط", "7. Ration Charity Fund & Legal Policies"),
@@ -845,7 +837,6 @@ fun SettingsScreen(
                 }
             }
 
-            // Log Out Button
             item {
                 OutlinedButton(
                     onClick = onSignOut,
