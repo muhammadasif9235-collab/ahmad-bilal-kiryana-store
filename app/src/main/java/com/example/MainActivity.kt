@@ -91,6 +91,7 @@ import com.example.auth.FingerprintAppLockScreen
 import com.example.auth.ShopSecurityVault
 import com.example.auth.onGoogleSignInClicked
 import com.example.auth.signOutShopAccount
+import com.example.auth.UserInstallTracker
 import com.example.data.BusinessCatalog
 import com.example.data.BusinessType
 import com.example.data.DailyCashType
@@ -432,6 +433,7 @@ private fun MainShopShell(
                     }
                 }
                 showBusinessSetup = false
+                UserInstallTracker.recordSignUp(shopUr, settings.shopPhone)
                 viewModel.postMessage(
                     language.pick(
                         "${selectedType.titleUrdu} کی دکان اور سامان کی لسٹ تیار ہو گئی!",
