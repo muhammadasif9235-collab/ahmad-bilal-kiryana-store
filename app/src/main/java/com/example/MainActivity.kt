@@ -92,12 +92,10 @@ import com.example.auth.ShopSecurityVault
 import com.example.auth.UserInstallTracker
 import com.example.auth.onGoogleSignInClicked
 import com.example.auth.signOutShopAccount
-import com.example.data.BusinessCatalog
 import com.example.data.BusinessType
 import com.example.data.DailyCashType
 import com.example.data.DailyPaymentSource
 import com.example.data.Order
-import com.example.data.ProductCategory
 import com.example.data.ShopPreferences
 import com.example.data.ShopRepository
 import com.example.data.ShopSettings
@@ -412,34 +410,14 @@ private fun MainShopShell(
                 )
 
                 if (loadPresets) {
-                    products.forEach { oldProd ->
-                        viewModel.deleteProduct(oldProd.id)
-                    }
-                    BusinessCatalog.presetsFor(selectedType).forEach { preset ->
-                        viewModel.saveProduct(
-                            existingId = null,
-                            nameUrdu = preset.nameUrdu,
-                            nameEnglish = preset.nameEnglish,
-                            category = ProductCategory.OTHER,
-                            unit = preset.unit,
-                            costPrice = preset.costPrice,
-                            sellingPrice = preset.sellingPrice,
-                            marginPercent = settings.defaultMarginPercent,
-                            autoPriceEnabled = false,
-                            stockQty = preset.initialStock,
-                            lowStockThreshold = preset.lowStockThreshold,
-                            barcode = ""
-                        )
-                    }
+                    viewModel.switchBusinessType(
+                        businessType = selectedType,
+                        clearExistingProducts = true
+                    )
                 }
+
                 showBusinessSetup = false
                 UserInstallTracker.recordSignUp(shopUr, settings.shopPhone)
-                viewModel.postMessage(
-                    language.pick(
-                        "${selectedType.titleUrdu} کی دکان اور سامان کی لسٹ تیار ہو گئی!",
-                        "${selectedType.titleEnglish} store & items loaded!"
-                    )
-                )
             }
         )
         return
