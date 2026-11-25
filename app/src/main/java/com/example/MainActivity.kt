@@ -1017,3 +1017,16 @@ private fun MainShopShell(
                                 onOpenBusinessSetup = { showBusinessSetup = true },
                                 onSignOut = {
                                     if (Firebase.auth.currentUser != null)
+                                onSignOut = {
+                                    if (Firebase.auth.currentUser != null) {
+                                        signOutShopAccount(
+                                            credentialManager = credentialManager.value,
+                                            scope = scope,
+                                            onSignOutComplete = onSignedOut
+                                        )
+                                    } else {
+                                        onSignedOut()
+                                    }
+                                }
+                            )
+                            
