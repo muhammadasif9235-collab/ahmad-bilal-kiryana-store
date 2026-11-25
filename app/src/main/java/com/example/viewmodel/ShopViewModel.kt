@@ -3,6 +3,7 @@ package com.example.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.BusinessType
 import com.example.data.CartItem
 import com.example.data.Customer
 import com.example.data.DailyCashEntry
@@ -55,6 +56,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Calendar
+import java.util.Locale
 
 data class ShopAnalytics(
     val todaySales: Double = 0.0,
@@ -415,7 +417,6 @@ class ShopViewModel(
             return
         }
 
-        // Unpack optional phone metadata encoded by CheckoutDialog when creating a new Khata customer
         val (unpackedPhone, cleanNote) = if (note.startsWith("\u001FCP:")) {
             val endIdx = note.indexOf('\u001F', startIndex = 4)
             if (endIdx > 4) {
@@ -610,14 +611,41 @@ class ShopViewModel(
         viewModelScope.launch {
             repository.deleteProduct(productId).onSuccess {
                 showMessage("آئٹم حذف کر دیا گیا", "Product deleted")
+            }.onFailure { err ->
+                showMessage("آئٹم حذف نہ ہو سکا: ${err.localizedMessage}", "Delete failed: ${err.localizedMessage}")
             }
         }
     }
 
-        fun syncGujratMarketRates() {
+    fun switchBusinessType(
+        businessType: BusinessType,
+        clearExistingProducts: Boolean = true
+    ) {
+        viewModelScope.launch {
+            _isBusy.value = true
+            val result = repository.applyBusinessCatalog(
+                businessType = businessType,
+                clearExistingProducts = clearExistingProducts
+            )
+            _isBusy.value = false
+            result.onSuccess { count ->
+                showMessage(
+                    "${businessType.titleUrdu} کی $count اشیاء لوڈ ہو گئیں",
+                    "Loaded $count items for ${businessType.titleEnglish}"
+                )
+            }.onFailure { err ->
+                showMessage(
+                    "کاروبار تبدیل نہ ہو سکا: ${err.localizedMessage}",
+                    "Failed to switch business: ${err.localizedMessage}"
+                )
+            }
+        }
+    }
+
+    fun syncGujratMarketRates() {
         val products = (productsState.value as? UiState.Success)?.data ?: emptyList()
         val currentSettings = settings.value
-        val deviceLocale = java.util.Locale.getDefault()
+        val deviceLocale = Locale.getDefault()
         val countryCode = deviceLocale.country.ifBlank { "PK" }
 
         val addressEn = currentSettings.shopAddressEnglish.trim()
@@ -628,13 +656,13 @@ class ShopViewModel(
             addressUr.isNotBlank() -> addressUr
             addressEn.isNotBlank() -> addressEn
             countryCode.equals("PK", ignoreCase = true) -> "مقامی پاکستان منڈی"
-            else -> deviceLocale.getDisplayCountry(java.util.Locale.ENGLISH).ifBlank { countryCode }
+            else -> deviceLocale.getDisplayCountry(Locale.ENGLISH).ifBlank { countryCode }
         }
         val displayRegionEn = when {
             addressEn.isNotBlank() -> addressEn
             addressUr.isNotBlank() -> addressUr
             countryCode.equals("PK", ignoreCase = true) -> "Local Pakistan Market"
-            else -> deviceLocale.getDisplayCountry(java.util.Locale.ENGLISH).ifBlank { countryCode }
+            else -> deviceLocale.getDisplayCountry(Locale.ENGLISH).ifBlank { countryCode }
         }
 
         viewModelScope.launch {
@@ -659,8 +687,8 @@ class ShopViewModel(
                 )
             }
         }
-        }
-        
+    }
+
     fun recordStockMovement(
         product: Product,
         type: StockMovementType,
@@ -1310,7 +1338,6 @@ class ShopViewModel(
             (it.createdAt?.toDate()?.time ?: System.currentTimeMillis()) >= startOfTodayMs
         }
 
-        // Build last 7 days buckets for mini sales bar chart
         val dayBuckets = (6 downTo 0).map { daysAgo ->
             val dayStart = Calendar.getInstance().apply {
                 add(Calendar.DAY_OF_YEAR, -daysAgo)
