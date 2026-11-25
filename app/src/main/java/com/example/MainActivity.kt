@@ -965,7 +965,7 @@ private fun MainShopShell(
                                 },
                                 onBackupToCloudNow = { viewModel.backupLocalToCloud() },
                                 onRestoreFromCloudNow = { viewModel.restoreCloudToLocal() },
-                                onSyncGujratMarketRates = { viewModel.syncGujratMarketRates() },
+                                onSyncGujratRates = { viewModel.syncGujratMarketRates() },
                                 onUpdateDefaultMargin = { viewModel.updateDefaultMargin(it) },
                                 onUpdateShopPhone = { viewModel.updateShopPhone(it) },
                                 onSaveStoreProfile = { nameUr, nameEn, addrUr, addrEn, phone, bank, title, accNo, iban, branch ->
