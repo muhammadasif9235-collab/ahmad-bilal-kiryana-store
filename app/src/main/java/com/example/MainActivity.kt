@@ -1013,8 +1013,8 @@ private fun MainShopShell(
                                 onOpenRationFund = { currentDestination = ShopDestination.RATION_FUND },
                                 onUpdateShopLocation = { lat, lng, addr ->
                                     viewModel.updateShopGpsLocation(lat, lng, addr)
-                                },
-                                                                onOpenBusinessSetup = { showBusinessSetup = true },
+                                }
+                                onOpenBusinessSetup = { showBusinessSetup = true },
                                 onSignOut = {
                                     if (Firebase.auth.currentUser != null) {
                                         signOutShopAccount(
@@ -1032,5 +1032,3 @@ private fun MainShopShell(
                 }
             }
         }
-    }
-    
