@@ -750,7 +750,8 @@ private fun MainShopShell(
                                 onGoToKhata = { currentDestination = ShopDestination.KHATA },
                                 onOpenMaryamRationCard = { currentDestination = ShopDestination.RATION_CARD },
                                 onOpenRationFund = { currentDestination = ShopDestination.RATION_FUND },
-                                onSyncGujratMarketRates = { viewModel.syncGujratMarketRates() },
+                                onSyncGujratRates = { viewModel.syncGujratMarketRates() },
+```[span_4](start_span)[span_4](end_span)
                                 onOpenReceipt = { viewModel.openReceipt(it) },
                                 todayManualCashNet = todayManualCashNet,
                                 onOpenRoznamcha = { currentDestination = ShopDestination.ROZNAMCHA },
