@@ -88,6 +88,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -612,7 +613,7 @@ private const val KEY_LIVE_RATES_ENABLED = "live_rates_auto_update_enabled"
 private fun isLiveRatesEnabledForApp(context: Context): Boolean =
     context.applicationContext
         .getSharedPreferences(LIVE_RATES_PREFS, Context.MODE_PRIVATE)
-        .getBoolean(KEY_LIVE_RATES_ENABLED, false)
+        .getBoolean(KEY_LIVE_RATES_ENABLED, true)
 
 private fun getOrCreateInstallId(context: Context): String {
     val prefs = context.applicationContext.getSharedPreferences(BUSINESS_PREFS, Context.MODE_PRIVATE)
@@ -1544,7 +1545,8 @@ private fun MainShopShell(
                                 phoneNumber = "03401558166",
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
-                                    .padding(top = 12.dp, end = 16.dp)
+                                    .padding(top = 154.dp, end = 16.dp)
+                                    .scale(0.68f)
                             )
                         }
                     }
