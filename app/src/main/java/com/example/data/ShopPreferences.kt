@@ -14,11 +14,11 @@ import kotlinx.coroutines.flow.map
 private val Context.shopDataStore by preferencesDataStore(name = "ahmad_bilal_kiryana_prefs")
 
 object DonationCharityAccount {
-    const val BANK_NAME: String = ""
-    const val ACCOUNT_TITLE: String = ""
-    const val ACCOUNT_NUMBER: String = ""
-    const val IBAN: String = ""
-    const val BRANCH_NAME: String = ""
+    const val BANK_NAME: String = "HBL"
+    const val ACCOUNT_TITLE: String = "Muhammad Asif"
+    const val ACCOUNT_NUMBER: String = "16857900668003"
+    const val IBAN: String = "PK08HABB0016857900668003"
+    const val BRANCH_NAME: String = "MOTA, (TANDA)"
 }
 
 data class ShopSettings(
@@ -185,7 +185,7 @@ class ShopPreferences(private val context: Context) {
     }
 
     suspend fun applyOwnerDefaultBankIfEmpty() {
-        // جان بوجھ کر خالی چھوڑا گیا ہے تاکہ نئے صارفین کے بینک خانے خود بخود کسی اور کی تفصیل سے نہ بھریں
+        // نیچے والے ذاتی/راست بینک خانوں میں کسی دوسرے کی تفصیل خودکار نہیں بھری جائے گی
     }
 
     suspend fun setShopLocation(
