@@ -44,6 +44,13 @@ enum class BusinessType(
         "جینٹس شوز، لیڈیز سینڈل، پشاوری چپل، جوگرز",
         "Gents Shoes, Ladies Sandals, Chappal, Joggers"
     ),
+    CROCKERY(
+        "crockery",
+        "کراکری و برتن سٹور",
+        "Crockery & Utensils",
+        "برتن، جگ، گلاس، سٹیل دیگچیاں، ڈنر سیٹ، کٹورے",
+        "Utensils, Jugs, Glasses, Steel Degchis, Dinner Sets"
+    ),
     AUTO_PARTS(
         "auto_parts",
         "آٹو پارٹس و موٹرسائیکل",
@@ -135,10 +142,55 @@ data class BusinessPresetItem(
     val sellingPrice: Double,
     val initialStock: Double,
     val lowStockThreshold: Double,
-    val categoryName: String = "OTHER"
+    val categoryName: String = "OTHER",
+    val isCustomAdded: Boolean = false
 )
 
 object BusinessCatalog {
+
+    private val customItemsByType: MutableMap<BusinessType, MutableList<BusinessPresetItem>> =
+        mutableMapOf()
+
+    fun addCustomPresetItem(
+        type: BusinessType,
+        nameUrdu: String,
+        nameEnglish: String = nameUrdu,
+        unit: String = "piece",
+        costPrice: Double = 0.0,
+        sellingPrice: Double = 0.0,
+        initialStock: Double = 10.0,
+        lowStockThreshold: Double = 2.0,
+        categoryName: String = "CUSTOM"
+    ): BusinessPresetItem? {
+        val cleanUrdu = nameUrdu.trim()
+        val cleanEnglish = nameEnglish.trim().ifBlank { cleanUrdu }
+        if (cleanUrdu.isEmpty() && cleanEnglish.isEmpty()) return null
+
+        val newItem = BusinessPresetItem(
+            nameUrdu = cleanUrdu.ifBlank { cleanEnglish },
+            nameEnglish = cleanEnglish,
+            unit = unit.trim().ifBlank { "piece" },
+            costPrice = costPrice.coerceAtLeast(0.0),
+            sellingPrice = sellingPrice.coerceAtLeast(0.0),
+            initialStock = initialStock.coerceAtLeast(0.0),
+            lowStockThreshold = lowStockThreshold.coerceAtLeast(0.0),
+            categoryName = categoryName.trim().ifBlank { "CUSTOM" },
+            isCustomAdded = true
+        )
+
+        val list = customItemsByType.getOrPut(type) { mutableListOf() }
+        list.removeAll {
+            it.nameUrdu.equals(newItem.nameUrdu, ignoreCase = true) &&
+                it.nameEnglish.equals(newItem.nameEnglish, ignoreCase = true)
+        }
+        list.add(0, newItem)
+        return newItem
+    }
+
+    fun editablePresetsFor(type: BusinessType): List<BusinessPresetItem> {
+        val customList = customItemsByType[type].orEmpty()
+        return customList + presetsFor(type)
+    }
 
     fun presetsFor(type: BusinessType): List<BusinessPresetItem> = when (type) {
         BusinessType.KIRYANA -> listOf(
@@ -191,6 +243,16 @@ object BusinessCatalog {
             BusinessPresetItem("اسپورٹس جوگرز", "Sports Joggers", "piece", 1800.0, 2400.0, 20.0, 4.0),
             BusinessPresetItem("بچوں کے سکول شوز", "Kids School Shoes", "piece", 850.0, 1150.0, 30.0, 6.0),
             BusinessPresetItem("کاٹن جرابیں جوڑا", "Cotton Socks Pair", "piece", 90.0, 140.0, 60.0, 12.0)
+        )
+        BusinessType.CROCKERY -> listOf(
+            BusinessPresetItem("سٹیل کی دیگچی سیٹ", "Stainless Steel Degchi Set", "set", 2400.0, 3100.0, 15.0, 3.0),
+            BusinessPresetItem("پانی کا جگ (پلاسٹک / شیشہ)", "Water Jug", "piece", 320.0, 450.0, 25.0, 5.0),
+            BusinessPresetItem("پانی پینے کے گلاس (6 عدد)", "Drinking Glasses Set of 6", "pack", 540.0, 720.0, 30.0, 6.0),
+            BusinessPresetItem("چینی / میلامائن ڈنر سیٹ", "Dinner Set", "set", 4200.0, 5500.0, 10.0, 2.0),
+            BusinessPresetItem("سالن / چاول کے کٹورے (6 عدد)", "Bowls Set of 6", "pack", 480.0, 650.0, 25.0, 5.0),
+            BusinessPresetItem("کھانے کے چمچ (درجن)", "Dining Spoons Dozen", "dozen", 360.0, 500.0, 30.0, 6.0),
+            BusinessPresetItem("چائے کی کیتلی / فلاسک", "Tea Kettle / Flask", "piece", 780.0, 1050.0, 18.0, 4.0),
+            BusinessPresetItem("کھانا گرم رکھنے والا ہاٹ پاٹ", "Hot Pot", "piece", 950.0, 1250.0, 15.0, 3.0)
         )
         BusinessType.AUTO_PARTS -> listOf(
             BusinessPresetItem("موبل آئل 70cc/125cc (0.7L)", "Motorcycle Engine Oil 0.7L", "piece", 680.0, 820.0, 40.0, 8.0),
