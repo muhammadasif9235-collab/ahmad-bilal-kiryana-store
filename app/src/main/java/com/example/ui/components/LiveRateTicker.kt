@@ -1,10 +1,12 @@
 package com.example.ui.components
 
 import android.content.Context
+import android.location.Geocoder
+import android.location.Location
+import android.location.LocationManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -37,7 +39,10 @@ import com.example.i18n.pick
 import com.example.ui.theme.GoldShimmer
 import com.example.ui.theme.SaffronSecondary
 import com.google.firebase.firestore.FirebaseFirestore
+import java.util.Locale
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -48,102 +53,235 @@ data class TickerRateEntry(
     val nameEnglish: String,
     val priceTextUrdu: String,
     val priceTextEnglish: String,
-    val isShopPromo: Boolean = false,
-    val isAppServicePromo: Boolean = false
+    val isShopPromo: Boolean = false
+)
+
+data class ResolvedMarketRegion(
+    val regionKey: String,
+    val labelUrdu: String,
+    val labelEnglish: String,
+    val isGujratArea: Boolean
 )
 
 object DailyMarketTickerManager {
     private const val PREFS_NAME = "ahmad_bilal_daily_ticker_cache"
-    private const val KEY_LAST_FETCH_MS = "last_fetch_ms"
-    private const val KEY_RATES_JSON = "cached_rates_json"
     private const val TWENTY_FOUR_HOURS_MS = 24L * 60L * 60L * 1000L
 
-    fun getDefaultGujratRates(): List<TickerRateEntry> = listOf(
-        // گوشت و پولٹری
-        TickerRateEntry(
-            "گوشت و پولٹری", "Meat & Poultry",
-            "برائلر مرغی زندہ (تھوک)", "Live Broiler (Wholesale)",
-            "روپے 424 / کلو", "Rs 424 / kg"
-        ),
-        TickerRateEntry(
-            "گوشت و پولٹری", "Meat & Poultry",
-            "برائلر مرغی زندہ (پرچون)", "Live Broiler (Retail)",
-            "روپے 438 / کلو", "Rs 438 / kg"
-        ),
-        TickerRateEntry(
-            "گوشت و پولٹری", "Meat & Poultry",
-            "برائلر مرغی گوشت (پرچون)", "Chicken Meat (Retail)",
-            "روپے 635 / کلو", "Rs 635 / kg"
-        ),
-        TickerRateEntry(
-            "گوشت و پولٹری", "Meat & Poultry",
-            "انڈہ فارمی تھوک (1 پیٹی = 12 کریٹ / 360 انڈے)", "Farm Eggs Crate (12 Trays / 360 Eggs)",
-            "روپے 9,090 / پیٹی", "Rs 9,090 / crate"
-        ),
-        TickerRateEntry(
-            "گوشت و پولٹری", "Meat & Poultry",
-            "انڈہ فارمی فی درجن", "Farm Eggs Per Dozen",
-            "روپے 307 / درجن", "Rs 307 / dozen"
-        ),
-        TickerRateEntry(
-            "گوشت و پولٹری", "Meat & Poultry",
-            "چھوٹا گوشت (مٹن)", "Mutton",
-            "روپے 2,000 / کلو", "Rs 2,000 / kg"
-        ),
-        TickerRateEntry(
-            "گوشت و پولٹری", "Meat & Poultry",
-            "بڑا گوشت (بیف)", "Beef",
-            "روپے 1,000 / کلو", "Rs 1,000 / kg"
-        ),
+    fun resolveRegionInfo(context: Context, settings: ShopSettings): ResolvedMarketRegion {
+        val combinedAddress = "${settings.shopAddressUrdu} ${settings.shopAddressEnglish}".lowercase(Locale.ROOT)
+        val gpsCity = tryDetectCityFromCoordinates(
+            context = context,
+            lat = settings.shopLatitude,
+            lng = settings.shopLongitude
+        )
 
-        // کریانہ و اجناس
-        TickerRateEntry("کریانہ ریٹس", "Kiryana Rates", "چینی (شوگر)", "Sugar", "روپے 145 / کلو", "Rs 145 / kg"),
-        TickerRateEntry("کریانہ ریٹس", "Kiryana Rates", "درجہ اول گھی", "Cooking Ghee", "روپے 520 / کلو", "Rs 520 / kg"),
-        TickerRateEntry("کریانہ ریٹس", "Kiryana Rates", "کوکنگ آئل", "Cooking Oil", "روپے 535 / لیٹر", "Rs 535 / L"),
-        TickerRateEntry("کریانہ ریٹس", "Kiryana Rates", "سپر کرنل باسمتی چاول", "Super Basmati Rice", "روپے 290 / کلو", "Rs 290 / kg"),
-        TickerRateEntry("کریانہ ریٹس", "Kiryana Rates", "چکی آٹا (20 کلو تھیلا)", "Flour 20kg Bag", "روپے 1,780 / تھیلا", "Rs 1,780 / bag"),
-        TickerRateEntry("کریانہ ریٹس", "Kiryana Rates", "دال چنا", "Chana Dal", "روپے 265 / کلو", "Rs 265 / kg"),
-        TickerRateEntry("کریانہ ریٹس", "Kiryana Rates", "دال مسور", "Masoor Dal", "روپے 285 / کلو", "Rs 285 / kg"),
+        val rawLocationText = listOfNotNull(
+            gpsCity?.takeIf { it.isNotBlank() },
+            combinedAddress.takeIf { it.isNotBlank() }
+        ).joinToString(" ").lowercase(Locale.ROOT)
 
-        // منڈی سبزیاں
-        TickerRateEntry("منڈی سبزیاں", "Mandi Vegetables", "آلو نیا", "Fresh Potato", "روپے 75 / کلو", "Rs 75 / kg"),
-        TickerRateEntry("منڈی سبزیاں", "Mandi Vegetables", "پیاز", "Onion", "روپے 115 / کلو", "Rs 115 / kg"),
-        TickerRateEntry("منڈی سبزیاں", "Mandi Vegetables", "ٹماٹر", "Tomato", "روپے 95 / کلو", "Rs 95 / kg"),
-        TickerRateEntry("منڈی سبزیاں", "Mandi Vegetables", "ادرک", "Ginger", "روپے 540 / کلو", "Rs 540 / kg"),
-        TickerRateEntry("منڈی سبزیاں", "Mandi Vegetables", "لہسن دیسی", "Local Garlic", "روپے 480 / کلو", "Rs 480 / kg"),
-        TickerRateEntry("منڈی سبزیاں", "Mandi Vegetables", "ہری مرچ", "Green Chili", "روپے 140 / کلو", "Rs 140 / kg"),
+        return when {
+            rawLocationText.contains("gujrat") || rawLocationText.contains("گجرات") ||
+                rawLocationText.contains("tanda") || rawLocationText.contains("ٹانڈہ") ||
+                rawLocationText.contains("kharian") || rawLocationText.contains("کھاریاں") ||
+                rawLocationText.contains("lalamusa") || rawLocationText.contains("لالہ موسیٰ") ||
+                rawLocationText.contains("sarai alamgir") || rawLocationText.contains("سرائے عالمگیر") ->
+                ResolvedMarketRegion("gujrat", "گجرات منڈی", "Gujrat Mandi", isGujratArea = true)
 
-        // منڈی فروٹس / پھل
-        TickerRateEntry("منڈی فروٹس", "Mandi Fruits", "کینو / مالٹا", "Kinnow / Orange", "روپے 180 / درجن", "Rs 180 / dozen"),
-        TickerRateEntry("منڈی فروٹس", "Mandi Fruits", "سیب کالا کولو", "Kala Kulu Apple", "روپے 260 / کلو", "Rs 260 / kg"),
-        TickerRateEntry("منڈی فروٹس", "Mandi Fruits", "کیلا", "Banana", "روپے 160 / درجن", "Rs 160 / dozen"),
-        TickerRateEntry("منڈی فروٹس", "Mandi Fruits", "امرود", "Guava", "روپے 150 / کلو", "Rs 150 / kg"),
-        TickerRateEntry("منڈی فروٹس", "Mandi Fruits", "انار", "Pomegranate", "روپے 340 / کلو", "Rs 340 / kg")
-    )
+            rawLocationText.contains("lahore") || rawLocationText.contains("لاہور") ->
+                ResolvedMarketRegion("lahore", "لاہور منڈی", "Lahore Mandi", isGujratArea = false)
 
-    suspend fun loadDailyRates(context: Context, shopProducts: List<Product>): List<TickerRateEntry> {
-        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val lastFetch = prefs.getLong(KEY_LAST_FETCH_MS, 0L)
-        val now = System.currentTimeMillis()
-        val cachedJson = prefs.getString(KEY_RATES_JSON, null)
+            rawLocationText.contains("gujranwala") || rawLocationText.contains("گوجرانوالہ") ->
+                ResolvedMarketRegion("gujranwala", "گوجرانوالہ منڈی", "Gujranwala Mandi", isGujratArea = false)
 
-        if (!cachedJson.isNullOrBlank() && (now - lastFetch) < TWENTY_FOUR_HOURS_MS) {
-            val parsed = parseJsonRates(cachedJson)
-            if (parsed.isNotEmpty()) return parsed
+            rawLocationText.contains("sialkot") || rawLocationText.contains("سیالکوٹ") ->
+                ResolvedMarketRegion("sialkot", "سیالکوٹ منڈی", "Sialkot Mandi", isGujratArea = false)
+
+            rawLocationText.contains("faisalabad") || rawLocationText.contains("فیصل آباد") ->
+                ResolvedMarketRegion("faisalabad", "فیصل آباد منڈی", "Faisalabad Mandi", isGujratArea = false)
+
+            rawLocationText.contains("multan") || rawLocationText.contains("ملتان") ->
+                ResolvedMarketRegion("multan", "ملتان منڈی", "Multan Mandi", isGujratArea = false)
+
+            rawLocationText.contains("karachi") || rawLocationText.contains("کراچی") ->
+                ResolvedMarketRegion("karachi", "کراچی منڈی", "Karachi Mandi", isGujratArea = false)
+
+            rawLocationText.contains("rawalpindi") || rawLocationText.contains("راولپنڈی") ||
+                rawLocationText.contains("islamabad") || rawLocationText.contains("اسلام آباد") ->
+                ResolvedMarketRegion("twin_cities", "راولپنڈی / اسلام آباد منڈی", "Rwp / Isb Mandi", isGujratArea = false)
+
+            else -> {
+                val cleanCity = gpsCity?.trim().orEmpty()
+                if (cleanCity.isNotBlank()) {
+                    val slug = cleanCity.lowercase(Locale.ROOT)
+                        .replace(Regex("[^a-z0-9]+"), "_")
+                        .trim('_')
+                        .ifBlank { "local_market" }
+                    ResolvedMarketRegion(
+                        regionKey = slug,
+                        labelUrdu = "$cleanCity مارکیٹ",
+                        labelEnglish = "$cleanCity Market",
+                        isGujratArea = false
+                    )
+                } else {
+                    ResolvedMarketRegion(
+                        regionKey = "local_market",
+                        labelUrdu = "مقامی مارکیٹ",
+                        labelEnglish = "Local Market",
+                        isGujratArea = false
+                    )
+                }
+            }
+        }
+    }
+
+    private fun tryDetectCityFromCoordinates(
+        context: Context,
+        lat: Double,
+        lng: Double
+    ): String? {
+        var targetLat = lat
+        var targetLng = lng
+
+        if (targetLat == 0.0 && targetLng == 0.0) {
+            try {
+                val lm = context.applicationContext.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+                val providers = lm?.getProviders(true).orEmpty()
+                var bestLoc: Location? = null
+                for (provider in providers) {
+                    val loc = try {
+                        lm?.getLastKnownLocation(provider)
+                    } catch (_: SecurityException) {
+                        null
+                    }
+                    if (loc != null && (bestLoc == null || loc.accuracy < bestLoc.accuracy)) {
+                        bestLoc = loc
+                    }
+                }
+                if (bestLoc != null) {
+                    targetLat = bestLoc.latitude
+                    targetLng = bestLoc.longitude
+                }
+            } catch (_: Throwable) {
+            }
         }
 
-        val cloudRates = tryFetchFromFirestore()
+        if (targetLat == 0.0 && targetLng == 0.0) return null
+
+        return try {
+            if (!Geocoder.isPresent()) return null
+            val geocoder = Geocoder(context.applicationContext, Locale.ENGLISH)
+            @Suppress("DEPRECATION")
+            val addresses = geocoder.getFromLocation(targetLat, targetLng, 1)
+            val addr = addresses?.firstOrNull()
+            addr?.locality?.takeIf { it.isNotBlank() }
+                ?: addr?.subAdminArea?.takeIf { it.isNotBlank() }
+                ?: addr?.adminArea?.takeIf { it.isNotBlank() }
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    fun getDefaultRatesForRegion(region: ResolvedMarketRegion): List<TickerRateEntry> {
+        val catUr = region.labelUrdu
+        val catEn = region.labelEnglish
+        return listOf(
+            // گوشت و پولٹری
+            TickerRateEntry(
+                catUr, catEn,
+                "برائلر مرغی زندہ (تھوک)", "Live Broiler (Wholesale)",
+                "روپے 424 / کلو", "Rs 424 / kg"
+            ),
+            TickerRateEntry(
+                catUr, catEn,
+                "برائلر مرغی زندہ (پرچون)", "Live Broiler (Retail)",
+                "روپے 438 / کلو", "Rs 438 / kg"
+            ),
+            TickerRateEntry(
+                catUr, catEn,
+                "برائلر مرغی گوشت (پرچون)", "Chicken Meat (Retail)",
+                "روپے 635 / کلو", "Rs 635 / kg"
+            ),
+            TickerRateEntry(
+                catUr, catEn,
+                "انڈہ فارمی تھوک (1 پیٹی = 12 کریٹ / 360 انڈے)", "Farm Eggs Crate (12 Trays / 360 Eggs)",
+                "روپے 9,090 / پیٹی", "Rs 9,090 / crate"
+            ),
+            TickerRateEntry(
+                catUr, catEn,
+                "انڈہ فارمی فی درجن", "Farm Eggs Per Dozen",
+                "روپے 307 / درجن", "Rs 307 / dozen"
+            ),
+            TickerRateEntry(
+                catUr, catEn,
+                "چھوٹا گوشت (مٹن)", "Mutton",
+                "روپے 2,000 / کلو", "Rs 2,000 / kg"
+            ),
+            TickerRateEntry(
+                catUr, catEn,
+                "بڑا گوشت (بیف)", "Beef",
+                "روپے 1,000 / کلو", "Rs 1,000 / kg"
+            ),
+
+            // کریانہ و اجناس
+            TickerRateEntry(catUr, catEn, "چینی (شوگر)", "Sugar", "روپے 145 / کلو", "Rs 145 / kg"),
+            TickerRateEntry(catUr, catEn, "درجہ اول گھی", "Cooking Ghee", "روپے 520 / کلو", "Rs 520 / kg"),
+            TickerRateEntry(catUr, catEn, "کوکنگ آئل", "Cooking Oil", "روپے 535 / لیٹر", "Rs 535 / L"),
+            TickerRateEntry(catUr, catEn, "سپر کرنل باسمتی چاول", "Super Basmati Rice", "روپے 290 / کلو", "Rs 290 / kg"),
+            TickerRateEntry(catUr, catEn, "چکی آٹا (20 کلو تھیلا)", "Flour 20kg Bag", "روپے 1,780 / تھیلا", "Rs 1,780 / bag"),
+            TickerRateEntry(catUr, catEn, "دال چنا", "Chana Dal", "روپے 265 / کلو", "Rs 265 / kg"),
+            TickerRateEntry(catUr, catEn, "دال مسور", "Masoor Dal", "روپے 285 / کلو", "Rs 285 / kg"),
+
+            // سبزیاں
+            TickerRateEntry(catUr, catEn, "آلو نیا", "Fresh Potato", "روپے 75 / کلو", "Rs 75 / kg"),
+            TickerRateEntry(catUr, catEn, "پیاز", "Onion", "روپے 115 / کلو", "Rs 115 / kg"),
+            TickerRateEntry(catUr, catEn, "ٹماٹر", "Tomato", "روپے 95 / کلو", "Rs 95 / kg"),
+            TickerRateEntry(catUr, catEn, "ادرک", "Ginger", "روپے 540 / کلو", "Rs 540 / kg"),
+            TickerRateEntry(catUr, catEn, "لہسن دیسی", "Local Garlic", "روپے 480 / کلو", "Rs 480 / kg"),
+            TickerRateEntry(catUr, catEn, "ہری مرچ", "Green Chili", "روپے 140 / کلو", "Rs 140 / kg"),
+
+            // پھل / فروٹس
+            TickerRateEntry(catUr, catEn, "کینو / مالٹا", "Kinnow / Orange", "روپے 180 / درجن", "Rs 180 / dozen"),
+            TickerRateEntry(catUr, catEn, "سیب کالا کولو", "Kala Kulu Apple", "روپے 260 / کلو", "Rs 260 / kg"),
+            TickerRateEntry(catUr, catEn, "کیلا", "Banana", "روپے 160 / درجن", "Rs 160 / dozen"),
+            TickerRateEntry(catUr, catEn, "امرود", "Guava", "روپے 150 / کلو", "Rs 150 / kg"),
+            TickerRateEntry(catUr, catEn, "انار", "Pomegranate", "روپے 340 / کلو", "Rs 340 / kg")
+        )
+    }
+
+    suspend fun loadDailyRates(
+        context: Context,
+        settings: ShopSettings,
+        shopProducts: List<Product>
+    ): Pair<ResolvedMarketRegion, List<TickerRateEntry>> {
+        val region = withContext(Dispatchers.IO) {
+            resolveRegionInfo(context, settings)
+        }
+        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val keyLastFetch = "last_fetch_ms_${region.regionKey}"
+        val keyRatesJson = "cached_rates_json_${region.regionKey}"
+
+        val lastFetch = prefs.getLong(keyLastFetch, 0L)
+        val now = System.currentTimeMillis()
+        val cachedJson = prefs.getString(keyRatesJson, null)
+
+        if (!cachedJson.isNullOrBlank() && (now - lastFetch) < TWENTY_FOUR_HOURS_MS) {
+            val parsed = parseJsonRates(cachedJson, region)
+            if (parsed.isNotEmpty()) return region to parsed
+        }
+
+        val cloudRates = tryFetchFromFirestore(region)
         if (cloudRates.isNotEmpty()) {
             prefs.edit()
-                .putLong(KEY_LAST_FETCH_MS, now)
-                .putString(KEY_RATES_JSON, toJsonString(cloudRates))
+                .putLong(keyLastFetch, now)
+                .putString(keyRatesJson, toJsonString(cloudRates))
                 .apply()
-            return cloudRates
+            return region to cloudRates
         }
 
         if (!cachedJson.isNullOrBlank()) {
-            val parsed = parseJsonRates(cachedJson)
-            if (parsed.isNotEmpty()) return parsed
+            val parsed = parseJsonRates(cachedJson, region)
+            if (parsed.isNotEmpty()) return region to parsed
         }
 
         val liveShopItems = shopProducts
@@ -161,16 +299,19 @@ object DailyMarketTickerManager {
                 )
             }
 
-        return (getDefaultGujratRates() + liveShopItems).distinctBy { it.nameUrdu }
+        val fallbackList = (getDefaultRatesForRegion(region) + liveShopItems).distinctBy { it.nameUrdu }
+        return region to fallbackList
     }
 
-    private suspend fun tryFetchFromFirestore(): List<TickerRateEntry> {
+    private suspend fun tryFetchFromFirestore(region: ResolvedMarketRegion): List<TickerRateEntry> {
         return try {
-            val doc = FirebaseFirestore.getInstance()
-                .collection("market_rates")
-                .document("daily")
-                .get()
-                .await()
+            val db = FirebaseFirestore.getInstance()
+            val doc = if (region.regionKey != "local_market") {
+                val regionalSnap = db.collection("market_rates").document(region.regionKey).get().await()
+                if (regionalSnap.exists()) regionalSnap else db.collection("market_rates").document("daily").get().await()
+            } else {
+                db.collection("market_rates").document("daily").get().await()
+            }
 
             val rawItems = doc.get("items") as? List<*> ?: return emptyList()
             rawItems.mapNotNull { entry ->
@@ -180,8 +321,8 @@ object DailyMarketTickerManager {
                 if (nameUr.isBlank() || priceUr.isBlank()) return@mapNotNull null
 
                 TickerRateEntry(
-                    categoryUrdu = map["categoryUrdu"]?.toString()?.trim().orEmpty().ifBlank { "منڈی ریٹ" },
-                    categoryEnglish = map["categoryEnglish"]?.toString()?.trim().orEmpty().ifBlank { "Market Rate" },
+                    categoryUrdu = map["categoryUrdu"]?.toString()?.trim().orEmpty().ifBlank { region.labelUrdu },
+                    categoryEnglish = map["categoryEnglish"]?.toString()?.trim().orEmpty().ifBlank { region.labelEnglish },
                     nameUrdu = nameUr,
                     nameEnglish = map["nameEnglish"]?.toString()?.trim().orEmpty().ifBlank { nameUr },
                     priceTextUrdu = priceUr,
@@ -208,7 +349,7 @@ object DailyMarketTickerManager {
         return arr.toString()
     }
 
-    private fun parseJsonRates(json: String): List<TickerRateEntry> {
+    private fun parseJsonRates(json: String, region: ResolvedMarketRegion): List<TickerRateEntry> {
         return try {
             val arr = JSONArray(json)
             val result = mutableListOf<TickerRateEntry>()
@@ -216,8 +357,8 @@ object DailyMarketTickerManager {
                 val obj = arr.getJSONObject(i)
                 result.add(
                     TickerRateEntry(
-                        categoryUrdu = obj.optString("cu", "منڈی ریٹ"),
-                        categoryEnglish = obj.optString("ce", "Market Rate"),
+                        categoryUrdu = obj.optString("cu", region.labelUrdu),
+                        categoryEnglish = obj.optString("ce", region.labelEnglish),
                         nameUrdu = obj.optString("nu"),
                         nameEnglish = obj.optString("ne"),
                         priceTextUrdu = obj.optString("pu"),
@@ -240,10 +381,30 @@ fun LiveMarketRateTicker(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var rawRates by remember { mutableStateOf(DailyMarketTickerManager.getDefaultGujratRates()) }
+    var resolvedRegion by remember {
+        mutableStateOf(
+            ResolvedMarketRegion(
+                regionKey = "local_market",
+                labelUrdu = "مقامی مارکیٹ",
+                labelEnglish = "Local Market",
+                isGujratArea = false
+            )
+        )
+    }
+    var rawRates by remember {
+        mutableStateOf(DailyMarketTickerManager.getDefaultRatesForRegion(resolvedRegion))
+    }
 
-    LaunchedEffect(products.size) {
-        rawRates = DailyMarketTickerManager.loadDailyRates(context, products)
+    LaunchedEffect(
+        settings.shopAddressUrdu,
+        settings.shopAddressEnglish,
+        settings.shopLatitude,
+        settings.shopLongitude,
+        products.size
+    ) {
+        val (region, rates) = DailyMarketTickerManager.loadDailyRates(context, settings, products)
+        resolvedRegion = region
+        rawRates = rates
     }
 
     val tickerFeed = remember(rawRates, settings.storeNameUrdu, settings.storeNameEnglish, settings.shopAddressUrdu) {
@@ -257,50 +418,28 @@ fun LiveMarketRateTicker(
             isShopPromo = true
         )
 
-        val appServicePromo = TickerRateEntry(
-            categoryUrdu = "ایپ سروس",
-            categoryEnglish = "App Service",
-            nameUrdu = "اپنے کاروبار کی علیحدہ ایپ مناسب ریٹ میں بنوانے کے لیے رابطہ کریں",
-            nameEnglish = "Get a custom app for your business at reasonable rates",
-            priceTextUrdu = "03401558166 (WhatsApp / Call)",
-            priceTextEnglish = "03401558166 (WhatsApp / Call)",
-            isAppServicePromo = true
-        )
-
         val combined = mutableListOf<TickerRateEntry>()
-        var promoCycle = 0
         rawRates.forEachIndexed { index, item ->
             combined.add(item)
             if ((index + 1) % 7 == 0) {
-                if (promoCycle % 2 == 0) {
-                    combined.add(shopPromo)
-                } else {
-                    combined.add(appServicePromo)
-                }
-                promoCycle++
+                combined.add(shopPromo)
             }
         }
         if (combined.none { it.isShopPromo }) {
             combined.add(shopPromo)
-        }
-        if (combined.none { it.isAppServicePromo }) {
-            combined.add(appServicePromo)
         }
         combined
     }
 
     val fullTickerText = remember(tickerFeed, language) {
         tickerFeed.joinToString(separator = "     ✦     ") { item ->
-            when {
-                item.isShopPromo -> language.pick(
+            if (item.isShopPromo) {
+                language.pick(
                     "★ ${item.nameUrdu} — ${item.priceTextUrdu} ★",
                     "★ ${item.nameEnglish} — ${item.priceTextEnglish} ★"
                 )
-                item.isAppServicePromo -> language.pick(
-                    "📱 ${item.nameUrdu}: ${item.priceTextUrdu}",
-                    "📱 ${item.nameEnglish}: ${item.priceTextEnglish}"
-                )
-                else -> language.pick(
+            } else {
+                language.pick(
                     "[${item.categoryUrdu}] ${item.nameUrdu}: ${item.priceTextUrdu}",
                     "[${item.categoryEnglish}] ${item.nameEnglish}: ${item.priceTextEnglish}"
                 )
@@ -336,11 +475,12 @@ fun LiveMarketRateTicker(
                         .background(Color.White)
                 )
                 Text(
-                    text = language.pick("لائیو ریٹس", "LIVE RATES"),
+                    text = language.pick(resolvedRegion.labelUrdu, resolvedRegion.labelEnglish),
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.ExtraBold,
                     color = Color.White,
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
@@ -359,48 +499,6 @@ fun LiveMarketRateTicker(
                         initialDelayMillis = 400,
                         velocity = 42.dp
                     )
-            )
-        }
-    }
-}
-
-@Composable
-fun CustomAppPromoTopStrip(
-    language: AppLanguage,
-    onContactClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        color = Color(0xFF102A43),
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable { onContactClick() }
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 5.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = language.pick(
-                    "اپنے کاروبار کی علیحدہ ایپ مناسب ریٹ میں بنوائیں",
-                    "Custom business app at affordable rates"
-                ),
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = Color(0xFFF0F4F8),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
-            Text(
-                text = "03401558166",
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = GoldShimmer,
-                maxLines = 1
             )
         }
     }
