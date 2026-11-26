@@ -88,7 +88,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.auth.AuthScreen
+import com.example.auth.BusinessAppOfferStarBadge
 import com.example.auth.FingerprintAppLockScreen
+import com.example.auth.ForceUpdateGateDialog
 import com.example.auth.InstallSignUpSheet
 import com.example.auth.ShopSecurityVault
 import com.example.auth.UserInstallTracker
@@ -114,6 +116,7 @@ import com.example.services.QrScanAndPaymentDialog
 import com.example.services.ScannedNfcCard
 import com.example.ui.components.AutoReceiptDialog
 import com.example.ui.components.BillEditorDialog
+import com.example.ui.components.LiveMarketRateTicker
 import com.example.ui.components.LowStockReportDialog
 import com.example.ui.components.PaymentReceiptDialog
 import com.example.ui.components.RationCardReceiptDialog
@@ -404,6 +407,12 @@ private fun MainShopShell(
     val rationItems = (rationItemsState as? UiState.Success)?.data ?: emptyList()
     val rationCardBills = (rationCardBillsState as? UiState.Success)?.data ?: emptyList()
     val dailyCashEntries = (dailyCashEntriesState as? UiState.Success)?.data ?: emptyList()
+
+    ForceUpdateGateDialog(
+        currentVersionCode = BuildConfig.VERSION_CODE.toLong(),
+        language = language,
+        isOnline = isOnline
+    )
 
     val bizPrefs = remember { context.applicationContext.getSharedPreferences(BUSINESS_PREFS, Context.MODE_PRIVATE) }
     val hasExistingCustomShop = remember(settings.storeNameUrdu) {
@@ -763,6 +772,12 @@ private fun MainShopShell(
                 }
 
                 Column(modifier = Modifier.weight(1f).fillMaxSize()) {
+                    LiveMarketRateTicker(
+                        language = language,
+                        settings = settings,
+                        products = products
+                    )
+
                     if (isBusy) {
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     }
@@ -1045,6 +1060,16 @@ private fun MainShopShell(
                                         onSignedOut()
                                     }
                                 }
+                            )
+                        }
+
+                        if (!isSecondaryScreen) {
+                            BusinessAppOfferStarBadge(
+                                language = language,
+                                phoneNumber = "03401558166",
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(end = 14.dp, bottom = 14.dp)
                             )
                         }
                     }
