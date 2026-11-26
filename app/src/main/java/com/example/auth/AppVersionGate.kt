@@ -134,3 +134,131 @@ fun ForceUpdateGateDialog(
         }
     )
 }
+@Composable
+fun BusinessAppOfferStarBadge(
+    language: AppLanguage,
+    modifier: Modifier = Modifier,
+    phoneNumber: String = "03401558166"
+) {
+    val context = LocalContext.current
+    var showOfferDialog by remember { androidx.compose.runtime.mutableStateOf(false) }
+
+    val infiniteTransition = androidx.compose.animation.core.rememberInfiniteTransition(
+        label = "star_flicker"
+    )
+    val flickerAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.45f,
+        targetValue = 1f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = androidx.compose.animation.core.tween(durationMillis = 650),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+        ),
+        label = "flicker_alpha"
+    )
+    val starScale by infiniteTransition.animateFloat(
+        initialValue = 0.94f,
+        targetValue = 1.08f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = androidx.compose.animation.core.tween(durationMillis = 700),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+        ),
+        label = "star_scale"
+    )
+
+    androidx.compose.material3.Surface(
+        color = androidx.compose.ui.graphics.Color(0xFF063729),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+        modifier = modifier
+            .androidx.compose.ui.graphics.graphicsLayer {
+                alpha = flickerAlpha
+                scaleX = starScale
+                scaleY = starScale
+            }
+            .androidx.compose.foundation.border(
+                width = 1.2.dp,
+                color = androidx.compose.ui.graphics.Color(0xFFFBBF24),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp)
+            )
+            .androidx.compose.foundation.clickable { showOfferDialog = true }
+    ) {
+        Row(
+            modifier = androidx.compose.foundation.layout.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = "✦",
+                color = androidx.compose.ui.graphics.Color(0xFFFBBF24),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.ExtraBold
+            )
+            Text(
+                text = language.pick("خوشخبری • ایپ آفر", "HOT OFFER • APP"),
+                color = androidx.compose.ui.graphics.Color(0xFFFEF3C7),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
+            )
+        }
+    }
+
+    if (showOfferDialog) {
+        AlertDialog(
+            onDismissRequest = { showOfferDialog = false },
+            title = {
+                Text(
+                    text = "✦ دھماکہ خیز آفر • Hot Business App Offer ✦",
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "خوشخبری! AI، کمپیوٹر اور سوشل میڈیا کے جدید دور میں اپنے کاروبار کو نئی جدت دیں۔ اب اپنی علیحدہ، تیز اور پروفیشنل کاروباری ایپلیکیشن نہایت مناسب ریٹ میں بنوائیں!",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Good News! Give your business a modern edge in the era of AI, computers, and social media. Get your own custom business app built at affordable rates!",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        text = "رابطہ / Contact (WhatsApp & Call): $phoneNumber",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showOfferDialog = false
+                        try {
+                            val cleanNum = phoneNumber.trim()
+                            val waUri = Uri.parse("https://wa.me/92${cleanNum.removePrefix("0")}")
+                            val intent = Intent(Intent.ACTION_VIEW, waUri)
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            context.startActivity(intent)
+                        } catch (_: Throwable) {
+                            try {
+                                val callIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${phoneNumber.trim()}"))
+                                callIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                context.startActivity(callIntent)
+                            } catch (_: Throwable) {
+                            }
+                        }
+                    }
+                ) {
+                    Text(language.pick("واٹس ایپ پر رابطہ کریں", "Chat on WhatsApp"))
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { showOfferDialog = false }) {
+                    Text(language.pick("بند کریں", "Close"))
+                }
+            }
+        )
+    }
+}
