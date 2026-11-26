@@ -11,5 +11,5 @@ Last updated: November 26, 2026
 
 ## Contact
 - **Business:** Ahmad Bilal Kiryana Store, Mohalla Muhammad Nagar, Tanda, Tehsil & District Gujrat, Pakistan
-- **Support Email:** [muhammadasif9235@gmail.com]
+- **Support Email:** muhammadasif9235@gmail.com
 - 
