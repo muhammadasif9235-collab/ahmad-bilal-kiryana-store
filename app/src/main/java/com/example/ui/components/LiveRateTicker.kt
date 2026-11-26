@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -47,7 +48,8 @@ data class TickerRateEntry(
     val nameEnglish: String,
     val priceTextUrdu: String,
     val priceTextEnglish: String,
-    val isShopPromo: Boolean = false
+    val isShopPromo: Boolean = false,
+    val isAppServicePromo: Boolean = false
 )
 
 object DailyMarketTickerManager {
@@ -255,28 +257,50 @@ fun LiveMarketRateTicker(
             isShopPromo = true
         )
 
+        val appServicePromo = TickerRateEntry(
+            categoryUrdu = "ایپ سروس",
+            categoryEnglish = "App Service",
+            nameUrdu = "اپنے کاروبار کی علیحدہ ایپ مناسب ریٹ میں بنوانے کے لیے رابطہ کریں",
+            nameEnglish = "Get a custom app for your business at reasonable rates",
+            priceTextUrdu = "03401558166 (WhatsApp / Call)",
+            priceTextEnglish = "03401558166 (WhatsApp / Call)",
+            isAppServicePromo = true
+        )
+
         val combined = mutableListOf<TickerRateEntry>()
+        var promoCycle = 0
         rawRates.forEachIndexed { index, item ->
             combined.add(item)
             if ((index + 1) % 7 == 0) {
-                combined.add(shopPromo)
+                if (promoCycle % 2 == 0) {
+                    combined.add(shopPromo)
+                } else {
+                    combined.add(appServicePromo)
+                }
+                promoCycle++
             }
         }
         if (combined.none { it.isShopPromo }) {
             combined.add(shopPromo)
+        }
+        if (combined.none { it.isAppServicePromo }) {
+            combined.add(appServicePromo)
         }
         combined
     }
 
     val fullTickerText = remember(tickerFeed, language) {
         tickerFeed.joinToString(separator = "     ✦     ") { item ->
-            if (item.isShopPromo) {
-                language.pick(
+            when {
+                item.isShopPromo -> language.pick(
                     "★ ${item.nameUrdu} — ${item.priceTextUrdu} ★",
                     "★ ${item.nameEnglish} — ${item.priceTextEnglish} ★"
                 )
-            } else {
-                language.pick(
+                item.isAppServicePromo -> language.pick(
+                    "📱 ${item.nameUrdu}: ${item.priceTextUrdu}",
+                    "📱 ${item.nameEnglish}: ${item.priceTextEnglish}"
+                )
+                else -> language.pick(
                     "[${item.categoryUrdu}] ${item.nameUrdu}: ${item.priceTextUrdu}",
                     "[${item.categoryEnglish}] ${item.nameEnglish}: ${item.priceTextEnglish}"
                 )
@@ -335,6 +359,48 @@ fun LiveMarketRateTicker(
                         initialDelayMillis = 400,
                         velocity = 42.dp
                     )
+            )
+        }
+    }
+}
+
+@Composable
+fun CustomAppPromoTopStrip(
+    language: AppLanguage,
+    onContactClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = Color(0xFF102A43),
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable { onContactClick() }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = language.pick(
+                    "اپنے کاروبار کی علیحدہ ایپ مناسب ریٹ میں بنوائیں",
+                    "Custom business app at affordable rates"
+                ),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFFF0F4F8),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = "03401558166",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = GoldShimmer,
+                maxLines = 1
             )
         }
     }
