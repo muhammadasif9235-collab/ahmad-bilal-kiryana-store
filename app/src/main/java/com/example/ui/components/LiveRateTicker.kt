@@ -65,6 +65,7 @@ data class ResolvedMarketRegion(
 
 object DailyMarketTickerManager {
     private const val PREFS_NAME = "ahmad_bilal_daily_ticker_cache"
+    private const val RATE_VERSION_TAG = "v7_5_updated_rates_1"
     private const val TWENTY_FOUR_HOURS_MS = 24L * 60L * 60L * 1000L
 
     fun resolveRegionInfo(context: Context, settings: ShopSettings): ResolvedMarketRegion {
@@ -223,14 +224,42 @@ object DailyMarketTickerManager {
                 "روپے 1,000 / کلو", "Rs 1,000 / kg"
             ),
 
-            // کریانہ و اجناس
-            TickerRateEntry(catUr, catEn, "چینی (شوگر)", "Sugar", "روپے 145 / کلو", "Rs 145 / kg"),
-            TickerRateEntry(catUr, catEn, "درجہ اول گھی", "Cooking Ghee", "روپے 520 / کلو", "Rs 520 / kg"),
-            TickerRateEntry(catUr, catEn, "کوکنگ آئل", "Cooking Oil", "روپے 535 / لیٹر", "Rs 535 / L"),
-            TickerRateEntry(catUr, catEn, "سپر کرنل باسمتی چاول", "Super Basmati Rice", "روپے 290 / کلو", "Rs 290 / kg"),
-            TickerRateEntry(catUr, catEn, "چکی آٹا (20 کلو تھیلا)", "Flour 20kg Bag", "روپے 1,780 / تھیلا", "Rs 1,780 / bag"),
-            TickerRateEntry(catUr, catEn, "دال چنا", "Chana Dal", "روپے 265 / کلو", "Rs 265 / kg"),
-            TickerRateEntry(catUr, catEn, "دال مسور", "Masoor Dal", "روپے 285 / کلو", "Rs 285 / kg"),
+            // کریانہ و اجناس (اپڈیٹ شدہ درست نرخ)
+            TickerRateEntry(
+                catUr, catEn,
+                "صوفی گھی", "Sufi Ghee",
+                "روپے 631–640 / کلو", "Rs 631–640 / kg"
+            ),
+            TickerRateEntry(
+                catUr, catEn,
+                "صوفی آئل", "Sufi Oil",
+                "روپے 618–630 / لیٹر", "Rs 618–630 / L"
+            ),
+            TickerRateEntry(
+                catUr, catEn,
+                "چینی (شوگر)", "Sugar",
+                "روپے 140–150 / کلو", "Rs 140–150 / kg"
+            ),
+            TickerRateEntry(
+                catUr, catEn,
+                "دال چنا", "Chana Dal",
+                "روپے 300–320 / کلو", "Rs 300–320 / kg"
+            ),
+            TickerRateEntry(
+                catUr, catEn,
+                "چاول (اچھا باسمتی)", "Fine Basmati Rice",
+                "روپے 340–380 / کلو", "Rs 340–380 / kg"
+            ),
+            TickerRateEntry(
+                catUr, catEn,
+                "چکی آٹا (20 کلو تھیلا)", "Flour 20kg Bag",
+                "روپے 1,780 / تھیلا", "Rs 1,780 / bag"
+            ),
+            TickerRateEntry(
+                catUr, catEn,
+                "دال مسور", "Masoor Dal",
+                "روپے 285 / کلو", "Rs 285 / kg"
+            ),
 
             // سبزیاں
             TickerRateEntry(catUr, catEn, "آلو نیا", "Fresh Potato", "روپے 75 / کلو", "Rs 75 / kg"),
@@ -258,8 +287,18 @@ object DailyMarketTickerManager {
             resolveRegionInfo(context, settings)
         }
         val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val keyVersion = "rate_version_${region.regionKey}"
         val keyLastFetch = "last_fetch_ms_${region.regionKey}"
         val keyRatesJson = "cached_rates_json_${region.regionKey}"
+
+        val savedVersion = prefs.getString(keyVersion, null)
+        if (savedVersion != RATE_VERSION_TAG) {
+            prefs.edit()
+                .remove(keyLastFetch)
+                .remove(keyRatesJson)
+                .putString(keyVersion, RATE_VERSION_TAG)
+                .apply()
+        }
 
         val lastFetch = prefs.getLong(keyLastFetch, 0L)
         val now = System.currentTimeMillis()
