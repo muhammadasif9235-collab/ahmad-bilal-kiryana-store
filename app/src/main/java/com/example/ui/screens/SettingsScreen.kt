@@ -50,7 +50,6 @@ import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.QrCode2
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Store
 import androidx.compose.material.icons.filled.Sync
@@ -71,6 +70,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -89,6 +89,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.auth.ShopSecurityVault
+import com.example.data.DonationCharityAccount
 import com.example.data.ShopSettings
 import com.example.i18n.AppLanguage
 import com.example.i18n.pick
@@ -114,11 +115,34 @@ private val QUICK_PAKISTAN_BANKS = listOf(
 
 private const val PROFILE_PHOTO_PREFS = "ahmad_bilal_profile_photo"
 private const val KEY_SHOP_PHOTO_PATH = "custom_shop_photo_path"
+private const val KEY_LIVE_RATES_ENABLED = "live_rates_auto_update_enabled"
 
 fun getSavedShopPhotoPath(context: Context): String? =
     context.applicationContext
         .getSharedPreferences(PROFILE_PHOTO_PREFS, Context.MODE_PRIVATE)
         .getString(KEY_SHOP_PHOTO_PATH, null)
+
+private fun isLiveRatesEnabled(context: Context): Boolean =
+    context.applicationContext
+        .getSharedPreferences(PROFILE_PHOTO_PREFS, Context.MODE_PRIVATE)
+        .getBoolean(KEY_LIVE_RATES_ENABLED, true)
+
+private fun setLiveRatesEnabled(context: Context, enabled: Boolean) {
+    context.applicationContext
+        .getSharedPreferences(PROFILE_PHOTO_PREFS, Context.MODE_PRIVATE)
+        .edit()
+        .putBoolean(KEY_LIVE_RATES_ENABLED, enabled)
+        .apply()
+}
+
+private fun isAppBuilderOwner(context: Context, userEmail: String?): Boolean {
+    val email = (userEmail ?: ShopSecurityVault.getRegisteredEmail(context)).trim().lowercase(Locale.ROOT)
+    val builderEmails = setOf(
+        "muhammadasif9235@gmail.com",
+        "mirza.muhammad.asif@gmail.com"
+    )
+    return email in builderEmails
+}
 
 private fun copyUriToInternalPhoto(context: Context, uri: Uri): String? {
     return try {
@@ -253,6 +277,7 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val isOwnerProfile = remember(context, userEmail) { isAppBuilderOwner(context, userEmail) }
 
     var expandedBar by remember { mutableStateOf<String?>(null) }
     fun toggleBar(key: String) {
@@ -282,6 +307,35 @@ fun SettingsScreen(
     var ibanInput by remember(settings.hblIban) { mutableStateOf(settings.hblIban) }
     var branchInput by remember(settings.hblBranchName) { mutableStateOf(settings.hblBranchName) }
 
+    LaunchedEffect(isOwnerProfile, settings.bankName, settings.hblAccountNumber) {
+        if (
+            isOwnerProfile &&
+            settings.bankName.isBlank() &&
+            settings.hblAccountTitle.isBlank() &&
+            settings.hblAccountNumber.isBlank() &&
+            settings.hblIban.isBlank()
+        ) {
+            bankNameInput = DonationCharityAccount.BANK_NAME
+            accountTitleInput = DonationCharityAccount.ACCOUNT_TITLE
+            accountNumberInput = DonationCharityAccount.ACCOUNT_NUMBER
+            ibanInput = DonationCharityAccount.IBAN
+            branchInput = DonationCharityAccount.BRANCH_NAME
+            onSaveStoreProfile(
+                storeNameUrduInput,
+                storeNameEnglishInput,
+                addressUrduInput,
+                addressEnglishInput,
+                phoneInput,
+                DonationCharityAccount.BANK_NAME,
+                DonationCharityAccount.ACCOUNT_TITLE,
+                DonationCharityAccount.ACCOUNT_NUMBER,
+                DonationCharityAccount.IBAN,
+                DonationCharityAccount.BRANCH_NAME
+            )
+        }
+    }
+
+    var liveRatesEnabled by remember { mutableStateOf(isLiveRatesEnabled(context)) }
     var marginInput by remember(settings.defaultMarginPercent) {
         mutableStateOf(settings.defaultMarginPercent.toString())
     }
@@ -322,6 +376,18 @@ fun SettingsScreen(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { results ->
         if (results.values.all { it }) onRefreshPairedPrinters()
+    }
+
+    val personalBankSubtitle = remember(settings.bankName, settings.hblAccountTitle, language) {
+        val parts = listOfNotNull(
+            settings.bankName.trim().takeIf { it.isNotBlank() },
+            settings.hblAccountTitle.trim().takeIf { it.isNotBlank() }
+        )
+        if (parts.isEmpty()) {
+            language.pick("اختیاری: اپنا بینک اکاؤنٹ درج کریں", "Optional: Enter Your Bank Account")
+        } else {
+            parts.joinToString(" • ")
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -528,12 +594,20 @@ fun SettingsScreen(
             item {
                 SettingsAccordionBar(
                     title = language.pick("2. ذاتی بینک اکاؤنٹ اور RAAST QR", "2. Personal Bank & Sales RAAST QR"),
-                    subtitle = "${settings.bankName} • ${settings.hblAccountTitle}",
+                    subtitle = personalBankSubtitle,
                     icon = Icons.Default.AccountBalance,
                     iconTint = ProfitGreen,
                     expanded = expandedBar == "bank",
                     onToggle = { toggleBar("bank") }
                 ) {
+                    Text(
+                        text = language.pick(
+                            "یہ خانے مکمل طور پر اختیاری ہیں — اگر آپ اپنا بینک اکاؤنٹ رکھنا چاہیں تو خود درج کریں، ورنہ خالی چھوڑ دیں۔",
+                            "These fields are optional — enter your own bank details if you want, or leave them blank."
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -549,21 +623,21 @@ fun SettingsScreen(
                     OutlinedTextField(
                         value = bankNameInput,
                         onValueChange = { bankNameInput = it },
-                        label = { Text(language.pick("بینک کا نام", "Bank Name")) },
+                        label = { Text(language.pick("بینک کا نام (اختیاری)", "Bank Name (Optional)")) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth().testTag("settings_bank_name_input")
                     )
                     OutlinedTextField(
                         value = accountTitleInput,
                         onValueChange = { accountTitleInput = it },
-                        label = { Text(language.pick("اکاؤنٹ ہولڈر کا نام", "Account Title")) },
+                        label = { Text(language.pick("اکاؤنٹ ہولڈر کا نام (اختیاری)", "Account Title (Optional)")) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth().testTag("settings_bank_title_input")
                     )
                     OutlinedTextField(
                         value = ibanInput,
                         onValueChange = { ibanInput = it.uppercase().replace(" ", "") },
-                        label = { Text(language.pick("ذاتی IBAN (RAAST QR)", "Personal IBAN")) },
+                        label = { Text(language.pick("ذاتی IBAN (اختیاری)", "Personal IBAN (Optional)")) },
                         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth().testTag("settings_bank_iban_input")
@@ -572,7 +646,7 @@ fun SettingsScreen(
                         OutlinedTextField(
                             value = accountNumberInput,
                             onValueChange = { accountNumberInput = it },
-                            label = { Text(language.pick("اکاؤنٹ نمبر", "Account #")) },
+                            label = { Text(language.pick("اکاؤنٹ نمبر (اختیاری)", "Account # (Optional)")) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true,
                             modifier = Modifier.weight(1f).testTag("settings_bank_account_input")
@@ -580,7 +654,7 @@ fun SettingsScreen(
                         OutlinedTextField(
                             value = branchInput,
                             onValueChange = { branchInput = it },
-                            label = { Text(language.pick("برانچ", "Branch")) },
+                            label = { Text(language.pick("برانچ (اختیاری)", "Branch (Optional)")) },
                             singleLine = true,
                             modifier = Modifier.weight(1f).testTag("settings_bank_branch_input")
                         )
@@ -596,7 +670,7 @@ fun SettingsScreen(
                     ) {
                         Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.size(6.dp))
-                        Text(language.pick("بینک اور RAAST QR محفوظ کریں", "Save Bank & RAAST QR"))
+                        Text(language.pick("بینک تفصیل محفوظ کریں", "Save Bank Details"))
                     }
                 }
             }
@@ -608,13 +682,22 @@ fun SettingsScreen(
                 var securityNotice by remember { mutableStateOf<String?>(null) }
 
                 SettingsAccordionBar(
-                    title = language.pick("3. فنگر پرنٹ لاک اور 4 ہندسوں کا PIN", "3. Fingerprint Lock & 4-Digit PIN"),
-                    subtitle = if (fingerprintEnabled && !isGuest) language.pick("فعال (ON)", "Enabled (ON)")
-                    else language.pick("بند (OFF)", "Disabled (OFF)"),
+                    title = language.pick("3. AES-256 انکرپشن، فنگر پرنٹ اور PIN", "3. AES-256 Encryption, Biometrics & PIN"),
+                    subtitle = language.pick("AES-256 Keystore محفوظ • ", "AES-256 Keystore Active • ") +
+                        if (fingerprintEnabled && !isGuest) language.pick("لاک فعال (ON)", "Lock ON")
+                        else language.pick("لاک بند (OFF)", "Lock OFF"),
                     icon = Icons.Default.Fingerprint,
                     expanded = expandedBar == "security",
                     onToggle = { toggleBar("security") }
                 ) {
+                    Text(
+                        text = language.pick(
+                            "حساس ڈیٹا کے لیے AES-256 + Android Keystore انکرپشن والٹ فعال ہے۔ کوئی بھی سیکیورٹی 100% مطلق نہیں ہوتی، تاہم ڈیٹا کو مضبوط انکرپٹڈ شکل میں محفوظ رکھا جاتا ہے۔",
+                            "AES-256 + Android Keystore encryption vault is active for protected data. No security is 100% absolute, but data is stored in encrypted form."
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = ProfitGreen
+                    )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -779,6 +862,42 @@ fun SettingsScreen(
                     expanded = expandedBar == "market",
                     onToggle = { toggleBar("market") }
                 ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = language.pick(
+                                    "لائیو ریٹس اپڈیٹ (آن / آف)",
+                                    "Live Market Rate Updates (ON / OFF)"
+                                ),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = if (liveRatesEnabled) {
+                                    language.pick("آن: علاقے کے مطابق لائیو اپڈیٹس آ رہی ہیں", "ON: Receiving live regional updates")
+                                } else {
+                                    language.pick("آف: مینول طریقے سے خود ریٹس/کام کریں", "OFF: Manual mode active")
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = liveRatesEnabled,
+                            onCheckedChange = { enabled ->
+                                liveRatesEnabled = enabled
+                                setLiveRatesEnabled(context, enabled)
+                                if (enabled) {
+                                    onSyncGujratRates()
+                                }
+                            },
+                            modifier = Modifier.testTag("settings_live_rates_switch")
+                        )
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         OutlinedTextField(
                             value = marginInput,
@@ -791,11 +910,6 @@ fun SettingsScreen(
                         FilledTonalButton(onClick = { marginInput.toDoubleOrNull()?.let(onUpdateDefaultMargin) }) {
                             Text(language.pick("محفوظ", "Save"))
                         }
-                    }
-                    OutlinedButton(onClick = onSyncGujratRates, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.size(6.dp))
-                        Text(language.pick("مارکیٹ ریٹس خودکار اپڈیٹ کریں", "Auto-Update Market Rates"))
                     }
                     Button(onClick = onToggleLanguage, modifier = Modifier.fillMaxWidth().testTag("settings_language_toggle_button")) {
                         Text(if (language == AppLanguage.URDU) "Switch to English (LTR)" else "اردو میں تبدیل کریں (RTL)")
