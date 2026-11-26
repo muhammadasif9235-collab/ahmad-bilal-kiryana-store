@@ -2,18 +2,34 @@ package com.example.auth
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -134,6 +150,7 @@ fun ForceUpdateGateDialog(
         }
     )
 }
+
 @Composable
 fun BusinessAppOfferStarBadge(
     language: AppLanguage,
@@ -141,60 +158,58 @@ fun BusinessAppOfferStarBadge(
     phoneNumber: String = "03401558166"
 ) {
     val context = LocalContext.current
-    var showOfferDialog by remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showOfferDialog by remember { mutableStateOf(false) }
 
-    val infiniteTransition = androidx.compose.animation.core.rememberInfiniteTransition(
-        label = "star_flicker"
-    )
+    val infiniteTransition = rememberInfiniteTransition(label = "star_flicker")
     val flickerAlpha by infiniteTransition.animateFloat(
         initialValue = 0.45f,
         targetValue = 1f,
-        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-            animation = androidx.compose.animation.core.tween(durationMillis = 650),
-            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 650),
+            repeatMode = RepeatMode.Reverse
         ),
         label = "flicker_alpha"
     )
     val starScale by infiniteTransition.animateFloat(
         initialValue = 0.94f,
         targetValue = 1.08f,
-        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-            animation = androidx.compose.animation.core.tween(durationMillis = 700),
-            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 700),
+            repeatMode = RepeatMode.Reverse
         ),
         label = "star_scale"
     )
 
-    androidx.compose.material3.Surface(
-        color = androidx.compose.ui.graphics.Color(0xFF063729),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+    Surface(
+        color = Color(0xFF063729),
+        shape = RoundedCornerShape(20.dp),
         modifier = modifier
-            .androidx.compose.ui.graphics.graphicsLayer {
+            .graphicsLayer {
                 alpha = flickerAlpha
                 scaleX = starScale
                 scaleY = starScale
             }
-            .androidx.compose.foundation.border(
+            .border(
                 width = 1.2.dp,
-                color = androidx.compose.ui.graphics.Color(0xFFFBBF24),
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp)
+                color = Color(0xFFFBBF24),
+                shape = RoundedCornerShape(20.dp)
             )
-            .androidx.compose.foundation.clickable { showOfferDialog = true }
+            .clickable { showOfferDialog = true }
     ) {
         Row(
-            modifier = androidx.compose.foundation.layout.padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text(
                 text = "✦",
-                color = androidx.compose.ui.graphics.Color(0xFFFBBF24),
+                color = Color(0xFFFBBF24),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.ExtraBold
             )
             Text(
                 text = language.pick("خوشخبری • ایپ آفر", "HOT OFFER • APP"),
-                color = androidx.compose.ui.graphics.Color(0xFFFEF3C7),
+                color = Color(0xFFFEF3C7),
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1
@@ -255,7 +270,7 @@ fun BusinessAppOfferStarBadge(
                 }
             },
             dismissButton = {
-                androidx.compose.material3.TextButton(onClick = { showOfferDialog = false }) {
+                TextButton(onClick = { showOfferDialog = false }) {
                     Text(language.pick("بند کریں", "Close"))
                 }
             }
