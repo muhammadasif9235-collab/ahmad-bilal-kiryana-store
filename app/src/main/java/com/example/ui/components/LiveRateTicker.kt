@@ -46,6 +46,9 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
+private const val FULL_SHOP_ADDRESS_URDU =
+    "احمد بلال کریانہ سٹور محلہ محمد نگر ٹانڈہ تحصیل و ضلع گجرات پاکستان"
+
 data class TickerRateEntry(
     val categoryUrdu: String,
     val categoryEnglish: String,
@@ -65,11 +68,11 @@ data class ResolvedMarketRegion(
 
 object DailyMarketTickerManager {
     private const val PREFS_NAME = "ahmad_bilal_daily_ticker_cache"
-    private const val RATE_VERSION_TAG = "v7_5_updated_rates_1"
+    private const val RATE_VERSION_TAG = "v7_6_full_tanda_address_1"
     private const val TWENTY_FOUR_HOURS_MS = 24L * 60L * 60L * 1000L
 
     fun resolveRegionInfo(context: Context, settings: ShopSettings): ResolvedMarketRegion {
-        val combinedAddress = "${settings.shopAddressUrdu} ${settings.shopAddressEnglish}".lowercase(Locale.ROOT)
+        val combinedAddress = "${settings.shopAddressUrdu}${settings.shopAddressEnglish}".lowercase(Locale.ROOT)
         val gpsCity = tryDetectCityFromCoordinates(
             context = context,
             lat = settings.shopLatitude,
@@ -187,7 +190,6 @@ object DailyMarketTickerManager {
         val catUr = region.labelUrdu
         val catEn = region.labelEnglish
         return listOf(
-            // گوشت و پولٹری
             TickerRateEntry(
                 catUr, catEn,
                 "برائلر مرغی زندہ (تھوک)", "Live Broiler (Wholesale)",
@@ -223,8 +225,6 @@ object DailyMarketTickerManager {
                 "بڑا گوشت (بیف)", "Beef",
                 "روپے 1,000 / کلو", "Rs 1,000 / kg"
             ),
-
-            // کریانہ و اجناس (اپڈیٹ شدہ درست نرخ)
             TickerRateEntry(
                 catUr, catEn,
                 "صوفی گھی", "Sufi Ghee",
@@ -260,16 +260,12 @@ object DailyMarketTickerManager {
                 "دال مسور", "Masoor Dal",
                 "روپے 285 / کلو", "Rs 285 / kg"
             ),
-
-            // سبزیاں
             TickerRateEntry(catUr, catEn, "آلو نیا", "Fresh Potato", "روپے 75 / کلو", "Rs 75 / kg"),
             TickerRateEntry(catUr, catEn, "پیاز", "Onion", "روپے 115 / کلو", "Rs 115 / kg"),
             TickerRateEntry(catUr, catEn, "ٹماٹر", "Tomato", "روپے 95 / کلو", "Rs 95 / kg"),
             TickerRateEntry(catUr, catEn, "ادرک", "Ginger", "روپے 540 / کلو", "Rs 540 / kg"),
             TickerRateEntry(catUr, catEn, "لہسن دیسی", "Local Garlic", "روپے 480 / کلو", "Rs 480 / kg"),
             TickerRateEntry(catUr, catEn, "ہری مرچ", "Green Chili", "روپے 140 / کلو", "Rs 140 / kg"),
-
-            // پھل / فروٹس
             TickerRateEntry(catUr, catEn, "کینو / مالٹا", "Kinnow / Orange", "روپے 180 / درجن", "Rs 180 / dozen"),
             TickerRateEntry(catUr, catEn, "سیب کالا کولو", "Kala Kulu Apple", "روپے 260 / کلو", "Rs 260 / kg"),
             TickerRateEntry(catUr, catEn, "کیلا", "Banana", "روپے 160 / درجن", "Rs 160 / dozen"),
@@ -423,10 +419,10 @@ fun LiveMarketRateTicker(
     var resolvedRegion by remember {
         mutableStateOf(
             ResolvedMarketRegion(
-                regionKey = "local_market",
-                labelUrdu = "مقامی مارکیٹ",
-                labelEnglish = "Local Market",
-                isGujratArea = false
+                regionKey = "gujrat",
+                labelUrdu = "گجرات منڈی",
+                labelEnglish = "Gujrat Mandi",
+                isGujratArea = true
             )
         )
     }
@@ -446,14 +442,26 @@ fun LiveMarketRateTicker(
         rawRates = rates
     }
 
-    val tickerFeed = remember(rawRates, settings.storeNameUrdu, settings.storeNameEnglish, settings.shopAddressUrdu) {
+    val tickerFeed = remember(rawRates, settings.storeNameEnglish, settings.shopAddressEnglish) {
+        val cleanAddressUr = settings.shopAddressUrdu
+            .replace("مین بازار ٹانڈہ", "")
+            .replace("مین بازار", "")
+            .trim()
+            .ifBlank { FULL_SHOP_ADDRESS_URDU }
+
+        val urduBannerText = if (cleanAddressUr.contains("احمد بلال کریانہ سٹور")) {
+            cleanAddressUr
+        } else {
+            FULL_SHOP_ADDRESS_URDU
+        }
+
         val shopPromo = TickerRateEntry(
             categoryUrdu = "خوش آمدید",
             categoryEnglish = "Welcome",
-            nameUrdu = "${settings.storeNameUrdu}، ${settings.shopAddressUrdu}",
-            nameEnglish = "${settings.storeNameEnglish}, ${settings.shopAddressEnglish}",
+            nameUrdu = urduBannerText,
+            nameEnglish = FULL_SHOP_ADDRESS_URDU,
             priceTextUrdu = "تازہ و معیاری اشیاء اور مناسب نرخ",
-            priceTextEnglish = "Fresh Quality Grocery & Best Rates",
+            priceTextEnglish = "تازہ و معیاری اشیاء اور مناسب نرخ",
             isShopPromo = true
         )
 
@@ -474,13 +482,13 @@ fun LiveMarketRateTicker(
         tickerFeed.joinToString(separator = "     ✦     ") { item ->
             if (item.isShopPromo) {
                 language.pick(
-                    "★ ${item.nameUrdu} — ${item.priceTextUrdu} ★",
-                    "★ ${item.nameEnglish} — ${item.priceTextEnglish} ★"
+                    "★ ${item.nameUrdu} —${item.priceTextUrdu} ★",
+                    "★ ${item.nameEnglish} —${item.priceTextEnglish} ★"
                 )
             } else {
                 language.pick(
-                    "[${item.categoryUrdu}] ${item.nameUrdu}: ${item.priceTextUrdu}",
-                    "[${item.categoryEnglish}] ${item.nameEnglish}: ${item.priceTextEnglish}"
+                    "[${item.categoryUrdu}] ${item.nameUrdu}:${item.priceTextUrdu}",
+                    "[${item.categoryEnglish}] ${item.nameEnglish}:${item.priceTextEnglish}"
                 )
             }
         }
