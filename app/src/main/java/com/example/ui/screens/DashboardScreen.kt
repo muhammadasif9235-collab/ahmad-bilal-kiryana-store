@@ -93,6 +93,9 @@ import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.delay
 
+private const val DASHBOARD_DEFAULT_SHOP_ADDRESS =
+    "احمد بلال کریانہ سٹور محلہ محمد نگر ٹانڈہ تحصیل و ضلع گجرات پاکستان"
+
 @Composable
 fun DashboardScreen(
     language: AppLanguage,
@@ -123,7 +126,7 @@ fun DashboardScreen(
         context.applicationContext.getSharedPreferences("ahmad_bilal_profile_photo", android.content.Context.MODE_PRIVATE)
     }
     var rateAutoUpdateOn by remember {
-        mutableStateOf(rateUpdatePrefs.getBoolean("live_rates_auto_update_enabled", false))
+        mutableStateOf(rateUpdatePrefs.getBoolean("live_rates_auto_update_enabled", true))
     }
 
     var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -141,14 +144,14 @@ fun DashboardScreen(
     }
 
     val displayShopTitle = if (language == AppLanguage.URDU) {
-        settings.storeNameUrdu.ifBlank { "کریانہ اینڈ جنرل سٹور" }
+        settings.storeNameUrdu.ifBlank { "احمد بلال کریانہ سٹور" }
     } else {
-        settings.storeNameEnglish.ifBlank { "Kiryana & General Store" }
+        settings.storeNameEnglish.ifBlank { "Ahmad Bilal Kiryana Store" }
     }
     val displayShopAddress = if (language == AppLanguage.URDU) {
-        settings.shopAddressUrdu
+        settings.shopAddressUrdu.ifBlank { DASHBOARD_DEFAULT_SHOP_ADDRESS }
     } else {
-        settings.shopAddressEnglish
+        settings.shopAddressEnglish.ifBlank { DASHBOARD_DEFAULT_SHOP_ADDRESS }
     }
 
     Box(
@@ -238,7 +241,6 @@ fun DashboardScreen(
                                 }
                             }
 
-                            // عام آن / آف (ON / OFF) سوئچ بٹن — ریفریش تیر کے بغیر، خودکار/مینول کنٹرول کے لیے
                             Surface(
                                 color = Color.Black.copy(alpha = 0.24f),
                                 shape = RoundedCornerShape(50.dp),
@@ -328,15 +330,10 @@ fun DashboardScreen(
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = displayShopAddress.ifBlank {
-                                        language.pick(
-                                            "پروفیشنل POS • کھاتہ • روزنامچہ • اسٹاک منیجر",
-                                            "Smart POS • Khata Ledger • Daily Cashbook • Stock"
-                                        )
-                                    },
+                                    text = displayShopAddress,
                                     style = MaterialTheme.typography.labelSmall,
                                     color = GoldShimmer,
-                                    maxLines = 1,
+                                    maxLines = 2,
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
