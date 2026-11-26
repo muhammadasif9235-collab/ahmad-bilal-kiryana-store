@@ -168,6 +168,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+private const val DEFAULT_TICKER_SHOP_BANNER =
+    "احمد بلال کریانہ سٹور محلہ محمد نگر ٹانڈہ تحصیل و ضلع گجرات پاکستان"
+
 enum class ShopDestination(
     val urduLabel: String,
     val englishLabel: String,
@@ -246,8 +249,8 @@ private fun NearMeShopsSection(
             list.add(
                 NearMeShopsEntry(
                     id = "current_active_shop",
-                    nameUrdu = settings.storeNameUrdu.ifBlank { "میری دکان" },
-                    nameEnglish = settings.storeNameEnglish.ifBlank { "My Shop" },
+                    nameUrdu = settings.storeNameUrdu.ifBlank { DEFAULT_TICKER_SHOP_BANNER },
+                    nameEnglish = settings.storeNameEnglish.ifBlank { "Ahmad Bilal Kiryana Store" },
                     businessTypeLabel = language.pick("کریانہ / کاروبار سٹور", "Kiryana / Business Store"),
                     areaLabel = buyerLocationText,
                     distanceKm = 0.2,
@@ -633,7 +636,12 @@ fun AppRoot(
     val scope = rememberCoroutineScope()
     val preferences = remember { ShopPreferences(context.applicationContext) }
     val loadedSettings by preferences.settingsFlow.collectAsStateWithLifecycle(initialValue = null)
-    val settings = loadedSettings ?: ShopSettings()
+    val settings = (loadedSettings ?: ShopSettings()).let { s ->
+        s.copy(
+            shopAddressUrdu = s.shopAddressUrdu.ifBlank { DEFAULT_TICKER_SHOP_BANNER },
+            shopAddressEnglish = s.shopAddressEnglish.ifBlank { DEFAULT_TICKER_SHOP_BANNER }
+        )
+    }
     val language = settings.language
     val installId = remember { getOrCreateInstallId(context) }
 
@@ -768,7 +776,13 @@ private fun MainShopShell(
         factory = shopVmFactory
     )
 
-    val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val rawSettings by viewModel.settings.collectAsStateWithLifecycle()
+    val settings = remember(rawSettings) {
+        rawSettings.copy(
+            shopAddressUrdu = rawSettings.shopAddressUrdu.ifBlank { DEFAULT_TICKER_SHOP_BANNER },
+            shopAddressEnglish = rawSettings.shopAddressEnglish.ifBlank { DEFAULT_TICKER_SHOP_BANNER }
+        )
+    }
     val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
     val productsState by viewModel.productsState.collectAsStateWithLifecycle()
     val customersState by viewModel.customersState.collectAsStateWithLifecycle()
@@ -835,8 +849,8 @@ private fun MainShopShell(
                 viewModel.saveStoreProfile(
                     storeNameUrdu = shopUr,
                     storeNameEnglish = shopEn,
-                    addressUrdu = cityUr,
-                    addressEnglish = cityUr,
+                    addressUrdu = cityUr.ifBlank { DEFAULT_TICKER_SHOP_BANNER },
+                    addressEnglish = cityUr.ifBlank { DEFAULT_TICKER_SHOP_BANNER },
                     phone = settings.shopPhone,
                     bankName = settings.bankName,
                     accountTitle = settings.hblAccountTitle,
@@ -1507,8 +1521,8 @@ private fun MainShopShell(
                                     viewModel.saveStoreProfile(
                                         storeNameUrdu = nameUr,
                                         storeNameEnglish = nameEn,
-                                        addressUrdu = addrUr,
-                                        addressEnglish = addrEn,
+                                        addressUrdu = addrUr.ifBlank { DEFAULT_TICKER_SHOP_BANNER },
+                                        addressEnglish = addrEn.ifBlank { DEFAULT_TICKER_SHOP_BANNER },
                                         phone = phone,
                                         bankName = bank,
                                         accountTitle = title,
@@ -1545,8 +1559,8 @@ private fun MainShopShell(
                                 phoneNumber = "03401558166",
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
-                                    .padding(top = 154.dp, end = 16.dp)
-                                    .scale(0.68f)
+                                    .padding(top = 186.dp, end = 12.dp)
+                                    .scale(0.62f)
                             )
                         }
                     }
