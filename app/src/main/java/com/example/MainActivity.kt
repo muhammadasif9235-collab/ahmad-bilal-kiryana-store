@@ -612,7 +612,7 @@ private const val KEY_LIVE_RATES_ENABLED = "live_rates_auto_update_enabled"
 private fun isLiveRatesEnabledForApp(context: Context): Boolean =
     context.applicationContext
         .getSharedPreferences(LIVE_RATES_PREFS, Context.MODE_PRIVATE)
-        .getBoolean(KEY_LIVE_RATES_ENABLED, true)
+        .getBoolean(KEY_LIVE_RATES_ENABLED, false)
 
 private fun getOrCreateInstallId(context: Context): String {
     val prefs = context.applicationContext.getSharedPreferences(BUSINESS_PREFS, Context.MODE_PRIVATE)
@@ -1221,8 +1221,8 @@ private fun MainShopShell(
                                     } else {
                                         viewModel.postMessage(
                                             language.pick(
-                                                "لائیو ریٹس اپڈیٹ آف ہے — سیٹنگز سے آن کریں۔",
-                                                "Live Market Rate Updates are OFF — enable in Settings."
+                                                "لائیو ریٹس اپڈیٹ آف ہے — مینول طریقے سے کام جاری ہے۔",
+                                                "Live Market Rate Updates are OFF — manual mode active."
                                             )
                                         )
                                     }
@@ -1316,8 +1316,8 @@ private fun MainShopShell(
                                     } else {
                                         viewModel.postMessage(
                                             language.pick(
-                                                "لائیو ریٹس اپڈیٹ آف ہے — سیٹنگز سے آن کریں۔",
-                                                "Live Market Rate Updates are OFF — enable in Settings."
+                                                "لائیو ریٹس اپڈیٹ آف ہے — مینول طریقے سے کام جاری ہے۔",
+                                                "Live Market Rate Updates are OFF — manual mode active."
                                             )
                                         )
                                     }
