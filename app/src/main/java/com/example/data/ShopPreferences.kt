@@ -14,11 +14,11 @@ import kotlinx.coroutines.flow.map
 private val Context.shopDataStore by preferencesDataStore(name = "ahmad_bilal_kiryana_prefs")
 
 object DonationCharityAccount {
-    const val BANK_NAME: String = "HBL"
-    const val ACCOUNT_TITLE: String = "Muhammad Asif"
-    const val ACCOUNT_NUMBER: String = "16857900668003"
-    const val IBAN: String = "PK08HABB0016857900668003"
-    const val BRANCH_NAME: String = "MOTA, (TANDA)"
+    const val BANK_NAME: String = ""
+    const val ACCOUNT_TITLE: String = ""
+    const val ACCOUNT_NUMBER: String = ""
+    const val IBAN: String = ""
+    const val BRANCH_NAME: String = ""
 }
 
 data class ShopSettings(
@@ -185,23 +185,7 @@ class ShopPreferences(private val context: Context) {
     }
 
     suspend fun applyOwnerDefaultBankIfEmpty() {
-        context.shopDataStore.edit { prefs ->
-            if (prefs[Keys.BANK_NAME].isNullOrBlank()) {
-                prefs[Keys.BANK_NAME] = DonationCharityAccount.BANK_NAME
-            }
-            if (prefs[Keys.HBL_ACCOUNT_TITLE].isNullOrBlank()) {
-                prefs[Keys.HBL_ACCOUNT_TITLE] = DonationCharityAccount.ACCOUNT_TITLE
-            }
-            if (prefs[Keys.HBL_ACCOUNT_NUMBER].isNullOrBlank()) {
-                prefs[Keys.HBL_ACCOUNT_NUMBER] = DonationCharityAccount.ACCOUNT_NUMBER
-            }
-            if (prefs[Keys.HBL_IBAN].isNullOrBlank()) {
-                prefs[Keys.HBL_IBAN] = DonationCharityAccount.IBAN
-            }
-            if (prefs[Keys.HBL_BRANCH_NAME].isNullOrBlank()) {
-                prefs[Keys.HBL_BRANCH_NAME] = DonationCharityAccount.BRANCH_NAME
-            }
-        }
+        // جان بوجھ کر خالی چھوڑا گیا ہے تاکہ نئے صارفین کے بینک خانے خود بخود کسی اور کی تفصیل سے نہ بھریں
     }
 
     suspend fun setShopLocation(
