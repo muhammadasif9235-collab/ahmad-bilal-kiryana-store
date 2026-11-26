@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
@@ -196,24 +195,6 @@ data class NearMeShopsEntry(
     val isCurrentUserShop: Boolean = false
 )
 
-private fun haversineDistanceKm(
-    lat1: Double,
-    lon1: Double,
-    lat2: Double,
-    lon2: Double
-): Double {
-    if (lat1 == 0.0 && lon1 == 0.0) return 0.0
-    if (lat2 == 0.0 && lon2 == 0.0) return 1.5
-    val earthRadiusKm = 6371.0
-    val dLat = Math.toRadians(lat2 - lat1)
-    val dLon = Math.toRadians(lon2 - lon1)
-    val a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
-        Math.sin(dLon / 2) * Math.sin(dLon / 2)
-    val c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-    return earthRadiusKm * c
-}
-
 @Composable
 private fun NearMeShopsSection(
     language: AppLanguage,
@@ -250,7 +231,8 @@ private fun NearMeShopsSection(
             }
     }
 
-    val baseShops = remember(
+    // صرف وہی دکاندار/اکاؤنٹ دکھایا جائے گا جس کا نمبر ایپ میں درج ہو
+    val registeredShops = remember(
         settings.storeNameUrdu,
         settings.storeNameEnglish,
         settings.shopPhone,
@@ -259,64 +241,29 @@ private fun NearMeShopsSection(
         buyerLng
     ) {
         val list = mutableListOf<NearMeShopsEntry>()
-        list.add(
-            NearMeShopsEntry(
-                id = "current_active_shop",
-                nameUrdu = settings.storeNameUrdu.ifBlank { "میری دکان" },
-                nameEnglish = settings.storeNameEnglish.ifBlank { "My Shop" },
-                businessTypeLabel = language.pick("کریانہ / کاروبار سٹور", "Kiryana / Business Store"),
-                areaLabel = buyerLocationText,
-                distanceKm = 0.2,
-                shopPhone = settings.shopPhone.trim(),
-                latitude = buyerLat,
-                longitude = buyerLng,
-                isCurrentUserShop = true
-            )
-        )
-        list.addAll(
-            listOf(
+        if (settings.shopPhone.isNotBlank()) {
+            list.add(
                 NearMeShopsEntry(
-                    id = "shop_tanda_kiryana_1",
-                    nameUrdu = "المدینہ کریانہ سٹور",
-                    nameEnglish = "Al-Madina Kiryana Store",
-                    businessTypeLabel = language.pick("کریانہ و راشن", "Kiryana & Ration"),
-                    areaLabel = language.pick("محلہ محمد نگر، ٹانڈہ", "Mohallah Muhammad Nagar, Tanda"),
-                    distanceKm = haversineDistanceKm(buyerLat, buyerLng, 32.5380, 73.9260).coerceAtLeast(0.4),
-                    shopPhone = "",
-                    latitude = 32.5380,
-                    longitude = 73.9260
-                ),
-                NearMeShopsEntry(
-                    id = "shop_tanda_crockery_2",
-                    nameUrdu = "رحمان کراکری و برتن ہاؤس",
-                    nameEnglish = "Rehman Crockery & Utensils",
-                    businessTypeLabel = language.pick("کراکری و برتن", "Crockery & Utensils"),
-                    areaLabel = language.pick("مین بازار، ٹانڈہ", "Main Bazaar, Tanda"),
-                    distanceKm = haversineDistanceKm(buyerLat, buyerLng, 32.5345, 73.9220).coerceAtLeast(0.7),
-                    shopPhone = "",
-                    latitude = 32.5345,
-                    longitude = 73.9220
-                ),
-                NearMeShopsEntry(
-                    id = "shop_gujrat_general_3",
-                    nameUrdu = "فیضان جنرل سٹور",
-                    nameEnglish = "Faizan General Store",
-                    businessTypeLabel = language.pick("جنرل سٹور و گروسری", "General Store & Grocery"),
-                    areaLabel = language.pick("جھنڈے وال روڈ، گجرات", "Jhanday Wal Road, Gujrat"),
-                    distanceKm = haversineDistanceKm(buyerLat, buyerLng, 32.5510, 74.0320).coerceAtLeast(1.2),
-                    shopPhone = "",
-                    latitude = 32.5510,
-                    longitude = 74.0320
+                    id = "current_active_shop",
+                    nameUrdu = settings.storeNameUrdu.ifBlank { "میری دکان" },
+                    nameEnglish = settings.storeNameEnglish.ifBlank { "My Shop" },
+                    businessTypeLabel = language.pick("کریانہ / کاروبار سٹور", "Kiryana / Business Store"),
+                    areaLabel = buyerLocationText,
+                    distanceKm = 0.2,
+                    shopPhone = settings.shopPhone.trim(),
+                    latitude = buyerLat,
+                    longitude = buyerLng,
+                    isCurrentUserShop = true
                 )
             )
-        )
+        }
         list.sortedBy { it.distanceKm }
     }
 
-    val filteredShops = remember(baseShops, searchQuery) {
+    val filteredShops = remember(registeredShops, searchQuery) {
         val q = searchQuery.trim().lowercase(Locale.ROOT)
-        if (q.isEmpty()) baseShops
-        else baseShops.filter {
+        if (q.isEmpty()) registeredShops
+        else registeredShops.filter {
             it.nameUrdu.lowercase(Locale.ROOT).contains(q) ||
                 it.nameEnglish.lowercase(Locale.ROOT).contains(q) ||
                 it.businessTypeLabel.lowercase(Locale.ROOT).contains(q) ||
@@ -343,7 +290,7 @@ private fun NearMeShopsSection(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = language.pick("قریبی کاروبار / دکانیں (Near Me)", "Near Me Shops & Businesses"),
+                        text = language.pick("قریبی رجسٹرڈ دکانیں (Near Me)", "Near Me Registered Shops"),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.ExtraBold,
                         color = EmeraldPrimary
@@ -376,11 +323,22 @@ private fun NearMeShopsSection(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
                 label = {
-                    Text(language.pick("دکان یا کاروبار تلاش کریں (کریانہ، کراکری)", "Search shop or business (Kiryana, Crockery)"))
+                    Text(language.pick("دکان یا کاروبار تلاش کریں", "Search shop or business"))
                 },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
+
+            if (filteredShops.isEmpty()) {
+                Text(
+                    text = language.pick(
+                        "اس وقت قریبی کوئی رجسٹرڈ دکاندار موجود نہیں ہے — سیٹنگز سے دکان کا فون نمبر درج کریں۔",
+                        "No registered shop with a phone number found nearby — add your shop phone in Settings."
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
 
             filteredShops.forEach { shop ->
                 val isSelected = selectedShop?.id == shop.id
@@ -1585,8 +1543,8 @@ private fun MainShopShell(
                                 language = language,
                                 phoneNumber = "03401558166",
                                 modifier = Modifier
-                                    .align(Alignment.TopCenter)
-                                    .padding(top = 186.dp)
+                                    .align(Alignment.TopEnd)
+                                    .padding(top = 12.dp, end = 16.dp)
                             )
                         }
                     }
