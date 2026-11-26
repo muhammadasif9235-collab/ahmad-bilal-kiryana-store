@@ -13,6 +13,14 @@ import kotlinx.coroutines.flow.map
 
 private val Context.shopDataStore by preferencesDataStore(name = "ahmad_bilal_kiryana_prefs")
 
+object DonationCharityAccount {
+    const val BANK_NAME: String = "HBL"
+    const val ACCOUNT_TITLE: String = "Muhammad Asif"
+    const val ACCOUNT_NUMBER: String = "16857900668003"
+    const val IBAN: String = "PK08HABB0016857900668003"
+    const val BRANCH_NAME: String = "MOTA, (TANDA)"
+}
+
 data class ShopSettings(
     val language: AppLanguage = AppLanguage.URDU,
     val selectedPrinterName: String = "",
@@ -21,17 +29,17 @@ data class ShopSettings(
     val lastRateSyncEpochMs: Long = 0L,
     val storeNameUrdu: String = "احمد بلال کریانہ سٹور ٹانڈہ",
     val storeNameEnglish: String = "Ahmad Bilal Kiryana Store, Tanda",
-    val shopPhone: String = "0300-0000000",
+    val shopPhone: String = "",
     val shopAddressUrdu: String = "مین بازار ٹانڈہ، ضلع گجرات، پنجاب",
     val shopAddressEnglish: String = "Main Bazaar Tanda, District Gujrat, Punjab",
     val localOwnerLoggedIn: Boolean = false,
     val storeSetupCompleted: Boolean = false,
     val lastCloudBackupEpochMs: Long = 0L,
-    val bankName: String = "HBL",
-    val hblAccountTitle: String = "Muhammad Asif",
-    val hblAccountNumber: String = "16857900668003",
-    val hblIban: String = "PK08HABB0016857900668003",
-    val hblBranchName: String = "MOTA, (TANDA)",
+    val bankName: String = "",
+    val hblAccountTitle: String = "",
+    val hblAccountNumber: String = "",
+    val hblIban: String = "",
+    val hblBranchName: String = "",
     val defaultPosFee: Double = 100.0,
     val shopLatitude: Double = 0.0,
     val shopLongitude: Double = 0.0
@@ -72,17 +80,17 @@ class ShopPreferences(private val context: Context) {
             lastRateSyncEpochMs = prefs[Keys.LAST_RATE_SYNC] ?: 0L,
             storeNameUrdu = prefs[Keys.STORE_NAME_URDU]?.takeIf { it.isNotBlank() } ?: "احمد بلال کریانہ سٹور ٹانڈہ",
             storeNameEnglish = prefs[Keys.STORE_NAME_ENGLISH]?.takeIf { it.isNotBlank() } ?: "Ahmad Bilal Kiryana Store, Tanda",
-            shopPhone = prefs[Keys.SHOP_PHONE] ?: "0300-0000000",
+            shopPhone = prefs[Keys.SHOP_PHONE] ?: "",
             shopAddressUrdu = prefs[Keys.SHOP_ADDRESS_URDU]?.takeIf { it.isNotBlank() } ?: "مین بازار ٹانڈہ، ضلع گجرات، پنجاب",
             shopAddressEnglish = prefs[Keys.SHOP_ADDRESS_ENGLISH]?.takeIf { it.isNotBlank() } ?: "Main Bazaar Tanda, District Gujrat, Punjab",
             localOwnerLoggedIn = prefs[Keys.LOCAL_OWNER_LOGGED_IN] ?: false,
             storeSetupCompleted = prefs[Keys.STORE_SETUP_COMPLETED] ?: false,
             lastCloudBackupEpochMs = prefs[Keys.LAST_CLOUD_BACKUP] ?: 0L,
-            bankName = prefs[Keys.BANK_NAME]?.takeIf { it.isNotBlank() } ?: "HBL",
-            hblAccountTitle = prefs[Keys.HBL_ACCOUNT_TITLE]?.takeIf { it.isNotBlank() } ?: "Muhammad Asif",
-            hblAccountNumber = prefs[Keys.HBL_ACCOUNT_NUMBER]?.takeIf { it.isNotBlank() } ?: "16857900668003",
-            hblIban = prefs[Keys.HBL_IBAN]?.takeIf { it.isNotBlank() } ?: "PK08HABB0016857900668003",
-            hblBranchName = prefs[Keys.HBL_BRANCH_NAME]?.takeIf { it.isNotBlank() } ?: "MOTA, (TANDA)",
+            bankName = prefs[Keys.BANK_NAME] ?: "",
+            hblAccountTitle = prefs[Keys.HBL_ACCOUNT_TITLE] ?: "",
+            hblAccountNumber = prefs[Keys.HBL_ACCOUNT_NUMBER] ?: "",
+            hblIban = prefs[Keys.HBL_IBAN] ?: "",
+            hblBranchName = prefs[Keys.HBL_BRANCH_NAME] ?: "",
             defaultPosFee = prefs[Keys.DEFAULT_POS_FEE] ?: 100.0,
             shopLatitude = prefs[Keys.SHOP_LATITUDE] ?: 0.0,
             shopLongitude = prefs[Keys.SHOP_LONGITUDE] ?: 0.0
@@ -151,7 +159,7 @@ class ShopPreferences(private val context: Context) {
             if (cleanAddrUr.isNotBlank()) it[Keys.SHOP_ADDRESS_URDU] = cleanAddrUr
             if (cleanAddrEn.isNotBlank()) it[Keys.SHOP_ADDRESS_ENGLISH] = cleanAddrEn
             it[Keys.SHOP_PHONE] = phone.trim().take(30)
-            it[Keys.BANK_NAME] = bankName.trim().ifBlank { "HBL" }.take(40)
+            it[Keys.BANK_NAME] = bankName.trim().take(40)
             it[Keys.HBL_ACCOUNT_TITLE] = accountTitle.trim().take(60)
             it[Keys.HBL_ACCOUNT_NUMBER] = accountNumber.trim().take(34)
             it[Keys.HBL_IBAN] = iban.trim().uppercase().replace(" ", "").take(34)
@@ -165,14 +173,34 @@ class ShopPreferences(private val context: Context) {
         accountNumber: String,
         iban: String,
         branchName: String,
-        bankName: String = "HBL"
+        bankName: String = ""
     ) {
         context.shopDataStore.edit {
-            it[Keys.BANK_NAME] = bankName.trim().ifBlank { "HBL" }.take(40)
+            it[Keys.BANK_NAME] = bankName.trim().take(40)
             it[Keys.HBL_ACCOUNT_TITLE] = accountTitle.trim().take(60)
             it[Keys.HBL_ACCOUNT_NUMBER] = accountNumber.trim().take(34)
             it[Keys.HBL_IBAN] = iban.trim().uppercase().replace(" ", "").take(34)
             it[Keys.HBL_BRANCH_NAME] = branchName.trim().take(60)
+        }
+    }
+
+    suspend fun applyOwnerDefaultBankIfEmpty() {
+        context.shopDataStore.edit { prefs ->
+            if (prefs[Keys.BANK_NAME].isNullOrBlank()) {
+                prefs[Keys.BANK_NAME] = DonationCharityAccount.BANK_NAME
+            }
+            if (prefs[Keys.HBL_ACCOUNT_TITLE].isNullOrBlank()) {
+                prefs[Keys.HBL_ACCOUNT_TITLE] = DonationCharityAccount.ACCOUNT_TITLE
+            }
+            if (prefs[Keys.HBL_ACCOUNT_NUMBER].isNullOrBlank()) {
+                prefs[Keys.HBL_ACCOUNT_NUMBER] = DonationCharityAccount.ACCOUNT_NUMBER
+            }
+            if (prefs[Keys.HBL_IBAN].isNullOrBlank()) {
+                prefs[Keys.HBL_IBAN] = DonationCharityAccount.IBAN
+            }
+            if (prefs[Keys.HBL_BRANCH_NAME].isNullOrBlank()) {
+                prefs[Keys.HBL_BRANCH_NAME] = DonationCharityAccount.BRANCH_NAME
+            }
         }
     }
 
