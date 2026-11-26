@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -89,6 +91,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.auth.AuthScreen
 import com.example.auth.BusinessAppOfferStarBadge
+import com.example.auth.EncryptedFieldVault
 import com.example.auth.FingerprintAppLockScreen
 import com.example.auth.ForceUpdateGateDialog
 import com.example.auth.InstallSignUpSheet
@@ -110,6 +113,7 @@ import com.example.i18n.LocalAppLanguage
 import com.example.i18n.pick
 import com.example.services.BarcodeScannerDialog
 import com.example.services.BluetoothPrinterManager
+import com.example.services.LocationHelper
 import com.example.services.NetworkMonitor
 import com.example.services.NfcRationCardReader
 import com.example.services.QrScanAndPaymentDialog
@@ -128,6 +132,8 @@ import com.example.ui.screens.DailyRoznamchaScreen
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.KhataScreen
 import com.example.ui.screens.MaryamRationCardScreen
+import com.example.ui.screens.NearMeShopsEntry
+import com.example.ui.screens.NearMeShopsSection
 import com.example.ui.screens.RationFundScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.StockScreen
@@ -171,6 +177,11 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        try {
+            val sampleCipher = EncryptedFieldVault.encrypt("vault_ready_check")
+            EncryptedFieldVault.decrypt(sampleCipher)
+        } catch (_: Throwable) {
+        }
         handleNfcIntent(intent)
         setContent {
             AppRoot(
@@ -220,6 +231,13 @@ private const val BUSINESS_PREFS = "ahmad_bilal_business_setup"
 private const val KEY_BUSINESS_DONE = "business_setup_completed_v1"
 private const val KEY_BUSINESS_CODE = "selected_business_code"
 private const val KEY_INSTALL_ID = "tracked_install_id_v1"
+private const val LIVE_RATES_PREFS = "ahmad_bilal_profile_photo"
+private const val KEY_LIVE_RATES_ENABLED = "live_rates_auto_update_enabled"
+
+private fun isLiveRatesEnabledForApp(context: Context): Boolean =
+    context.applicationContext
+        .getSharedPreferences(LIVE_RATES_PREFS, Context.MODE_PRIVATE)
+        .getBoolean(KEY_LIVE_RATES_ENABLED, true)
 
 private fun getOrCreateInstallId(context: Context): String {
     val prefs = context.applicationContext.getSharedPreferences(BUSINESS_PREFS, Context.MODE_PRIVATE)
@@ -491,6 +509,7 @@ private fun MainShopShell(
     val lowStockProducts = remember(products) { products.filter { it.isLowStock() } }
 
     var currentDestination by rememberSaveable { mutableStateOf(ShopDestination.HOME) }
+    var selectedNearbyShop by remember { mutableStateOf<NearMeShopsEntry?>(null) }
     var showBarcodeScanner by remember { mutableStateOf(false) }
     var showQrPaymentModal by remember { mutableStateOf(false) }
     var showLowStockReportDialog by remember { mutableStateOf(false) }
@@ -772,11 +791,16 @@ private fun MainShopShell(
                 }
 
                 Column(modifier = Modifier.weight(1f).fillMaxSize()) {
-                    LiveMarketRateTicker(
-                        language = language,
-                        settings = settings,
-                        products = products
-                    )
+                    val liveRatesEnabled = remember(context, currentDestination) {
+                        isLiveRatesEnabledForApp(context)
+                    }
+                    if (liveRatesEnabled) {
+                        LiveMarketRateTicker(
+                            language = language,
+                            settings = settings,
+                            products = products
+                        )
+                    }
 
                     if (isBusy) {
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -816,7 +840,18 @@ private fun MainShopShell(
                                 onGoToKhata = { currentDestination = ShopDestination.KHATA },
                                 onOpenMaryamRationCard = { currentDestination = ShopDestination.RATION_CARD },
                                 onOpenRationFund = { currentDestination = ShopDestination.RATION_FUND },
-                                onSyncGujratRates = { viewModel.syncGujratMarketRates() },
+                                onSyncGujratRates = {
+                                    if (isLiveRatesEnabledForApp(context)) {
+                                        viewModel.syncGujratMarketRates()
+                                    } else {
+                                        viewModel.postMessage(
+                                            language.pick(
+                                                "لائیو ریٹس اپڈیٹ آف ہے — سیٹنگز سے آن کریں۔",
+                                                "Live Market Rate Updates are OFF — enable in Settings."
+                                            )
+                                        )
+                                    }
+                                },
                                 onOpenReceipt = { viewModel.openReceipt(it) },
                                 todayManualCashNet = todayManualCashNet,
                                 onOpenRoznamcha = { currentDestination = ShopDestination.ROZNAMCHA },
@@ -900,7 +935,18 @@ private fun MainShopShell(
                                 onRecordStockMovement = { prod, type, qty, cost, note ->
                                     viewModel.recordStockMovement(prod, type, qty, cost, note)
                                 },
-                                onSyncGujratMarketRates = { viewModel.syncGujratMarketRates() },
+                                onSyncGujratMarketRates = {
+                                    if (isLiveRatesEnabledForApp(context)) {
+                                        viewModel.syncGujratMarketRates()
+                                    } else {
+                                        viewModel.postMessage(
+                                            language.pick(
+                                                "لائیو ریٹس اپڈیٹ آف ہے — سیٹنگز سے آن کریں۔",
+                                                "Live Market Rate Updates are OFF — enable in Settings."
+                                            )
+                                        )
+                                    }
+                                },
                                 onOpenLowStockReport = { showLowStockReportDialog = true }
                             )
 
@@ -954,12 +1000,64 @@ private fun MainShopShell(
                                 }
                             )
 
-                            ShopDestination.CUSTOMER_ORDER -> CustomerOrderScreen(
-                                language = language,
-                                settings = settings,
-                                products = products,
-                                onShowMessage = { viewModel.postMessage(it) }
-                            )
+                            ShopDestination.CUSTOMER_ORDER -> {
+                                val effectiveOrderSettings = remember(settings, selectedNearbyShop) {
+                                    val chosen = selectedNearbyShop
+                                    if (chosen != null) {
+                                        settings.copy(
+                                            storeNameUrdu = chosen.nameUrdu,
+                                            storeNameEnglish = chosen.nameEnglish,
+                                            shopPhone = chosen.shopPhone
+                                        )
+                                    } else {
+                                        settings
+                                    }
+                                }
+                                LazyColumn(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentPadding = PaddingValues(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    item {
+                                        NearMeShopsSection(
+                                            language = language,
+                                            settings = settings,
+                                            selectedShop = selectedNearbyShop,
+                                            onSelectShop = { selectedNearbyShop = it },
+                                            onRefreshLocation = { onDone ->
+                                                scope.launch {
+                                                    LocationHelper.detectCurrentLocation(context)
+                                                        .onSuccess { loc ->
+                                                            viewModel.updateShopGpsLocation(
+                                                                loc.latitude,
+                                                                loc.longitude,
+                                                                loc.addressLine
+                                                            )
+                                                            onDone(loc.addressLine)
+                                                        }
+                                                        .onFailure {
+                                                            viewModel.postMessage(
+                                                                language.pick(
+                                                                    "لوکیشن حاصل نہ ہو سکی — GPS چیک کریں۔",
+                                                                    "Could not detect GPS location."
+                                                                )
+                                                            )
+                                                        }
+                                                }
+                                            },
+                                            onShowMessage = { viewModel.postMessage(it) }
+                                        )
+                                    }
+                                    item {
+                                        CustomerOrderScreen(
+                                            language = language,
+                                            settings = effectiveOrderSettings,
+                                            products = products,
+                                            onShowMessage = { viewModel.postMessage(it) }
+                                        )
+                                    }
+                                }
+                            }
 
                             ShopDestination.RATION_FUND -> RationFundScreen(
                                 language = language,
@@ -1024,7 +1122,11 @@ private fun MainShopShell(
                                 },
                                 onBackupToCloudNow = { viewModel.backupLocalToCloud() },
                                 onRestoreFromCloudNow = { viewModel.restoreCloudToLocal() },
-                                onSyncGujratRates = { viewModel.syncGujratMarketRates() },
+                                onSyncGujratRates = {
+                                    if (isLiveRatesEnabledForApp(context)) {
+                                        viewModel.syncGujratMarketRates()
+                                    }
+                                },
                                 onUpdateDefaultMargin = { viewModel.updateDefaultMargin(it) },
                                 onUpdateShopPhone = { viewModel.updateShopPhone(it) },
                                 onSaveStoreProfile = { nameUr, nameEn, addrUr, addrEn, phone, bank, title, accNo, iban, branch ->
