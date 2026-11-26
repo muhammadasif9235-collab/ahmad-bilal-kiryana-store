@@ -2,10 +2,12 @@ package com.example
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,6 +32,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.CreditCard
@@ -38,15 +42,24 @@ import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LocalShipping
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.VolunteerActivism
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -55,6 +68,8 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -132,8 +147,6 @@ import com.example.ui.screens.DailyRoznamchaScreen
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.KhataScreen
 import com.example.ui.screens.MaryamRationCardScreen
-import com.example.ui.screens.NearMeShopsEntry
-import com.example.ui.screens.NearMeShopsSection
 import com.example.ui.screens.RationFundScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.StockScreen
@@ -141,12 +154,15 @@ import com.example.ui.screens.isManualRoznamchaEntry
 import com.example.ui.theme.EmeraldPrimary
 import com.example.ui.theme.GoldShimmer
 import com.example.ui.theme.KiryanaTheme
+import com.example.ui.theme.ProfitGreen
 import com.example.ui.theme.SaffronSecondary
+import com.example.ui.theme.UdharCrimson
 import com.example.viewmodel.ShopViewModel
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.auth
 import java.util.Calendar
+import java.util.Locale
 import java.util.UUID
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -169,6 +185,409 @@ enum class ShopDestination(
     SETTINGS("سیٹنگز", "Settings", Icons.Default.Settings)
 }
 
+data class NearMeShopsEntry(
+    val id: String,
+    val nameUrdu: String,
+    val nameEnglish: String,
+    val businessTypeLabel: String,
+    val areaLabel: String,
+    val distanceKm: Double,
+    val shopPhone: String,
+    val latitude: Double,
+    val longitude: Double,
+    val isCurrentUserShop: Boolean = false
+)
+
+private fun haversineDistanceKm(
+    lat1: Double,
+    lon1: Double,
+    lat2: Double,
+    lon2: Double
+): Double {
+    if (lat1 == 0.0 && lon1 == 0.0) return 0.0
+    if (lat2 == 0.0 && lon2 == 0.0) return 1.5
+    val earthRadiusKm = 6371.0
+    val dLat = Math.toRadians(lat2 - lat1)
+    val dLon = Math.toRadians(lon2 - lon1)
+    val a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2)
+    val c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    return earthRadiusKm * c
+}
+
+@Composable
+private fun NearMeShopsSection(
+    language: AppLanguage,
+    settings: ShopSettings,
+    selectedShop: NearMeShopsEntry?,
+    onSelectShop: (NearMeShopsEntry) -> Unit,
+    onRefreshLocation: (onComplete: (Double, Double, String) -> Unit) -> Unit,
+    onShowMessage: (String) -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    var buyerLat by remember {
+        mutableStateOf(if (settings.shopLatitude != 0.0) settings.shopLatitude else 32.5365)
+    }
+    var buyerLng by remember {
+        mutableStateOf(if (settings.shopLongitude != 0.0) settings.shopLongitude else 73.9245)
+    }
+    var buyerLocationText by remember {
+        mutableStateOf(
+            language.pick(settings.shopAddressUrdu, settings.shopAddressEnglish)
+                .ifBlank { language.pick("موجودہ لوکیشن تلاش کی جا رہی ہے...", "Detecting current location...") }
+        )
+    }
+    var searchQuery by remember { mutableStateOf("") }
+    var orderNote by remember { mutableStateOf("") }
+
+    LaunchedEffect(Unit) {
+        LocationHelper.detectCurrentLocation(context)
+            .onSuccess { loc ->
+                buyerLat = loc.latitude
+                buyerLng = loc.longitude
+                buyerLocationText = loc.addressLine
+            }
+    }
+
+    val baseShops = remember(
+        settings.storeNameUrdu,
+        settings.storeNameEnglish,
+        settings.shopPhone,
+        buyerLocationText,
+        buyerLat,
+        buyerLng
+    ) {
+        val list = mutableListOf<NearMeShopsEntry>()
+        list.add(
+            NearMeShopsEntry(
+                id = "current_active_shop",
+                nameUrdu = settings.storeNameUrdu.ifBlank { "میری دکان" },
+                nameEnglish = settings.storeNameEnglish.ifBlank { "My Shop" },
+                businessTypeLabel = language.pick("کریانہ / کاروبار سٹور", "Kiryana / Business Store"),
+                areaLabel = buyerLocationText,
+                distanceKm = 0.2,
+                shopPhone = settings.shopPhone.trim(),
+                latitude = buyerLat,
+                longitude = buyerLng,
+                isCurrentUserShop = true
+            )
+        )
+        list.addAll(
+            listOf(
+                NearMeShopsEntry(
+                    id = "shop_tanda_kiryana_1",
+                    nameUrdu = "المدینہ کریانہ سٹور",
+                    nameEnglish = "Al-Madina Kiryana Store",
+                    businessTypeLabel = language.pick("کریانہ و راشن", "Kiryana & Ration"),
+                    areaLabel = language.pick("محلہ محمد نگر، ٹانڈہ", "Mohallah Muhammad Nagar, Tanda"),
+                    distanceKm = haversineDistanceKm(buyerLat, buyerLng, 32.5380, 73.9260).coerceAtLeast(0.4),
+                    shopPhone = "",
+                    latitude = 32.5380,
+                    longitude = 73.9260
+                ),
+                NearMeShopsEntry(
+                    id = "shop_tanda_crockery_2",
+                    nameUrdu = "رحمان کراکری و برتن ہاؤس",
+                    nameEnglish = "Rehman Crockery & Utensils",
+                    businessTypeLabel = language.pick("کراکری و برتن", "Crockery & Utensils"),
+                    areaLabel = language.pick("مین بازار، ٹانڈہ", "Main Bazaar, Tanda"),
+                    distanceKm = haversineDistanceKm(buyerLat, buyerLng, 32.5345, 73.9220).coerceAtLeast(0.7),
+                    shopPhone = "",
+                    latitude = 32.5345,
+                    longitude = 73.9220
+                ),
+                NearMeShopsEntry(
+                    id = "shop_gujrat_general_3",
+                    nameUrdu = "فیضان جنرل سٹور",
+                    nameEnglish = "Faizan General Store",
+                    businessTypeLabel = language.pick("جنرل سٹور و گروسری", "General Store & Grocery"),
+                    areaLabel = language.pick("جھنڈے وال روڈ، گجرات", "Jhanday Wal Road, Gujrat"),
+                    distanceKm = haversineDistanceKm(buyerLat, buyerLng, 32.5510, 74.0320).coerceAtLeast(1.2),
+                    shopPhone = "",
+                    latitude = 32.5510,
+                    longitude = 74.0320
+                )
+            )
+        )
+        list.sortedBy { it.distanceKm }
+    }
+
+    val filteredShops = remember(baseShops, searchQuery) {
+        val q = searchQuery.trim().lowercase(Locale.ROOT)
+        if (q.isEmpty()) baseShops
+        else baseShops.filter {
+            it.nameUrdu.lowercase(Locale.ROOT).contains(q) ||
+                it.nameEnglish.lowercase(Locale.ROOT).contains(q) ||
+                it.businessTypeLabel.lowercase(Locale.ROOT).contains(q) ||
+                it.areaLabel.lowercase(Locale.ROOT).contains(q)
+        }
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(1.2.dp, EmeraldPrimary.copy(alpha = 0.45f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = language.pick("قریبی کاروبار / دکانیں (Near Me)", "Near Me Shops & Businesses"),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = EmeraldPrimary
+                    )
+                    Text(
+                        text = language.pick(
+                            "آپ کی آٹو لوکیشن: $buyerLocationText",
+                            "Your Auto Location: $buyerLocationText"
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                FilledTonalButton(
+                    onClick = {
+                        onRefreshLocation { lat, lng, addr ->
+                            buyerLat = lat
+                            buyerLng = lng
+                            buyerLocationText = addr
+                        }
+                    }
+                ) {
+                    Icon(Icons.Default.MyLocation, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.size(4.dp))
+                    Text(language.pick("آٹو لوکیشن", "Auto GPS"), style = MaterialTheme.typography.labelSmall)
+                }
+            }
+
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                label = {
+                    Text(language.pick("دکان یا کاروبار تلاش کریں (کریانہ، کراکری)", "Search shop or business (Kiryana, Crockery)"))
+                },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            filteredShops.forEach { shop ->
+                val isSelected = selectedShop?.id == shop.id
+                val hasPhone = shop.shopPhone.isNotBlank()
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelectShop(shop) },
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(
+                        width = if (isSelected) 1.6.dp else 1.dp,
+                        color = if (isSelected) GoldShimmer else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+                    ),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isSelected) EmeraldPrimary.copy(alpha = 0.08f)
+                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Storefront,
+                                    contentDescription = null,
+                                    tint = EmeraldPrimary
+                                )
+                                Column {
+                                    Text(
+                                        text = language.pick(shop.nameUrdu, shop.nameEnglish),
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "${shop.businessTypeLabel} • ${shop.areaLabel}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            Surface(
+                                color = EmeraldPrimary.copy(alpha = 0.12f),
+                                shape = RoundedCornerShape(50.dp)
+                            ) {
+                                Text(
+                                    text = String.format(Locale.US, "%.1f km", shop.distanceKm),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = EmeraldPrimary,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Call,
+                                    contentDescription = null,
+                                    tint = if (hasPhone) ProfitGreen else UdharCrimson,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Text(
+                                    text = if (hasPhone) {
+                                        language.pick("دکاندار نمبر: ${shop.shopPhone}", "Shop Number: ${shop.shopPhone}")
+                                    } else {
+                                        language.pick("دکاندار نے نمبر ایڈ نہیں کیا", "Shop number not added")
+                                    },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (hasPhone) ProfitGreen else UdharCrimson
+                                )
+                            }
+
+                            if (isSelected) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = EmeraldPrimary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = language.pick("منتخب", "Selected"),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = EmeraldPrimary
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (selectedShop != null) {
+                HorizontalDivider()
+                Text(
+                    text = language.pick(
+                        "منتخب دکان: ${selectedShop.nameUrdu}",
+                        "Selected Shop: ${selectedShop.nameEnglish}"
+                    ),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = EmeraldPrimary
+                )
+                OutlinedTextField(
+                    value = orderNote,
+                    onValueChange = { orderNote = it },
+                    label = {
+                        Text(language.pick("آرڈر کا سامان / تفصیل لکھیں", "Enter order items / details"))
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = {
+                            val cleanPhone = selectedShop.shopPhone.filter { it.isDigit() }
+                            if (cleanPhone.isBlank()) {
+                                onShowMessage(
+                                    language.pick(
+                                        "اس دکاندار کا نمبر ایپ میں ایڈ نہیں ہے — آرڈر کے لیے نمبر درج ہونا ضروری ہے۔",
+                                        "This shop has no phone number added in the app."
+                                    )
+                                )
+                                return@Button
+                            }
+                            scope.launch {
+                                LocationHelper.detectCurrentLocation(context)
+                                    .onSuccess { freshLoc ->
+                                        buyerLat = freshLoc.latitude
+                                        buyerLng = freshLoc.longitude
+                                        buyerLocationText = freshLoc.addressLine
+                                    }
+                                val mapsLink = LocationHelper.buildGoogleMapsUrl(buyerLat, buyerLng)
+                                val messageBody = language.pick(
+                                    "السلام علیکم! مجھے ${selectedShop.nameUrdu} سے سامان کا آرڈر دینا ہے:\n" +
+                                        "سامان: ${orderNote.ifBlank { "سامان کی لسٹ" }}\n" +
+                                        "آرڈر کرنے والے کی لوکیشن: $buyerLocationText\n" +
+                                        "GPS لنک: $mapsLink",
+                                    "Hello! I want to place an order with ${selectedShop.nameEnglish}:\n" +
+                                        "Items: ${orderNote.ifBlank { "Order items" }}\n" +
+                                        "Customer Location: $buyerLocationText\n" +
+                                        "GPS Link: $mapsLink"
+                                )
+                                val uri = Uri.parse("https://wa.me/$cleanPhone?text=${Uri.encode(messageBody)}")
+                                runCatching {
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, uri).apply {
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    })
+                                }.onFailure {
+                                    onShowMessage(
+                                        language.pick("واٹس ایپ / براؤزر کھولا نہیں جا سکا۔", "Could not open WhatsApp.")
+                                    )
+                                }
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.size(6.dp))
+                        Text(language.pick("لوکیشن سمیت آرڈر بھیجیں", "Send Order with Auto GPS"))
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            val mapsUri = Uri.parse(LocationHelper.buildGoogleMapsUrl(buyerLat, buyerLng))
+                            runCatching {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, mapsUri).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                })
+                            }
+                        }
+                    ) {
+                        Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.size(4.dp))
+                        Text(language.pick("نقشہ", "Map"))
+                    }
+                }
+            }
+        }
+    }
+}
+
 class MainActivity : FragmentActivity() {
 
     private val _incomingNfcCard = MutableStateFlow<ScannedNfcCard?>(null)
@@ -178,8 +597,8 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         try {
-            val sampleCipher = EncryptedFieldVault.encrypt("vault_ready_check")
-            EncryptedFieldVault.decrypt(sampleCipher)
+            val checkCipher = EncryptedFieldVault.encrypt("vault_ready_check")
+            EncryptedFieldVault.decrypt(checkCipher)
         } catch (_: Throwable) {
         }
         handleNfcIntent(intent)
@@ -1024,16 +1443,15 @@ private fun MainShopShell(
                                             settings = settings,
                                             selectedShop = selectedNearbyShop,
                                             onSelectShop = { selectedNearbyShop = it },
-                                            onRefreshLocation = { onDone ->
+                                            onRefreshLocation = { onRefreshComplete ->
                                                 scope.launch {
                                                     LocationHelper.detectCurrentLocation(context)
                                                         .onSuccess { loc ->
-                                                            viewModel.updateShopGpsLocation(
+                                                            onRefreshComplete(
                                                                 loc.latitude,
                                                                 loc.longitude,
                                                                 loc.addressLine
                                                             )
-                                                            onDone(loc.addressLine)
                                                         }
                                                         .onFailure {
                                                             viewModel.postMessage(
