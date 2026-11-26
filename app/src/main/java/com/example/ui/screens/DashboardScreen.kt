@@ -33,7 +33,6 @@ import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.ReceiptLong
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.VolunteerActivism
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Button
@@ -44,11 +43,14 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -117,6 +119,13 @@ fun DashboardScreen(
     val context = LocalContext.current
     val customPhotoPath = remember { getSavedShopPhotoPath(context) }
 
+    val rateUpdatePrefs = remember(context) {
+        context.applicationContext.getSharedPreferences("ahmad_bilal_profile_photo", android.content.Context.MODE_PRIVATE)
+    }
+    var rateAutoUpdateOn by remember {
+        mutableStateOf(rateUpdatePrefs.getBoolean("live_rates_auto_update_enabled", false))
+    }
+
     var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -153,7 +162,7 @@ fun DashboardScreen(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // 1. Modern Executive Fintech Header with Live Clock & Dynamic Shop Title
+            // 1. Modern Executive Fintech Header with Live Clock & ON/OFF Rate Update Toggle
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -201,7 +210,9 @@ fun DashboardScreen(
                                             text = liveDateText,
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.SemiBold,
-                                            color = Color.White
+                                            color = Color.White,
+                                            maxLines = 1,
+                                            softWrap = false
                                         )
                                     }
                                     Text(text = "•", color = GoldShimmer, style = MaterialTheme.typography.labelSmall)
@@ -219,37 +230,60 @@ fun DashboardScreen(
                                             text = liveTimeText,
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.ExtraBold,
-                                            color = Color(0xFF86EFAC)
+                                            color = Color(0xFF86EFAC),
+                                            maxLines = 1,
+                                            softWrap = false
                                         )
                                     }
                                 }
                             }
 
+                            // عام آن / آف (ON / OFF) سوئچ بٹن — ریفریش تیر کے بغیر، خودکار/مینول کنٹرول کے لیے
                             Surface(
-                                color = Color.White.copy(alpha = 0.16f),
+                                color = Color.Black.copy(alpha = 0.24f),
                                 shape = RoundedCornerShape(50.dp),
-                                border = BorderStroke(1.dp, GoldShimmer.copy(alpha = 0.5f)),
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(50.dp))
-                                    .clickable(onClick = onSyncGujratRates)
-                                    .testTag("dashboard_rate_sync_chip")
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (rateAutoUpdateOn) GoldShimmer else Color.White.copy(alpha = 0.35f)
+                                ),
+                                modifier = Modifier.testTag("dashboard_rate_sync_chip")
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    modifier = Modifier.padding(start = 10.dp, end = 6.dp, top = 2.dp, bottom = 2.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Refresh,
-                                        contentDescription = null,
-                                        tint = GoldShimmer,
-                                        modifier = Modifier.size(14.dp)
-                                    )
                                     Text(
-                                        text = language.pick("ریٹ اپڈیٹ", "Update Rates"),
+                                        text = if (rateAutoUpdateOn) {
+                                            language.pick("ریٹ اپڈیٹ آن", "Rates ON")
+                                        } else {
+                                            language.pick("ریٹ اپڈیٹ آف", "Rates OFF")
+                                        },
                                         style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = Color.White
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (rateAutoUpdateOn) GoldShimmer else Color.White,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Switch(
+                                        checked = rateAutoUpdateOn,
+                                        onCheckedChange = { checked ->
+                                            rateAutoUpdateOn = checked
+                                            rateUpdatePrefs.edit()
+                                                .putBoolean("live_rates_auto_update_enabled", checked)
+                                                .apply()
+                                            if (checked) {
+                                                onSyncGujratRates()
+                                            }
+                                        },
+                                        colors = SwitchDefaults.colors(
+                                            checkedThumbColor = EmeraldPrimaryDark,
+                                            checkedTrackColor = GoldShimmer,
+                                            uncheckedThumbColor = Color.White,
+                                            uncheckedTrackColor = Color.White.copy(alpha = 0.28f),
+                                            uncheckedBorderColor = Color.White.copy(alpha = 0.5f)
+                                        )
                                     )
                                 }
                             }
@@ -310,7 +344,8 @@ fun DashboardScreen(
                     }
                 }
             }
-                        // 2. Elevated Quick Action Dock
+
+            // 2. Elevated Quick Action Dock
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -533,8 +568,7 @@ fun DashboardScreen(
                                 Text(
                                     text = language.pick("مستحق خاندانوں کی مدد", "HBL Charity Fund"),
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -657,7 +691,7 @@ fun DashboardScreen(
                                 Text(
                                     text = language.pick("کم اسٹاک الرٹ (${lowStockProducts.size})", "Low Stock Alert (${lowStockProducts.size})"),
                                     style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
+                                    fontWeight = FontWeight.Bold,
                                     color = WarningAmber
                                 )
                                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
