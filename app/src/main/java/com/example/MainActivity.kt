@@ -1580,13 +1580,13 @@ private fun MainShopShell(
                             )
                         }
 
-                        if (!isSecondaryScreen) {
+                        if (!isSecondaryScreen && currentDestination == ShopDestination.HOME) {
                             BusinessAppOfferStarBadge(
                                 language = language,
                                 phoneNumber = "03401558166",
                                 modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .padding(end = 14.dp, bottom = 14.dp)
+                                    .align(Alignment.TopCenter)
+                                    .padding(top = 186.dp)
                             )
                         }
                     }
